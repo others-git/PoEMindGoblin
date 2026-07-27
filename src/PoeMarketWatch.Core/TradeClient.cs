@@ -45,7 +45,7 @@ public sealed class TradeClient : IDisposable
                 "User-Agent with contact details is not optional.", nameof(userAgent));
 
         _ownsHttp = http is null;
-        _http = http ?? new HttpClient { BaseAddress = new Uri(BaseUrl) };
+        _http = http ?? HttpFactory.Create();
         _http.BaseAddress ??= new Uri(BaseUrl);
         if (!_http.DefaultRequestHeaders.UserAgent.TryParseAdd(userAgent))
             _http.DefaultRequestHeaders.Add("User-Agent", userAgent);

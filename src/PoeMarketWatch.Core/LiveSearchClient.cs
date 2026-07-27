@@ -186,6 +186,9 @@ internal sealed class ClientWebSocketTransport : IWebSocketTransport
 
     public async Task ConnectAsync(Uri uri, string cookieHeader, string userAgent, CancellationToken ct)
     {
+        // Same trap as HttpClient: if the socket has its own cookie container it can
+        // clobber a manually set Cookie header. Leave Cookies null and set the header.
+        _socket.Options.Cookies = null;
         _socket.Options.SetRequestHeader("Cookie", cookieHeader);
         _socket.Options.SetRequestHeader("User-Agent", userAgent);
         _socket.Options.SetRequestHeader("Origin", TradeClient.BaseUrl);

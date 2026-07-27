@@ -29,7 +29,7 @@ public sealed class ConnectionTest
     {
         _userAgent = userAgent;
         _credentials = credentials;
-        _http = http ?? new HttpClient { BaseAddress = new Uri(TradeClient.BaseUrl) };
+        _http = http ?? HttpFactory.Create();
         _http.BaseAddress ??= new Uri(TradeClient.BaseUrl);
     }
 
