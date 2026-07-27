@@ -98,6 +98,29 @@ public class CredentialStoreTests : IDisposable
         Assert.Contains("PoeMarketWatch", CredentialStore.DefaultPath, StringComparison.Ordinal);
     }
 
+    [Theory]
+    // bare value (the normal case)
+    [InlineData("abc", null, null)]
+    // whole cookie header pasted by mistake -- accept it rather than storing junk
+    [InlineData("POESESSID=abc; POETOKEN=def", "abc", "def")]
+    [InlineData("poesessid=abc", "abc", null)]
+    [InlineData("POETOKEN=def; POESESSID=abc", "abc", "def")]
+    [InlineData("other=1; POESESSID=abc; junk", "abc", null)]
+    public void ParsesPastedCookieHeaders(string input, string? sess, string? token)
+    {
+        var (s, t) = CredentialStore.SplitCookieHeader(input);
+        Assert.Equal(sess, s);
+        Assert.Equal(token, t);
+    }
+
+    [Fact]
+    public void SplitHandlesGarbage()
+    {
+        Assert.Equal((null, null), CredentialStore.SplitCookieHeader(null));
+        Assert.Equal((null, null), CredentialStore.SplitCookieHeader("   "));
+        Assert.Equal((null, null), CredentialStore.SplitCookieHeader("no-equals-sign"));
+    }
+
     [Fact]
     public void IncompleteCredentialsAreDetected()
     {

@@ -1,12 +1,233 @@
-﻿<Window x:Class="PoeMarketWatch.MainWindow"
+<Window x:Class="PoeMarketWatch.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:PoeMarketWatch"
-        mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Title="PoE Market Watch" Height="700" Width="1150"
+        Background="#12100E" Foreground="#D8CBB4"
+        TextOptions.TextFormattingMode="Display">
 
+    <Window.Resources>
+        <SolidColorBrush x:Key="Panel" Color="#1C1917"/>
+        <SolidColorBrush x:Key="Line" Color="#3A322A"/>
+        <SolidColorBrush x:Key="Gold" Color="#C8A96A"/>
+        <SolidColorBrush x:Key="Dim" Color="#8A7E6C"/>
+        <SolidColorBrush x:Key="Bad" Color="#C4574B"/>
+
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#D8CBB4"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#2A241E"/>
+            <Setter Property="Foreground" Value="#D8CBB4"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#3A322A"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#0E0C0A"/>
+            <Setter Property="Foreground" Value="#D8CBB4"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="CaretBrush" Value="#C8A96A"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}"
+                BorderThickness="0,0,0,1" Padding="14,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="MARKET WATCH" FontSize="15" FontWeight="SemiBold"
+                               Foreground="{StaticResource Gold}" Margin="0,0,16,0"/>
+                    <Ellipse x:Name="ConnDot" Width="9" Height="9" Fill="{StaticResource Bad}"
+                             VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock x:Name="ConnText" Text="not connected" Foreground="{StaticResource Dim}"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button x:Name="StartBtn" Content="Start watching" Click="OnStartStop" Margin="0,0,8,0"/>
+                    <Button x:Name="CredsBtn" Content="Session…" Click="OnCredentials"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="340" MinWidth="260"/>
+                <ColumnDefinition Width="4"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <DockPanel Grid.Column="0" Background="{StaticResource Panel}">
+                <Border DockPanel.Dock="Top" Padding="12,10" BorderBrush="{StaticResource Line}"
+                        BorderThickness="0,0,0,1">
+                    <StackPanel>
+                        <TextBlock Text="WATCHES" FontSize="11" Foreground="{StaticResource Dim}"
+                                   FontWeight="SemiBold" Margin="0,0,0,8"/>
+                        <TextBox x:Name="UrlBox" Height="26"
+                                 ToolTip="Paste a trade search URL from the browser"/>
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="NameBox" Height="26" Margin="0,0,6,0"
+                                     ToolTip="A name for this watch"/>
+                            <Button Grid.Column="1" Content="Add" Click="OnAddWatch"/>
+                        </Grid>
+                        <TextBlock x:Name="AddHint"
+                                   Text="Build the search on the trade site, then paste its URL."
+                                   Foreground="{StaticResource Dim}" FontSize="11" TextWrapping="Wrap"
+                                   Margin="0,6,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <ListBox x:Name="WatchList" Background="Transparent" BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="12,8" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center"
+                                              Margin="0,0,8,0" Foreground="#D8CBB4"/>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding StatusText}" FontSize="11"
+                                                   Foreground="{StaticResource Dim}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="2" Content="X" Padding="6,2" Tag="{Binding}"
+                                            Click="OnRemoveWatch" ToolTip="Remove"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
+                          Background="{StaticResource Line}"/>
+
+            <DockPanel Grid.Column="2">
+                <Border DockPanel.Dock="Top" Padding="14,10" BorderBrush="{StaticResource Line}"
+                        BorderThickness="0,0,0,1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="MATCHES" FontSize="11" Foreground="{StaticResource Dim}"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock x:Name="HotkeyHint" FontSize="11" Foreground="{StaticResource Gold}"
+                                       Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="Clear" Click="OnClearMatches"/>
+                    </Grid>
+                </Border>
+
+                <ListBox x:Name="MatchList" Background="Transparent" BorderThickness="0">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="14,10" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding ItemName}" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource Gold}" FontSize="14"/>
+                                        <TextBlock FontSize="12" Margin="0,3,0,0">
+                                            <Run Text="{Binding PriceText, Mode=OneWay}"/>
+                                            <Run Text="   " Foreground="#5A5044"/>
+                                            <Run Text="{Binding FeeText, Mode=OneWay}" Foreground="#8A7E6C"/>
+                                        </TextBlock>
+                                        <TextBlock FontSize="11" Foreground="{StaticResource Dim}" Margin="0,3,0,0">
+                                            <Run Text="{Binding WatchName, Mode=OneWay}"/>
+                                            <Run Text="   "/>
+                                            <Run Text="{Binding AgeText, Mode=OneWay}"/>
+                                            <Run Text="   "/>
+                                            <Run Text="{Binding SellerText, Mode=OneWay}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding TokenText}" FontSize="10"
+                                                   Foreground="{StaticResource Dim}" VerticalAlignment="Center"
+                                                   Margin="0,0,8,0"/>
+                                        <Button Content="Travel" Tag="{Binding}" Click="OnTravel"
+                                                IsEnabled="{Binding CanTravel}"
+                                                ToolTip="Travel to the seller's hideout"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Grid>
+
+        <Border Grid.Row="2" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}"
+                BorderThickness="0,1,0,0" Padding="14,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="StatusText" Text="idle" Foreground="{StaticResource Dim}" FontSize="11"/>
+                <TextBlock x:Name="RateText" Grid.Column="1" Foreground="{StaticResource Dim}" FontSize="11"/>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

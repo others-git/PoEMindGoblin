@@ -119,5 +119,25 @@ public sealed class CredentialStore
         return string.Join("; ", parts);
     }
 
+    /// <summary>
+    /// Parse a pasted "POESESSID=abc; POETOKEN=def" header. Pasting the whole cookie
+    /// string instead of the bare value is the obvious user mistake, so accept both.
+    /// </summary>
+    public static (string? Sess, string? Token) SplitCookieHeader(string? header)
+    {
+        string? sess = null, token = null;
+        if (string.IsNullOrWhiteSpace(header)) return (null, null);
+        foreach (var part in header.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = part.Split('=', 2);
+            if (kv.Length != 2) continue;
+            var key = kv[0].Trim();
+            var value = kv[1].Trim();
+            if (key.Equals("POESESSID", StringComparison.OrdinalIgnoreCase)) sess = value;
+            else if (key.Equals("POETOKEN", StringComparison.OrdinalIgnoreCase)) token = value;
+        }
+        return (sess, token);
+    }
+
     private sealed record Dto(string sess, string? token);
 }

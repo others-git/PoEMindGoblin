@@ -10,6 +10,23 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <AssemblyName>PoeMarketWatch</AssemblyName>
+    <ApplicationIcon></ApplicationIcon>
+    <!-- Portable: one file, no installer, no .NET prerequisite on the target machine.
+         WPF cannot use NativeAOT, so this is IL + a bundled runtime (~150 MB). -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType>embedded</DebugType>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Generated from Path of Building data; see README. -->
+    <None Include="..\..\assets\trade-index.json" Link="assets\trade-index.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
 </Project>
