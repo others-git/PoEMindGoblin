@@ -7,11 +7,26 @@ namespace PoeMarketWatch.Core;
 /// <summary>
 /// Encrypted-at-rest store for the pathofexile.com session cookies.
 ///
-/// The trade API has NO OAuth scope -- GGG publishes scopes for profile, stashes,
-/// characters, item filters and the currency exchange, but not trade, and when asked
-/// directly they said only that "the internal APIs currently used by the trade website
-/// will remain available without authentication for now". Search works unauthenticated;
-/// the live-search socket and the whisper/travel endpoint do not.
+/// Why cookies and not OAuth, since that is the obvious question:
+///
+/// GGG's OAuth has exactly twelve scopes, and none of them is trade --
+///   account:  profile, leagues, stashes, characters, league_accounts, item_filter
+///   service:  leagues, leagues:ladder, pvp_matches, pvp_matches:ladder, psapi, cxapi
+/// You cannot request a scope that does not exist. Asked directly about trade access,
+/// GGG said only that "the internal APIs currently used by the trade website will remain
+/// available without authentication for now". Currency exchange got its own service
+/// scope while trade did not, so the omission looks deliberate.
+///
+/// There is a second wall behind the first: a portable exe is a PUBLIC client (no way to
+/// hold a secret), and public clients "cannot use any service:* scopes" at all. So even a
+/// hypothetical service:trade would be unusable here; it would have to be account:trade.
+///
+/// Other PoE apps that do use OAuth are doing OAuth-shaped things -- stash price checks,
+/// character import, filter management. Every tool that does LIVE SEARCH uses POESESSID,
+/// for this exact reason.
+///
+/// Measured: search works unauthenticated; the live-search socket and the whisper/travel
+/// endpoint both return 401 without cookies.
 ///
 /// So the live features need <c>POESESSID</c> and <c>POETOKEN</c>, which are full-account
 /// session credentials -- not scoped, not per-app revocable. Consequences enforced here:

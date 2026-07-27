@@ -52,10 +52,35 @@ the in-game filter.
 
 ## Authentication
 
-There is no OAuth scope for trade. GGG publishes scopes for profile, stashes, characters,
-item filters and the currency exchange; asked directly about trade, they said only that
-*"the internal APIs currently used by the trade website will remain available without
-authentication for now."*
+**Why not OAuth?** Because there is no trade scope. GGG's OAuth has exactly twelve:
+
+| Account | Service |
+|---|---|
+| `account:profile` | `service:leagues` |
+| `account:leagues` | `service:leagues:ladder` |
+| `account:stashes` | `service:pvp_matches` |
+| `account:characters` | `service:pvp_matches:ladder` |
+| `account:league_accounts` | `service:psapi` |
+| `account:item_filter` | `service:cxapi` |
+
+You cannot request a scope that does not exist. Asked directly about trade, GGG said only
+that *"the internal APIs currently used by the trade website will remain available without
+authentication for now."* Currency exchange got a service scope while trade did not, so the
+omission reads as deliberate.
+
+There is a second wall behind the first: a portable exe is a **public client** (no way to
+hold a secret), and public clients *"cannot use any `service:*` scopes"*. So even a
+hypothetical `service:trade` would be unusable here — it would have to be `account:trade`.
+
+Other PoE apps that use OAuth are doing OAuth-shaped things: stash price checks
+(`account:stashes`), build import (`account:characters`), filter management
+(`account:item_filter`). Every tool that does *live search* uses `POESESSID`.
+
+The one OAuth-shaped alternative is `service:psapi`, the raw public-stash river the trade
+site indexes — consume it and you could detect listings with no session cookie at all. But
+it needs a confidential client (a server you run), it means rebuilding poe.ninja's
+ingestion, and it still cannot travel, because that token is minted by the session-gated
+fetch endpoint.
 
 Measured against the live API:
 
