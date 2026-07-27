@@ -61,16 +61,37 @@ public sealed class CredentialStore
 
     public sealed record Credentials(string PoeSessId, string PoeToken)
     {
+        /// <summary>
+        /// Any other cookies from the same browser session, verbatim.
+        ///
+        /// Exists because guessing which cookies matter is exactly what went wrong: the
+        /// captured browser request carried POESESSID *and* POETOKEN, and Cloudflare may
+        /// add cf_clearance. Rather than maintain a list of names GGG never documented,
+        /// keep whatever the browser sent and replay it.
+        /// </summary>
+        public Dictionary<string, string> Extra { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
         public bool IsComplete => !string.IsNullOrWhiteSpace(PoeSessId);
 
+        public IEnumerable<string> CookieNames
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(PoeSessId)) yield return "POESESSID";
+                if (!string.IsNullOrWhiteSpace(PoeToken)) yield return "POETOKEN";
+                foreach (var k in Extra.Keys) yield return k;
+            }
+        }
+
         /// <summary>Guard against a credential landing in a log line or exception message.</summary>
-        public override string ToString() => "Credentials(POESESSID=***, POETOKEN=***)";
+        public override string ToString() =>
+            $"Credentials({string.Join(", ", CookieNames.Select(n => n + "=***"))})";
     }
 
     public void Save(Credentials creds)
     {
         ArgumentNullException.ThrowIfNull(creds);
-        var json = JsonSerializer.SerializeToUtf8Bytes(new Dto(creds.PoeSessId, creds.PoeToken));
+        var json = JsonSerializer.SerializeToUtf8Bytes(new Dto(creds.PoeSessId, creds.PoeToken, creds.Extra));
         byte[] blob;
         try
         {
@@ -102,7 +123,12 @@ public sealed class CredentialStore
             {
                 var dto = JsonSerializer.Deserialize<Dto>(json);
                 if (dto is null || string.IsNullOrWhiteSpace(dto.sess)) return null;
-                return new Credentials(dto.sess, dto.token ?? "");
+                return new Credentials(dto.sess, dto.token ?? "")
+                {
+                    Extra = dto.extra is null
+                        ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        : new Dictionary<string, string>(dto.extra, StringComparer.OrdinalIgnoreCase),
+                };
             }
             finally
             {
@@ -126,12 +152,43 @@ public sealed class CredentialStore
         if (File.Exists(_path)) File.Delete(_path);
     }
 
-    /// <summary>Cookie header value for the trade API.</summary>
+    /// <summary>Cookie header value for the trade API, including any extra cookies held.</summary>
     public static string ToCookieHeader(Credentials creds)
     {
-        var parts = new List<string> { $"POESESSID={creds.PoeSessId}" };
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(creds.PoeSessId)) parts.Add($"POESESSID={creds.PoeSessId}");
         if (!string.IsNullOrWhiteSpace(creds.PoeToken)) parts.Add($"POETOKEN={creds.PoeToken}");
+        foreach (var (k, v) in creds.Extra)
+        {
+            if (k.Equals("POESESSID", StringComparison.OrdinalIgnoreCase)
+                || k.Equals("POETOKEN", StringComparison.OrdinalIgnoreCase)) continue;
+            parts.Add($"{k}={v}");
+        }
         return string.Join("; ", parts);
+    }
+
+    /// <summary>
+    /// Parse a whole pasted Cookie header into credentials, keeping every cookie.
+    /// This is the reliable path: it captures cf_clearance and anything else GGG or
+    /// Cloudflare starts requiring, without this app having to know the names.
+    /// </summary>
+    public static Credentials? FromCookieHeader(string? header)
+    {
+        if (string.IsNullOrWhiteSpace(header)) return null;
+        string? sess = null, token = null;
+        var extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var part in header.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = part.Split('=', 2);
+            if (kv.Length != 2) continue;
+            var key = kv[0].Trim();
+            var value = kv[1].Trim();
+            if (key.Length == 0 || value.Length == 0) continue;
+            if (key.Equals("POESESSID", StringComparison.OrdinalIgnoreCase)) sess = value;
+            else if (key.Equals("POETOKEN", StringComparison.OrdinalIgnoreCase)) token = value;
+            else extra[key] = value;
+        }
+        return sess is null ? null : new Credentials(sess, token ?? "") { Extra = extra };
     }
 
     /// <summary>
@@ -154,5 +211,5 @@ public sealed class CredentialStore
         return (sess, token);
     }
 
-    private sealed record Dto(string sess, string? token);
+    private sealed record Dto(string sess, string? token, Dictionary<string, string>? extra = null);
 }

@@ -87,7 +87,7 @@ public class ConnectionTestTests
     }
 
     [Fact]
-    public async Task ExpiredCookiesBlameCookiesNotTheSocket()
+    public async Task RejectedCookiesBlameCookiesNotTheSocket()
     {
         var (test, handler) = Make();
         handler.Responses.Enqueue(Json("""{"id":"x","result":[]}"""));
@@ -97,8 +97,63 @@ public class ConnectionTestTests
 
         var cookies = Find(steps, "Session cookies");
         Assert.Equal(ConnectionTest.Result.Fail, cookies.Result);
-        Assert.Contains("expired", cookies.Detail);
+        Assert.Contains("401", cookies.Detail);
+        // must say WHICH cookies went, otherwise "401" is unactionable
+        Assert.Contains("POESESSID", cookies.Detail);
+        Assert.Contains("POETOKEN", cookies.Detail);
         Assert.Equal(ConnectionTest.Result.Skipped, Find(steps, "Live search socket").Result);
+    }
+
+    [Fact]
+    public async Task LonePoesessidIsCalledOutAsTheLikelyCause()
+    {
+        // The real-world 401: only POESESSID was pasted, but the browser also sends
+        // POETOKEN (and possibly cf_clearance).
+        var handler = new FakeHandler();
+        var http = new HttpClient(handler) { BaseAddress = new Uri(TradeClient.BaseUrl) };
+        var test = new ConnectionTest(Ua, () => new CredentialStore.Credentials("sess", ""), http);
+        handler.Responses.Enqueue(Json("""{"id":"x","result":[]}"""));
+        handler.Responses.Enqueue(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+
+        var steps = await test.RunAsync("Allflame", "q1");
+
+        var detail = Find(steps, "Session cookies").Detail;
+        Assert.Contains("Only POESESSID", detail);
+        Assert.Contains("WHOLE Cookie header", detail);
+    }
+
+    [Fact]
+    public async Task WithFullCookieSetTheAdviceShiftsToUserAgent()
+    {
+        // If everything was sent and it still 401s, cf_clearance/UA binding is next.
+        var handler = new FakeHandler();
+        var http = new HttpClient(handler) { BaseAddress = new Uri(TradeClient.BaseUrl) };
+        var creds = CredentialStore.FromCookieHeader("POESESSID=a; POETOKEN=b; cf_clearance=c")!;
+        var test = new ConnectionTest(Ua, () => creds, http);
+        handler.Responses.Enqueue(Json("""{"id":"x","result":[]}"""));
+        handler.Responses.Enqueue(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+
+        var steps = await test.RunAsync("Allflame", "q1");
+
+        var detail = Find(steps, "Session cookies").Detail;
+        Assert.Contains("cf_clearance", detail);
+        Assert.Contains("User-Agent", detail);
+    }
+
+    [Fact]
+    public async Task ExtraCookiesAreActuallySent()
+    {
+        var handler = new FakeHandler();
+        var http = new HttpClient(handler) { BaseAddress = new Uri(TradeClient.BaseUrl) };
+        var creds = CredentialStore.FromCookieHeader("POESESSID=a; cf_clearance=c")!;
+        var test = new ConnectionTest(Ua, () => creds, http);
+        handler.Responses.Enqueue(Json("""{"id":"x","result":[]}"""));
+        handler.Responses.Enqueue(new HttpResponseMessage((HttpStatusCode)101));
+
+        await test.RunAsync("Allflame", "q1");
+
+        var cookie = handler.Requests[1].Headers.GetValues("Cookie").First();
+        Assert.Contains("cf_clearance=c", cookie);
     }
 
     [Fact]

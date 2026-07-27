@@ -122,6 +122,59 @@ public class CredentialStoreTests : IDisposable
     }
 
     [Fact]
+    public void FromCookieHeaderKeepsEveryCookie()
+    {
+        // The fix for the 401: stop guessing which cookies matter, keep them all.
+        var c = CredentialStore.FromCookieHeader(
+            "POESESSID=abc; POETOKEN=def; cf_clearance=xyz; _ga=GA1.2.3");
+        Assert.NotNull(c);
+        Assert.Equal("abc", c!.PoeSessId);
+        Assert.Equal("def", c.PoeToken);
+        Assert.Equal("xyz", c.Extra["cf_clearance"]);
+        Assert.Equal("GA1.2.3", c.Extra["_ga"]);
+    }
+
+    [Fact]
+    public void CookieHeaderRoundTripsIncludingExtras()
+    {
+        var c = CredentialStore.FromCookieHeader("POESESSID=abc; POETOKEN=def; cf_clearance=xyz")!;
+        var header = CredentialStore.ToCookieHeader(c);
+        Assert.Contains("POESESSID=abc", header);
+        Assert.Contains("POETOKEN=def", header);
+        Assert.Contains("cf_clearance=xyz", header);
+        // no duplicate POESESSID from the Extra bag
+        Assert.Equal(1, header.Split("POESESSID=").Length - 1);
+    }
+
+    [Fact]
+    public void ExtraCookiesSurviveTheEncryptedRoundTrip()
+    {
+        var store = new CredentialStore(File_);
+        store.Save(CredentialStore.FromCookieHeader("POESESSID=a; cf_clearance=b")!);
+        var loaded = store.Load();
+        Assert.Equal("b", loaded!.Extra["cf_clearance"]);
+    }
+
+    [Fact]
+    public void HeaderWithoutSessionIsRejected()
+    {
+        Assert.Null(CredentialStore.FromCookieHeader("cf_clearance=xyz; _ga=1"));
+        Assert.Null(CredentialStore.FromCookieHeader(""));
+        Assert.Null(CredentialStore.FromCookieHeader(null));
+    }
+
+    [Fact]
+    public void ToStringListsCookieNamesButNoValues()
+    {
+        var c = CredentialStore.FromCookieHeader("POESESSID=secret1; cf_clearance=secret2")!;
+        var text = c.ToString();
+        Assert.Contains("POESESSID", text);
+        Assert.Contains("cf_clearance", text);
+        Assert.DoesNotContain("secret1", text);
+        Assert.DoesNotContain("secret2", text);
+    }
+
+    [Fact]
     public void IncompleteCredentialsAreDetected()
     {
         Assert.False(new CredentialStore.Credentials("", "tok").IsComplete);

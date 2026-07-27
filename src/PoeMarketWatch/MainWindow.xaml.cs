@@ -194,7 +194,7 @@ public partial class MainWindow : Window
     // ------------------------------------------------------------------- chrome
     private void OnCredentials(object sender, RoutedEventArgs e)
     {
-        var dialog = new CredentialWindow(_credentials) { Owner = this };
+        var dialog = new CredentialWindow(_credentials, _settings) { Owner = this };
         if (dialog.ShowDialog() == true) Status("Session saved, encrypted with DPAPI.");
         UpdateChrome();
     }

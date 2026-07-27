@@ -105,6 +105,7 @@ public sealed class ConnectionTest
         string league, string queryId, CredentialStore.Credentials creds, CancellationToken ct)
     {
         var uri = $"/api/trade/live/{Uri.EscapeDataString(league)}/{Uri.EscapeDataString(queryId)}";
+        var sent = string.Join(", ", creds.CookieNames);
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, uri);
@@ -123,26 +124,31 @@ public sealed class ConnectionTest
 
             return code switch
             {
-                101 => (new Step("Session cookies", Result.Pass, "accepted"),
+                101 => (new Step("Session cookies", Result.Pass, $"accepted ({sent})"),
                         new Step("Live search socket", Result.Pass, "101 Switching Protocols")),
 
                 401 or 403 => (
                     new Step("Session cookies", Result.Fail,
-                        $"HTTP {code} - POESESSID is missing, wrong or expired. Log in again and re-copy it."),
+                        $"HTTP {code}. Sent: {sent}."
+                        + (creds.Extra.Count == 0 && string.IsNullOrWhiteSpace(creds.PoeToken)
+                            ? " Only POESESSID was sent - the browser also sends POETOKEN, and may send"
+                              + " cf_clearance. Paste the WHOLE Cookie header instead of one value."
+                            : " If these are fresh, the User-Agent may not match the browser that"
+                              + " obtained cf_clearance (Cloudflare binds it to the UA).")),
                     new Step("Live search socket", Result.Skipped, "skipped: cookies rejected")),
 
                 // The socket attaches to an EXISTING search. Search ids do not live
                 // forever, so a watch saved days ago can 404 while the same filters
                 // work fine in the browser.
-                404 => (new Step("Session cookies", Result.Pass, "accepted"),
+                404 => (new Step("Session cookies", Result.Pass, $"accepted ({sent})"),
                         new Step("Live search socket", Result.Fail,
                             $"HTTP 404 - query id '{queryId}' no longer exists. Re-run the search on "
                             + "the trade site and paste the new URL.")),
 
-                429 => (new Step("Session cookies", Result.Pass, "accepted"),
+                429 => (new Step("Session cookies", Result.Pass, $"accepted ({sent})"),
                         new Step("Live search socket", Result.Fail, "429 rate limited")),
 
-                _ => (new Step("Session cookies", Result.Pass, "accepted"),
+                _ => (new Step("Session cookies", Result.Pass, $"accepted ({sent})"),
                       new Step("Live search socket", Result.Fail,
                           $"HTTP {code} {resp.ReasonPhrase}")),
             };

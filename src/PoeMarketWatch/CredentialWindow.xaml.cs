@@ -4,52 +4,86 @@ using PoeMarketWatch.Core;
 namespace PoeMarketWatch;
 
 /// <summary>
-/// Collects POESESSID / POETOKEN.
+/// Collects the session cookies.
 ///
-/// Deliberately uses PasswordBox rather than TextBox: these are unscoped full-account
-/// credentials, so they should not sit in plain view or land in a screenshot while
-/// someone is streaming. Existing values are never loaded back into the UI -- the store
-/// is write-then-verify only.
+/// The primary path is "paste the whole Cookie header", because guessing which cookies
+/// the API needs is exactly what fails: POESESSID alone gets a 401, the browser also
+/// sends POETOKEN, and Cloudflare may add cf_clearance. Keeping the entire header means
+/// this app never has to know the list.
+///
+/// PasswordBox rather than TextBox throughout: these are unscoped full-account
+/// credentials and should not sit in plain view or land in a screenshot. Stored values
+/// are never read back into the UI.
 /// </summary>
 public partial class CredentialWindow : Window
 {
     private readonly CredentialStore _store;
+    private readonly AppSettings _settings;
 
-    public CredentialWindow(CredentialStore store)
+    public CredentialWindow(CredentialStore store, AppSettings settings)
     {
         InitializeComponent();
         _store = store;
-        if (_store.Exists) ErrorText.Text = "A session is already stored. Saving replaces it.";
+        _settings = settings;
+        UaBox.Text = settings.UserAgent;
+
+        if (_store.Load() is { } existing)
+            ErrorText.Text = $"Stored now: {string.Join(", ", existing.CookieNames)}. Saving replaces it.";
+        else if (_store.Exists)
+            ErrorText.Text = "A session is stored but could not be decrypted. Saving replaces it.";
     }
 
     private void OnSave(object sender, RoutedEventArgs e)
     {
-        var sess = SessBox.Password.Trim();
-        if (sess.Length == 0)
-        {
-            ErrorText.Text = "POESESSID is required - the live search socket returns 401 without it.";
-            return;
-        }
+        var header = HeaderBox.Password.Trim();
+        CredentialStore.Credentials? creds = null;
 
-        // A pasted "POESESSID=abc; POETOKEN=def" is a common mistake; accept it gracefully.
-        if (sess.Contains('=') || sess.Contains(';'))
+        if (header.Length > 0)
         {
-            var (s, t) = CredentialStore.SplitCookieHeader(sess);
-            if (s is not null)
+            creds = CredentialStore.FromCookieHeader(header);
+            if (creds is null)
             {
-                _store.Save(new CredentialStore.Credentials(s, t ?? TokenBox.Password.Trim()));
-                DialogResult = true;
+                ErrorText.Text = "That header has no POESESSID in it. Copy the whole 'cookie' "
+                               + "request header, not the response 'set-cookie'.";
                 return;
             }
         }
+        else
+        {
+            var sess = SessBox.Password.Trim();
+            if (sess.Length == 0)
+            {
+                ErrorText.Text = "Paste the Cookie header above, or enter POESESSID.";
+                return;
+            }
+            // Tolerate a full header pasted into the single-value box too.
+            creds = sess.Contains('=') || sess.Contains(';')
+                ? CredentialStore.FromCookieHeader(sess)
+                : null;
+            creds ??= new CredentialStore.Credentials(sess, TokenBox.Password.Trim());
 
-        _store.Save(new CredentialStore.Credentials(sess, TokenBox.Password.Trim()));
+            // A POETOKEN typed separately should win over one parsed out of the box.
+            var token = TokenBox.Password.Trim();
+            if (token.Length > 0 && creds.PoeToken != token)
+                creds = creds with { PoeToken = token };
+        }
+
+        _store.Save(creds);
+
+        var ua = UaBox.Text.Trim();
+        if (ua.Length > 0 && ua != _settings.UserAgent)
+        {
+            _settings.UserAgent = ua;
+            _settings.Save();
+        }
+
         DialogResult = true;
     }
 
     private void OnClear(object sender, RoutedEventArgs e)
     {
         _store.Clear();
+        HeaderBox.Clear();
         SessBox.Clear();
         TokenBox.Clear();
         ErrorText.Text = "Stored session removed.";
