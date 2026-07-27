@@ -201,6 +201,46 @@ public partial class MainWindow : Window
 
     private void OnClearMatches(object sender, RoutedEventArgs e) => _matches.Clear();
 
+    /// <summary>
+    /// Tests each layer separately, because every failure mode looks identical from the
+    /// outside: dead socket, expired session, stale query id and a quiet market all
+    /// present as "nothing happens".
+    /// </summary>
+    private async void OnDiagnose(object sender, RoutedEventArgs e)
+    {
+        var watch = (WatchList.SelectedItem as WatchRow)?.Model
+                    ?? _settings.Watches.FirstOrDefault(w => w.Enabled)
+                    ?? _settings.Watches.FirstOrDefault();
+        if (watch is null) { Status("Add a watch first, then Diagnose."); return; }
+
+        DiagBtn.IsEnabled = false;
+        Status($"Diagnosing '{watch.Name}'...");
+        try
+        {
+            var test = new ConnectionTest(_settings.UserAgent, () => _credentials.Load());
+            var steps = await test.RunAsync(watch.League, watch.QueryId);
+
+            var report = string.Join("\n", steps.Select(s =>
+                $"{(s.Result == ConnectionTest.Result.Pass ? "PASS" : s.Result == ConnectionTest.Result.Fail ? "FAIL" : "----")}  {s.Name}\n        {s.Detail}"));
+
+            var failure = steps.FirstOrDefault(s => s.Result == ConnectionTest.Result.Fail);
+            Status(failure is null ? "All checks passed." : $"{failure.Name}: {failure.Detail}");
+
+            MessageBox.Show(this,
+                $"Watch: {watch.Name}\nLeague: {watch.League}\nQuery id: {watch.QueryId}\n\n{report}",
+                "Connection diagnosis", MessageBoxButton.OK,
+                failure is null ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        }
+        catch (Exception ex)
+        {
+            Status($"Diagnosis failed: {ex.Message}");
+        }
+        finally
+        {
+            DiagBtn.IsEnabled = true;
+        }
+    }
+
     private void RefreshTransient()
     {
         foreach (var m in _matches) m.Refresh();

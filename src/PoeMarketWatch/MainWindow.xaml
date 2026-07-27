@@ -78,6 +78,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <Button x:Name="StartBtn" Content="Start watching" Click="OnStartStop" Margin="0,0,8,0"/>
+                    <Button x:Name="DiagBtn" Content="Diagnose" Click="OnDiagnose" Margin="0,0,8,0"/>
                     <Button x:Name="CredsBtn" Content="Session…" Click="OnCredentials"/>
                 </StackPanel>
             </Grid>
