@@ -50,10 +50,14 @@ public class VoyageProfileTests
     [Fact]
     public void SulphurProfileScoresTheSulphurLine()
     {
+        // 30 x 2.0 from the "% increased Dead Man's Sulphur" rule.
+        //
+        // Note this constructs the Chart directly. Parsed from real text this line would
+        // be DROPPED, because the "Dead Man's Sulphur: +30%" headline stat is its sum and
+        // scoring both counts the same sulphur twice -- see ChartTextRealFormatTests.
         var profile = VoyageRules.Defaults().First(p => p.Name == "sulphur");
         var chart = Chart("30% increased Dead Man's Sulphur found in this Area");
-        // 30 x 1.0 from the number rule, plus 5 flat from the catch-all
-        Assert.Equal(35, profile.ScoreChart(chart), 3);
+        Assert.Equal(60, profile.ScoreChart(chart), 3);
     }
 
     [Fact]

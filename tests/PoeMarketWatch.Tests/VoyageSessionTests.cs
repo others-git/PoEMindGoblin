@@ -83,13 +83,13 @@ public class VoyageSessionTests
         s.ApplyPanelRead([Cell(1, true, true, true, true), Cell(2, true, true, true, true)]);
 
         Assert.Equal([1, 2], s.ChartsAwaitingDetail);
-        Assert.Equal(9, s.SquaresAwaitingModifiers.Count);
+        Assert.Equal(8, s.SquaresAwaitingModifiers.Count);      // the centre is excluded
 
         s.ApplyChartText(1, "A\nItem Quantity: +10%");
         s.ApplySquareModifiers(3, ["Adjacent Areas contain 8 additional packs of Sea Beasts"]);
 
         Assert.Equal([2], s.ChartsAwaitingDetail);
-        Assert.Equal(8, s.SquaresAwaitingModifiers.Count);
+        Assert.Equal(7, s.SquaresAwaitingModifiers.Count);
     }
 
     [Fact]
@@ -105,7 +105,8 @@ public class VoyageSessionTests
         // squares' Area Modifiers. Figurines are no longer read one by one -- the game
         // totals them per square, which is what the panel reports.
         foreach (var i in new[] { 1, 2 }) s.ApplyChartText(i, $"c{i}\nItem Quantity: +5%");
-        for (var sq = 1; sq <= 9; sq++) s.ApplySquareModifiers(sq, ["Adjacent Areas are fun"]);
+        foreach (var sq in s.SquaresAwaitingModifiers.ToList())
+            s.ApplySquareModifiers(sq, ["Adjacent Areas are fun"]);
         Assert.Equal(1.0, s.ReadProgress, 6);
     }
 

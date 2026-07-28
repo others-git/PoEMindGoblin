@@ -292,14 +292,16 @@
 
         <!-- ===== modifiers | board | charts ===== -->
         <Grid Grid.Row="1">
+            <!-- The board is the answer, so it takes the slack; the modifier list is
+                 reference material and gets a fixed, narrower column. -->
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" MinWidth="280"/>
-                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="340" MinWidth="260" MaxWidth="420"/>
+                <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
             <!-- modifiers: everything captured, and what it applies to -->
-            <DockPanel Grid.Column="0" Margin="18,16,10,16">
+            <DockPanel Grid.Column="0" Margin="16,16,8,16">
                 <TextBlock DockPanel.Dock="Top" x:Name="ModifierHeader" Text="M O D I F I E R S"
                            Style="{StaticResource Eyebrow}"/>
                 <ListBox x:Name="ModifierList" Style="{StaticResource Plain}"

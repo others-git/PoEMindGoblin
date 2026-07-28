@@ -230,6 +230,25 @@ public sealed class VoyageRules : IDisposable
     /// Starting profiles. Patterns capture the number in the text so magnitude counts.
     /// These are examples to edit, not an authority on what is worth farming.
     /// </summary>
+    /// <summary>
+    /// The built-in profiles.
+    ///
+    /// Every pattern here is written against REAL chart text, taken from captured
+    /// sessions and from poedb's mod tables for the three Voyage chart bases. Two things
+    /// that came out of that and would otherwise be invisible bugs:
+    ///
+    ///   * GGG misspells "Quantity" as "Qauntity" -- but only in the global lines,
+    ///     "8% increased Qauntity of Items found in all Voyage Areas". The adjacent and
+    ///     in-area versions spell it correctly. A rule matching "Quantity" therefore
+    ///     scores some rolls and silently misses others, so these match either spelling.
+    ///   * The headline stats are AGGREGATES of the affix lines, so the stat is scored
+    ///     and the contributing lines are dropped at parse time. Scoring both trebles a
+    ///     chart carrying three sulphur affixes.
+    ///
+    /// Adjacency patterns matter as much as the rest: a chart's Adjacent Modifier is
+    /// scored with these same rules and paid to its neighbours, which is what decides
+    /// whether it belongs in the centre or a corner.
+    /// </summary>
     public static List<VoyageProfile> Defaults() =>
     [
         new VoyageProfile
@@ -238,25 +257,27 @@ public sealed class VoyageRules : IDisposable
             Description = "Maximise Dead Man's Sulphur.",
             Rules =
             [
-                new VoyageRule { Pattern = @"Dead Man's Sulphur:\s*\+?(\d+(?:\.\d+)?)", Weight = 5.0,
-                                 Comment = "the chart's own sulphur stat, the main source" },
-                new VoyageRule { Pattern = @"(\d+)%\s+increased Dead Man's Sulphur", Weight = 1.0 },
-                new VoyageRule { Pattern = @"increased Dead Man's Sulphur", Weight = 5.0,
-                                 Comment = "flat credit for a sulphur mod the number pattern misses; "
-                                         + "requires 'increased' so it cannot double-fire on the stat line" },
+                new VoyageRule { Pattern = @"Dead Man's Sulphur:\s*\+?(\d+)", Weight = 5.0,
+                                 Comment = "the chart's own sulphur total, the main source" },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Dead Man's Sulphur", Weight = 2.0,
+                                 Comment = "global and adjacent sulphur rolls" },
             ],
         },
         new VoyageProfile
         {
             Name = "pack size",
-            Description = "Maximise monsters, including adjacency modifiers.",
+            Description = "Maximise monsters, including what neighbours receive.",
             BoardModifierWeight = 1.5,
             Rules =
             [
                 new VoyageRule { Pattern = @"Monster Pack Size:\s*\+?(\d+)", Weight = 1.0 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional packs", Weight = 4.0 },
-                new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = 1.0 },
-                new VoyageRule { Pattern = @"(\d+)%\s+increased Monster", Weight = 0.5 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = 1.5,
+                                 Comment = "global and adjacent pack size" },
+                new VoyageRule { Pattern = @"(\d+)\s+additional packs", Weight = 3.0,
+                                 Comment = "Crabs, Octopi, Sea Beasts -- all worded this way" },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased number of (?:Rare|Magic) Monsters",
+                                 Weight = 0.75 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Imprisoned Monsters", Weight = 2.0 },
             ],
         },
         new VoyageProfile
@@ -267,21 +288,65 @@ public sealed class VoyageRules : IDisposable
             [
                 new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 1.0 },
                 new VoyageRule { Pattern = @"Item Rarity:\s*\+?(\d+)", Weight = 0.5 },
-                new VoyageRule { Pattern = @"(\d+)%\s+increased Quantity", Weight = 1.0 },
-                new VoyageRule { Pattern = @"(\d+)%\s+increased Rarity", Weight = 0.5 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Q(?:uantity|auntity) of Items", Weight = 1.5,
+                                 Comment = "matches GGG's 'Qauntity' typo in the global lines" },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Rarity of Items", Weight = 0.75 },
+            ],
+        },
+        new VoyageProfile
+        {
+            Name = "loot boxes",
+            Description = "Strongboxes, barrels, treasure and unique-drop conversions.",
+            BoardModifierWeight = 1.5,
+            Rules =
+            [
+                new VoyageRule { Pattern = @"(\d+)\s+additional (?:Diviner's |Arcanist's |Operative's )?Strongboxes",
+                                 Weight = 6.0 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Clusters of Barrels", Weight = 1.0 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Treasure", Weight = 4.0 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Golden Lanterns", Weight = 3.0 },
+                new VoyageRule { Pattern = @"(\d+)%\s+chance to instead drop as a Unique", Weight = 2.0 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional cages? of Tormented Spirits", Weight = 5.0 },
+                new VoyageRule { Pattern = @"additional cage of Tormented Spirits", Weight = 5.0,
+                                 Comment = "the single-cage roll is worded without a number" },
+            ],
+        },
+        new VoyageProfile
+        {
+            Name = "gold",
+            Description = "Maximise gold.",
+            Rules =
+            [
+                new VoyageRule { Pattern = @"Gold Found:\s*\+?(\d+)", Weight = 1.0 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Gold found", Weight = 1.0 },
+                new VoyageRule { Pattern = @"(\d+)% of Equipment dropped by monsters in adjacent Areas is converted to Gold",
+                                 Weight = 1.0 },
             ],
         },
         new VoyageProfile
         {
             Name = "safe",
-            Description = "Prefer high tier, penalise dangerous monster modifiers.",
+            Description = "Prefer high tier, avoid the monster mods that actually kill you.",
             AreaLevelWeight = 1.0,
             Rules =
             [
-                new VoyageRule { Pattern = @"Monsters cannot be Taunted", Weight = -8 },
-                new VoyageRule { Pattern = @"Monsters reflect", Weight = -25 },
-                new VoyageRule { Pattern = @"cannot be modified to below Base Value", Weight = -5 },
-                new VoyageRule { Pattern = @"Monsters Hinder on Hit", Weight = -3 },
+                // Weighted by what genuinely ends runs, not by what sounds bad. All of
+                // these wordings are taken from real charts.
+                new VoyageRule { Pattern = @"Players have -(\d+)% to all maximum Resistances", Weight = -6 },
+                new VoyageRule { Pattern = @"Monsters are Hexproof", Weight = -10 },
+                new VoyageRule { Pattern = @"less effect of Curses on Monsters", Weight = -6 },
+                new VoyageRule { Pattern = @"Monsters cannot be Stunned", Weight = -4 },
+                new VoyageRule { Pattern = @"Monsters cannot be Taunted", Weight = -6 },
+                new VoyageRule { Pattern = @"Action Speed cannot be modified to below Base Value", Weight = -5 },
+                new VoyageRule { Pattern = @"Monster Damage Penetrates (\d+)% Elemental Resistances", Weight = -1 },
+                new VoyageRule { Pattern = @"(\d+)% more Monster Life", Weight = -0.15 },
+                new VoyageRule { Pattern = @"Monsters gain (\d+)% of Maximum Life as Extra Maximum Energy Shield",
+                                 Weight = -0.1 },
+                new VoyageRule { Pattern = @"\+(\d+)% to Monster Critical Strike Multiplier", Weight = -0.2 },
+                new VoyageRule { Pattern = @"Monsters steal Power, Frenzy and Endurance charges on Hit", Weight = -5 },
+                new VoyageRule { Pattern = @"Monsters' skills Chain (\d+) additional times", Weight = -2 },
+                new VoyageRule { Pattern = @"Monsters fire (\d+) additional Projectiles", Weight = -2 },
+                new VoyageRule { Pattern = @"patches of Shocked Ground", Weight = -3 },
             ],
         },
     ];

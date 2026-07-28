@@ -223,12 +223,14 @@ public class SquareModifierTests
     [Fact]
     public void NullUnreadsASquareWhereEmptyDoesNot()
     {
+        // Square 1, not 5: the centre is excluded from the checklist entirely, so it
+        // could never demonstrate the difference.
         var session = new VoyageSession();
-        session.ApplySquareModifiers(5, []);
-        Assert.DoesNotContain(5, session.SquaresAwaitingModifiers);
+        session.ApplySquareModifiers(1, []);
+        Assert.DoesNotContain(1, session.SquaresAwaitingModifiers);
 
-        session.ApplySquareModifiers(5, null);
-        Assert.Contains(5, session.SquaresAwaitingModifiers);
+        session.ApplySquareModifiers(1, null);
+        Assert.Contains(1, session.SquaresAwaitingModifiers);
     }
 
     [Fact]
@@ -243,9 +245,23 @@ public class SquareModifierTests
     }
 
     [Fact]
-    public void AllNineSquaresStartUnread()
+    public void OnlySquaresAFigurineCanReachAreOnTheChecklist()
     {
-        Assert.Equal(Enumerable.Range(1, 9), new VoyageSession().SquaresAwaitingModifiers);
+        // Eight, not nine: the centre of a 3x3 touches no figurine, so asking the user
+        // to hover it is asking them to confirm what the layout already determines.
+        var session = new VoyageSession();
+        Assert.Equal([1, 2, 3, 4, 6, 7, 8, 9], session.SquaresAwaitingModifiers);
+        Assert.Equal([5], session.SquaresWithoutFigurines);
+    }
+
+    [Fact]
+    public void ProgressReachesOneWithoutTheCentreSquare()
+    {
+        // If the excluded square still counted, the read could never finish.
+        var session = new VoyageSession();
+        foreach (var sq in session.SquaresAwaitingModifiers.ToList())
+            session.ApplySquareModifiers(sq, ["a modifier"]);
+        Assert.Equal(1.0, session.ReadProgress, 6);
     }
 
     [Fact]

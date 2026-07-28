@@ -522,7 +522,7 @@ public partial class VoyageView : UserControl
                   {
                       ModifierRow.Sort.Square => Target.Square,
                       ModifierRow.Sort.Figurine => Target.Figurine,
-                      _ => Target.Chart,
+                      _ => Target.Chart,          // VoyageWide points at its chart
                   },
                   row.Index,
                   $"{row.Title} selected — copy or type its text below.");
@@ -691,9 +691,9 @@ public partial class VoyageView : UserControl
     private Border[] _panelCells = [];
     private readonly Dictionary<int, Border> _figurineMarkers = new();
 
-    private const double SquareSize = 108;
-    private const double MarkerSize = 42;
-    private const double MarkerScale = 1.15;
+    private const double SquareSize = 138;
+    private const double MarkerSize = 46;
+    private const double MarkerScale = 1.25;
 
     /// <summary>
     /// Board plus the ring of figurines around it.
@@ -857,19 +857,48 @@ public partial class VoyageView : UserControl
                     : Color.FromRgb(0x3A, 0x2E, 0x1C));
                 cell.BorderThickness = new Thickness(isTarget ? 2 : 1);
                 cell.Child = BoardSquareContent(square, step, isStranded);
-                var squareRead = _session.SquareModifiers.TryGetValue(square, out var squareMods);
-                cell.ToolTip = Tip(
-                    step is null ? $"Square {square}" : $"Square {square} · chart {step.ChartNumber}",
-                    step is null
-                        ? "No chart — click to select, then hover it in game"
-                        : $"{step.Chart.Shape}, {step.RotationText}"
-                          + (isStranded ? " · cut off from the route" : ""),
-                    !squareRead ? ["Area modifiers not read yet."]
-                        : squareMods!.Count == 0 ? ["No board modifiers on this square."]
-                        : squareMods!,
-                    squareRead);
+                cell.ToolTip = SquareTip(square, step, isStranded);
             }
         }
+    }
+
+    /// <summary>
+    /// Everything that applies to a square: what the chart placed there brings, and what
+    /// the board gives it.
+    ///
+    /// Both, because that is the question being asked when you hover a solved square --
+    /// "what do I actually get here?" -- and the answer is the sum of the two. Kept
+    /// labelled so it stays obvious which half moves if the chart moves.
+    /// </summary>
+    private object SquareTip(int square, VoyagePlan.Step? step, bool stranded)
+    {
+        var lines = new List<string>();
+
+        if (step is not null)
+        {
+            lines.Add($"— chart {step.ChartNumber} —");
+            lines.AddRange(DescribeChart(step.Chart));
+        }
+
+        lines.Add(step is null ? "— board —" : "");
+        lines.Add(step is null ? "" : "— board —");
+        lines.RemoveAll(string.IsNullOrEmpty);
+
+        if (_session.SquareModifiers.TryGetValue(square, out var mods))
+            lines.AddRange(mods.Count == 0 ? ["No board modifiers on this square."] : mods);
+        else if (_session.SquaresWithoutFigurines.Contains(square))
+            lines.Add("No figurine reaches this square, so it never has board modifiers.");
+        else
+            lines.Add("Area modifiers not read yet.");
+
+        return Tip(
+            step is null ? $"Square {square}" : $"Square {square} · chart {step.ChartNumber}",
+            step is null
+                ? "No chart yet — click to select, then hover it in game"
+                : $"{step.Chart.Shape}, {step.RotationText}"
+                  + (stranded ? " · cut off from the route" : ""),
+            lines,
+            haveDetail: true);
     }
 
     /// <summary>
@@ -971,6 +1000,15 @@ public partial class VoyageView : UserControl
     private static SolidColorBrush Brush(byte r, byte g, byte b) =>
         new(Color.FromRgb(r, g, b));
 
+    /// <summary>
+    /// What a board square shows.
+    ///
+    /// Before solving, the square number is a quiet label. AFTER solving it becomes the
+    /// headline, because the plan is followed by matching numbers: every chart the plan
+    /// uses is stamped with its square number over in the panel, so you find "5" there
+    /// and drop it on the "5" here. Nine single digits beat sixty two-digit panel
+    /// indices, and the chart number stays underneath for when you want it.
+    /// </summary>
     private UIElement BoardSquareContent(int square, VoyagePlan.Step? step, bool stranded)
     {
         var stack = new StackPanel
@@ -979,24 +1017,15 @@ public partial class VoyageView : UserControl
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        stack.Children.Add(new TextBlock
-        {
-            Text = square.ToString(),
-            FontFamily = new FontFamily("Georgia"),
-            FontSize = 12,
-            Foreground = Brush(0x6B, 0x5F, 0x4E),
-            HorizontalAlignment = HorizontalAlignment.Center,
-        });
-
         if (step is null)
         {
             stack.Children.Add(new TextBlock
             {
-                Text = "empty",
-                FontSize = 11,
+                Text = square.ToString(),
+                FontFamily = new FontFamily("Georgia"),
+                FontSize = 30,
                 Foreground = Brush(0x3A, 0x30, 0x24),
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 26, 0, 0),
             });
             return stack;
         }
@@ -1005,25 +1034,33 @@ public partial class VoyageView : UserControl
             ? Color.FromRgb(0xB8, 0x50, 0x3E)
             : Color.FromRgb(0xC9, 0xA2, 0x27);
 
-        stack.Children.Add(Glyph(new ChartFace(step.Chart.Shape, step.Rotation), 52, accent));
+        stack.Children.Add(Glyph(new ChartFace(step.Chart.Shape, step.Rotation), 56, accent));
         stack.Children.Add(new TextBlock
         {
-            // The whole deliverable: read the number, find that square in the panel.
-            Text = step.ChartNumber.ToString(),
+            Text = square.ToString(),
             FontFamily = new FontFamily("Georgia"),
-            FontSize = 22,
+            FontSize = 34,
             Foreground = new SolidColorBrush(accent),
             HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 2, 0, 0),
+            Margin = new Thickness(0, -2, 0, 0),
         });
         stack.Children.Add(new TextBlock
         {
-            Text = stranded ? "stranded · " + step.RotationText : step.RotationText,
+            Text = $"chart {step.ChartNumber} · {step.RotationText}",
             FontFamily = new FontFamily("Consolas"),
             FontSize = 10,
             Foreground = stranded ? Brush(0xB8, 0x50, 0x3E) : Brush(0x94, 0x86, 0x6F),
             HorizontalAlignment = HorizontalAlignment.Center,
         });
+        if (stranded)
+            stack.Children.Add(new TextBlock
+            {
+                Text = "stranded",
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 10,
+                Foreground = Brush(0xB8, 0x50, 0x3E),
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
         return stack;
     }
 
@@ -1092,21 +1129,39 @@ public partial class VoyageView : UserControl
                 : Color.FromRgb(0x24, 0x1D, 0x16));
             cell.BorderThickness = new Thickness(isTarget ? 2 : 1);
 
-            var stack = new StackPanel { Margin = new Thickness(0, 3, 0, 0) };
+            var stack = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
             stack.Children.Add(new TextBlock
             {
                 Text = index.ToString(),
                 FontFamily = new FontFamily("Consolas"),
                 FontSize = 10,
                 Foreground = new SolidColorBrush(isPlanned
-                    ? Color.FromRgb(0xC9, 0xA2, 0x27)
+                    ? Color.FromRgb(0x8A, 0x6F, 0x22)
                     : Color.FromRgb(0x6B, 0x5F, 0x4E)),
                 HorizontalAlignment = HorizontalAlignment.Center,
             });
-            stack.Children.Add(Glyph(new ChartFace(chart.Shape, 0), 24,
-                isPlanned ? Color.FromRgb(0xC9, 0xA2, 0x27)
-                : hasDetail ? Color.FromRgb(0x86, 0xA8, 0x6A)
-                : Color.FromRgb(0x7A, 0x6E, 0x5C)));
+
+            if (isPlanned)
+            {
+                // The destination square, large. Once solved this is the only number
+                // worth reading: find it here, drop it on the square with the same one.
+                stack.Children.Add(new TextBlock
+                {
+                    Text = used[index].ToString(),
+                    FontFamily = new FontFamily("Georgia"),
+                    FontSize = 26,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xA2, 0x27)),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, -3, 0, -3),
+                });
+            }
+            else
+            {
+                stack.Children.Add(Glyph(new ChartFace(chart.Shape, 0), 24,
+                    hasDetail ? Color.FromRgb(0x86, 0xA8, 0x6A)
+                    : Color.FromRgb(0x7A, 0x6E, 0x5C)));
+            }
+
             stack.Children.Add(new TextBlock
             {
                 Text = chart.AreaLevel > 0 ? chart.AreaLevel.ToString() : "··",
@@ -1119,7 +1174,7 @@ public partial class VoyageView : UserControl
             cell.Child = stack;
             cell.ToolTip = Tip(
                 string.IsNullOrWhiteSpace(chart.Name) ? $"Chart {index}" : $"Chart {index} · {chart.Name}",
-                isPlanned ? $"Goes in square {used[index]}" : "Not in the plan",
+                isPlanned ? $"Goes on square {used[index]}" : "Not in the plan",
                 DescribeChart(chart), hasDetail);
         }
 
@@ -1148,20 +1203,37 @@ public partial class VoyageView : UserControl
         var previous = (ModifierList.SelectedItem as ModifierRow)?.Key;
         _modifiers.Clear();
 
-        // Squares first: they are what the game aggregates and what the solver uses.
+        // Voyage-wide modifiers first. They apply to the whole voyage wherever their
+        // chart sits, so unlike everything else here their position is irrelevant -- and
+        // they are the only entries that describe the run as a whole.
+        foreach (var (panelIndex, modifier) in _session.VoyageWideModifiers)
+        {
+            _modifiers.Add(new ModifierRow(
+                ModifierRow.Sort.VoyageWide, panelIndex,
+                "Voyage-wide", $"chart {panelIndex}",
+                modifier, captured: true,
+                selected: _target == Target.Chart && _targetIndex == panelIndex));
+        }
+
+        // Then squares: what the game aggregates, and what the solver places against.
+        var unreachable = _session.SquaresWithoutFigurines.ToHashSet();
         for (var square = 1; square <= _session.Layout.Rows * _session.Layout.Cols; square++)
         {
-            // Read-with-nothing is a real state: the centre square touches no figurine,
-            // so "No modifiers" and "Not read" must not look the same.
             var read = _session.SquareModifiers.TryGetValue(square, out var lines);
+
+            // Three states, not two: unreachable squares are not work left to do, so they
+            // must not read as "Not read" and sit there looking unfinished.
+            var text = unreachable.Contains(square) ? "No figurine reaches this square"
+                : !read ? "Not read"
+                : lines!.Count == 0 ? "No modifiers"
+                : string.Join("\n", lines!);
+
             _modifiers.Add(new ModifierRow(
                 ModifierRow.Sort.Square, square,
-                $"Square {square}", "board",
-                !read ? "Not read"
-                    : lines!.Count == 0 ? "No modifiers"
-                    : string.Join("\n", lines!),
-                captured: read,
-                selected: _target == Target.Square && _targetIndex == square));
+                $"Square {square}", "board", text,
+                captured: read || unreachable.Contains(square),
+                selected: _target == Target.Square && _targetIndex == square,
+                muted: unreachable.Contains(square)));
         }
 
         var placed = _steps.ToDictionary(st => st.ChartNumber, st => st.Square);
@@ -1253,10 +1325,10 @@ public partial class VoyageView : UserControl
     /// </summary>
     public sealed class ModifierRow
     {
-        public enum Sort { Square, Figurine, Chart }
+        public enum Sort { VoyageWide, Square, Figurine, Chart }
 
         public ModifierRow(Sort kind, int index, string title, string where,
-                           string text, bool captured, bool selected)
+                           string text, bool captured, bool selected, bool muted = false)
         {
             Kind = kind;
             Index = index;
@@ -1265,6 +1337,7 @@ public partial class VoyageView : UserControl
             Text = text;
             Captured = captured;
             Selected = selected;
+            Muted = muted;
         }
 
         public Sort Kind { get; }
@@ -1278,16 +1351,22 @@ public partial class VoyageView : UserControl
         public bool Captured { get; }
         public bool Selected { get; }
 
+        /// <summary>Nothing to do here — shown for completeness, not as outstanding work.</summary>
+        public bool Muted { get; }
+
         /// <summary>Stable identity, so a rebuild can restore the selection.</summary>
         public string Key => $"{Kind}:{Index}";
 
         public Brush Accent => new SolidColorBrush(
             Selected ? Color.FromRgb(0xC9, 0xA2, 0x27)
+            : Kind == Sort.VoyageWide ? Color.FromRgb(0xC9, 0xA2, 0x27)
+            : Muted ? Color.FromRgb(0x2A, 0x20, 0x18)
             : Captured ? Color.FromRgb(0x86, 0xA8, 0x6A)
             : Color.FromRgb(0x2A, 0x20, 0x18));
 
-        public Brush TextBrush => new SolidColorBrush(Captured
-            ? Color.FromRgb(0xE6, 0xDB, 0xC2)
+        public Brush TextBrush => new SolidColorBrush(
+            Muted ? Color.FromRgb(0x5A, 0x50, 0x42)
+            : Captured ? Color.FromRgb(0xE6, 0xDB, 0xC2)
             : Color.FromRgb(0x6B, 0x5F, 0x4E));
 
         public Brush RowBackground => new SolidColorBrush(

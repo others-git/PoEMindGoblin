@@ -63,15 +63,52 @@ public sealed class VoyageSession
     /// <summary>Forget a square's reading, putting it back on the checklist.</summary>
     public void ClearSquareModifiers(int square) => _squareModifiers.Remove(square);
 
-    /// <summary>Squares whose Area Modifiers have not been read yet.</summary>
-    public IReadOnlyList<int> SquaresAwaitingModifiers =>
+    /// <summary>
+    /// Squares no figurine touches, which therefore can never carry a board modifier.
+    ///
+    /// On the standard ring every figurine sits against an EDGE square, so the centre of
+    /// a 3x3 is reachable by none of them. Its Area Modifiers panel is empty every time,
+    /// and asking the user to hover it is asking them to confirm something the layout
+    /// already determines.
+    ///
+    /// Derived from the layout rather than hardcoded to square 5: change the board size
+    /// or the figurine ring and this follows.
+    /// </summary>
+    public IReadOnlyList<int> SquaresWithoutFigurines =>
         Enumerable.Range(1, Layout.Rows * Layout.Cols)
-                  .Where(sq => !_squareModifiers.ContainsKey(sq))
+                  .Where(sq => !Layout.Figurines.Any(
+                      f => f.Adjacent.Any(a => a.ToCell() == CellOf(sq))))
                   .ToList();
+
+    /// <summary>Squares whose Area Modifiers still need reading.</summary>
+    public IReadOnlyList<int> SquaresAwaitingModifiers
+    {
+        get
+        {
+            var unreachable = SquaresWithoutFigurines.ToHashSet();
+            return Enumerable.Range(1, Layout.Rows * Layout.Cols)
+                             .Where(sq => !_squareModifiers.ContainsKey(sq)
+                                          && !unreachable.Contains(sq))
+                             .ToList();
+        }
+    }
 
     /// <summary>The cell a 1-based square number refers to.</summary>
     public Cell CellOf(int square) =>
         new((square - 1) / Layout.Cols, (square - 1) % Layout.Cols);
+
+    /// <summary>
+    /// Every global "Voyage Modifier" in play, with the chart it came from.
+    ///
+    /// These apply to the whole voyage wherever the chart sits, so unlike everything else
+    /// on this board their position is irrelevant -- which is exactly why they belong
+    /// grouped at the top rather than buried per square.
+    /// </summary>
+    public IReadOnlyList<(int PanelIndex, string Modifier)> VoyageWideModifiers =>
+        _charts.Where(kv => !string.IsNullOrWhiteSpace(kv.Value.VoyageModifier))
+               .OrderBy(kv => kv.Key)
+               .Select(kv => (kv.Key, kv.Value.VoyageModifier!))
+               .ToList();
 
     /// <summary>
     /// Take a panel read. Charts already carrying hover detail keep it: a re-read after
@@ -152,11 +189,14 @@ public sealed class VoyageSession
     {
         get
         {
-            var squares = Layout.Rows * Layout.Cols;
-            var total = _charts.Count + squares;
+            // Only squares that CAN carry a modifier count towards the read; the centre
+            // of a 3x3 touches no figurine, so it is not work the user has to do.
+            var readable = Layout.Rows * Layout.Cols - SquaresWithoutFigurines.Count;
+            var total = _charts.Count + readable;
             if (total == 0) return 0;
-            var done = _charts.Count(kv => HasDetail(kv.Value)) + _squareModifiers.Count;
-            return done / (double)total;
+            var done = _charts.Count(kv => HasDetail(kv.Value))
+                       + _squareModifiers.Keys.Count(sq => !SquaresWithoutFigurines.Contains(sq));
+            return Math.Min(1.0, done / (double)total);
         }
     }
 
@@ -280,7 +320,10 @@ public sealed class VoyageSession
 
         foreach (var c in state.Charts)
         {
-            session._charts[c.PanelIndex] = new Chart(
+            // Refined on the way in: a session saved by an older parser has its scope
+            // undetected and chrome in its modifier list, and re-copying every chart to
+            // pick up a parser fix is not a reasonable thing to ask.
+            session._charts[c.PanelIndex] = ChartText.Refine(new Chart(
                 $"panel-{c.PanelIndex}", c.Name, c.Shape, c.AreaLevel, c.Modifiers.ToList())
             {
                 AreaName = c.AreaName,
@@ -292,7 +335,7 @@ public sealed class VoyageSession
                 MonsterPackSize = c.MonsterPackSize,
                 GoldFound = c.GoldFound,
                 Sulphur = c.Sulphur,
-            };
+            });
         }
 
         foreach (var (key, lines) in state.SquareModifiers)

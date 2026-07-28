@@ -189,3 +189,115 @@ public class VoyagePersistenceTests : IDisposable
         Assert.Contains("\"Straight\"", File.ReadAllText(_path));
     }
 }
+
+/// <summary>
+/// Sessions on disk hold the RESULT of parsing, not the text, so a parser fix does not
+/// reach charts already read. Refining on load repairs them instead of throwing away a
+/// session and asking for 24 charts to be copied again.
+/// </summary>
+public class SessionRefineTests : IDisposable
+{
+    private readonly string _path =
+        Path.Combine(Path.GetTempPath(), $"voyage-refine-{Guid.NewGuid():N}.json");
+
+    public void Dispose()
+    {
+        if (File.Exists(_path)) File.Delete(_path);
+    }
+
+    /// <summary>A chart exactly as the OLD parser stored it: everything in Modifiers.</summary>
+    private static Chart AsOldParserStoredIt() =>
+        new("panel-2", "Deepwater Descent", ChartShape.Straight, 71,
+        [
+            "Seafloor Ridges",
+            "Requirements:",
+            "Level: 54",
+            "Item Level: 71",
+            "{ Implicit Modifier }",
+            "Adjacent Areas contain 9(8-10) additional packs of Crabs",
+            "{ Prefix Modifier \"Unwavering\" (Tier: 1) — Life }",
+            "17(10-20)% more Monster Life",
+            "Monsters cannot be Stunned",
+            "(Maimed enemies have 30% reduced Movement Speed)",
+            "30% increased Dead Man's Sulphur found in this Area",
+            "Take this item to Valerie aboard the Sovereign to Chart this area.",
+        ]) { Sulphur = 30 };
+
+    [Fact]
+    public void RefiningRecoversTheAdjacencyModifier()
+    {
+        var refined = ChartText.Refine(AsOldParserStoredIt());
+        Assert.Equal("Adjacent Areas contain 9 additional packs of Crabs", refined.AdjacentModifier);
+        Assert.True(refined.HasAdjacentModifier);
+    }
+
+    [Fact]
+    public void RefiningStripsTheChrome()
+    {
+        var refined = ChartText.Refine(AsOldParserStoredIt());
+        Assert.DoesNotContain(refined.Modifiers, m => m.StartsWith("{"));
+        Assert.DoesNotContain(refined.Modifiers, m => m.StartsWith("("));
+        Assert.DoesNotContain(refined.Modifiers, m => m.Contains("Take this item"));
+        Assert.DoesNotContain(refined.Modifiers, m => m.Contains("Requirements"));
+        Assert.DoesNotContain(refined.Modifiers, m => m.StartsWith("Item Level"));
+        Assert.DoesNotContain(refined.Modifiers, m => m.StartsWith("Level:"));
+    }
+
+    [Fact]
+    public void RefiningDropsTheLinesAlreadyCountedInTheStats()
+    {
+        var refined = ChartText.Refine(AsOldParserStoredIt());
+        Assert.DoesNotContain(refined.Modifiers, m => m.Contains("Dead Man's Sulphur"));
+        Assert.Equal(30, refined.Sulphur);      // the stat itself is untouched
+    }
+
+    [Fact]
+    public void RefiningKeepsTheRealMonsterModifiers()
+    {
+        var refined = ChartText.Refine(AsOldParserStoredIt());
+        Assert.Contains("17% more Monster Life", refined.Modifiers);
+        Assert.Contains("Monsters cannot be Stunned", refined.Modifiers);
+    }
+
+    [Fact]
+    public void RefiningLeavesAGoodParseAlone()
+    {
+        // Only applied when no scope was detected, so it cannot undo correct work.
+        var good = new Chart("id", "X", ChartShape.Corner, 80, ["Monsters cannot be Stunned"])
+        {
+            AdjacentModifier = "Adjacent Areas contain 4 additional Strongboxes",
+        };
+        var refined = ChartText.Refine(good);
+        Assert.Equal(good.AdjacentModifier, refined.AdjacentModifier);
+        Assert.Equal(good.Modifiers, refined.Modifiers);
+    }
+
+    [Fact]
+    public void AnOldSessionIsRepairedWhenItLoads()
+    {
+        var session = new VoyageSession();
+        session.ApplyPanelRead([
+            new ChartPanelReader.ReadCell(2, 0, 1, false, true, false, true) { Level = 71 }]);
+
+        // Write the state as the old parser would have left it.
+        var state = session.ToState();
+        state.Charts[0].Modifiers = AsOldParserStoredIt().Modifiers.ToList();
+        state.Charts[0].Sulphur = 30;
+        state.Save(_path);
+
+        var (restored, _) = VoyageSession.Restore(_path);
+        var chart = restored.ByPanelIndex[2];
+
+        Assert.Equal("Adjacent Areas contain 9 additional packs of Crabs", chart.AdjacentModifier);
+        Assert.DoesNotContain(chart.Modifiers, m => m.StartsWith("{"));
+
+        // And the adjacency now actually scores, which it could not before.
+        var packs = new VoyageProfile
+        {
+            Name = "packs",
+            Rules = [new VoyageRule { Pattern = @"(\d+) additional packs", Weight = 10 }],
+        };
+        Assert.Equal(90, packs.ScoreAdjacent(chart));
+        Assert.Equal(0, packs.ScoreChart(chart));
+    }
+}
