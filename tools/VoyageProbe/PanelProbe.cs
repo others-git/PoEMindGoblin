@@ -14,7 +14,7 @@ using PoeMarketWatch.Core.Voyage;
 [SupportedOSPlatform("windows")]
 public static class PanelProbe
 {
-    public static int Run(string path, string profileName)
+    public static int Run(string path, string profileName, string? overlayPath = null)
     {
         if (!File.Exists(path))
         {
@@ -25,7 +25,14 @@ public static class PanelProbe
         using var pixels = new FilePixels(path);
         Console.WriteLine($"{Path.GetFileName(path)}  {pixels.Width}x{pixels.Height}");
 
-        var cells = new ChartPanelReader(levels: LevelReader.LoadWithUserTemplates()).Read(pixels);
+        var options = ChartPanelReader.Options.Load();
+        var cells = new ChartPanelReader(options, LevelReader.LoadWithUserTemplates()).Read(pixels);
+
+        if (overlayPath is not null)
+        {
+            DrawOverlay(path, options, cells, overlayPath);
+            Console.WriteLine($"overlay written to {overlayPath}");
+        }
         Console.WriteLine($"\n{cells.Count} charts read");
         foreach (var group in cells.GroupBy(c => c.Shape).OrderByDescending(g => g.Count()))
             Console.WriteLine($"  {group.Key,-9} x{group.Count()}");
@@ -59,6 +66,45 @@ public static class PanelProbe
         Console.WriteLine("PLAN");
         foreach (var step in session.Plan(solution)) Console.WriteLine("  " + step);
         return 0;
+    }
+
+    /// <summary>
+    /// Draw the calibration grid back over the screenshot.
+    ///
+    /// This is how the coordinates were found in the first place, and it is the only
+    /// honest way to check them: a drifted origin still produces a plan, just a plan
+    /// built from the wrong cells. Seeing the boxes land on the glyphs is proof.
+    /// </summary>
+    private static void DrawOverlay(
+        string source, ChartPanelReader.Options o,
+        IReadOnlyList<ChartPanelReader.ReadCell> cells, string destination)
+    {
+        using var bmp = new Bitmap(source);
+        var scaled = bmp.Width == o.ReferenceWidth && bmp.Height == o.ReferenceHeight
+            ? o
+            : o.ScaledTo(bmp.Width, bmp.Height);
+
+        using var g = Graphics.FromImage(bmp);
+        using var found = new Pen(Color.Lime, 1);
+        using var empty = new Pen(Color.FromArgb(90, Color.Red), 1);
+        using var font = new Font("Consolas", 9);
+        using var label = new SolidBrush(Color.Yellow);
+
+        for (var row = 0; row < scaled.Rows; row++)
+        {
+            for (var col = 0; col < scaled.Cols; col++)
+            {
+                var cx = scaled.OriginX + col * scaled.Pitch;
+                var cy = scaled.OriginY + row * scaled.Pitch + scaled.GlyphOffsetY;
+                var h = scaled.GlyphHalf;
+                var cell = cells.FirstOrDefault(c => c.Row == row && c.Col == col);
+                g.DrawRectangle(cell is null ? empty : found, cx - h, cy - h, h * 2, h * 2);
+                if (cell is not null)
+                    g.DrawString($"{cell.Index} {cell.Shape} L{cell.Level?.ToString() ?? "?"}",
+                                 font, label, cx - h, cy + h + 1);
+            }
+        }
+        bmp.Save(destination, ImageFormat.Png);
     }
 }
 

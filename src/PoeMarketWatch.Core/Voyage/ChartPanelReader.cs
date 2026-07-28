@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace PoeMarketWatch.Core.Voyage;
 
 /// <summary>Minimal pixel source, so reading is testable from a PNG with no game running.</summary>
@@ -78,6 +80,64 @@ public sealed class ChartPanelReader
                 ReferenceWidth = width,
                 ReferenceHeight = height,
             };
+        }
+
+        // ---- persistence ---------------------------------------------------------
+
+        /// <summary>
+        /// Calibration lives in a file because it CANNOT be static. These coordinates
+        /// were measured at 2560x1440 windowed fullscreen; UI scale, window mode, an
+        /// ultrawide monitor or a patch that moves the panel all shift them, and
+        /// <see cref="ScaledTo"/> only covers the pure-resolution case. A tool that works
+        /// at exactly one resolution works for exactly one person.
+        /// </summary>
+        public static string DefaultPath => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "PoeMarketWatch", "panel-calibration.json");
+
+        private static readonly JsonSerializerOptions Json = new()
+        {
+            WriteIndented = true,
+            PropertyNameCaseInsensitive = true,
+            ReadCommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+        };
+
+        /// <summary>Load the user's calibration, or the measured defaults if there is none.</summary>
+        public static Options Load(string? path = null)
+        {
+            path ??= DefaultPath;
+            if (!File.Exists(path)) return new Options();
+            try
+            {
+                // A hand-edited file with a zero pitch would divide the panel into
+                // nothing; fall back rather than read gibberish off the screen.
+                var loaded = JsonSerializer.Deserialize<Options>(File.ReadAllText(path), Json);
+                return loaded is { Pitch: > 0, Rows: > 0, Cols: > 0, GlyphHalf: > 0 }
+                    ? loaded
+                    : new Options();
+            }
+            catch (Exception ex) when (ex is JsonException or IOException)
+            {
+                return new Options();
+            }
+        }
+
+        public void Save(string? path = null)
+        {
+            path ??= DefaultPath;
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            var tmp = path + ".tmp";
+            File.WriteAllText(tmp, JsonSerializer.Serialize(this, Json));
+            File.Move(tmp, path, overwrite: true);
+        }
+
+        /// <summary>Write the defaults out so there is something to edit.</summary>
+        public static void WriteDefaultsIfMissing(string? path = null)
+        {
+            path ??= DefaultPath;
+            if (!File.Exists(path)) new Options().Save(path);
         }
     }
 

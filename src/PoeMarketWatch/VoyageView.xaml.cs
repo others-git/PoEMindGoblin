@@ -96,6 +96,24 @@ public partial class VoyageView : UserControl
         if (Profile is { Description: { } d } && !string.IsNullOrWhiteSpace(d)) SetStatus(d);
     }
 
+    private void OnCalibrate(object sender, RoutedEventArgs e)
+    {
+        // Opens the file rather than offering a dialog of spinners: the values are pixel
+        // coordinates, and the way to get them right is to run VoyageProbe's overlay,
+        // look at where the grid lands, and nudge. A GUI would not make that easier.
+        try
+        {
+            ChartPanelReader.Options.WriteDefaultsIfMissing();
+            Process.Start(new ProcessStartInfo(ChartPanelReader.Options.DefaultPath)
+                { UseShellExecute = true });
+            SetStatus("Calibration opened. Save, then Read panel again.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Could not open the calibration file: {ex.Message}", bad: true);
+        }
+    }
+
     private void OnEditRules(object sender, RoutedEventArgs e)
     {
         try
@@ -118,8 +136,8 @@ public partial class VoyageView : UserControl
         {
             using var bmp = ScreenCapture.CapturePrimaryScreen();
             using var pixels = new BitmapPixels(bmp);
-            var cells = new ChartPanelReader(levels: LevelReader.LoadWithUserTemplates())
-                .Read(pixels);
+            var cells = new ChartPanelReader(
+                ChartPanelReader.Options.Load(), LevelReader.LoadWithUserTemplates()).Read(pixels);
 
             if (cells.Count == 0)
             {

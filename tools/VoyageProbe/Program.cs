@@ -2,7 +2,10 @@ using PoeMarketWatch.Core.Voyage;
 
 // With a screenshot path, decode it and print the plan; otherwise run the synthetic
 // solver benchmark below.
-if (args.Length > 0) return PanelProbe.Run(args[0], args.Length > 1 ? args[1] : "safe");
+// probe <screenshot.png> [profile] [overlay-out.png]
+if (args.Length > 0)
+    return PanelProbe.Run(args[0], args.Length > 1 ? args[1] : "safe",
+                          args.Length > 2 ? args[2] : null);
 
 
 static List<Chart> Make(int n, int seed)

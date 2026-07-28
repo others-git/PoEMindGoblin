@@ -86,6 +86,8 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Content="Calibrate…" Click="OnCalibrate" Margin="0,0,8,0"
+                            ToolTip="Panel coordinates. Edit if the read misses charts at your resolution."/>
                     <Button Content="Reset" Click="OnReset" Margin="0,0,8,0"/>
                     <Button x:Name="PopOutBtn" Content="Pop out" Click="OnPopOut"
                             ToolTip="Move to its own window for a second monitor"/>

@@ -6,7 +6,8 @@ Windows market tool for Path of Exile. Two tools so far:
   async Market / Merchant's Tab listings. See a match the moment it is listed and be one
   keypress from the seller's hideout.
 * **Gem RoI** — which vendor-buyable gems are worth levelling, priced off poe.watch.
-* **Voyage solver** — which chart goes in which board square (core done; UI pending).
+* **Voyage planner** — reads the chart panel off a screenshot and tells you which chart
+  goes in which board square: `square 5 <- chart 23`.
 
 Portable: a single self-contained .exe, no installer, no runtime prerequisite.
 
@@ -25,10 +26,50 @@ complete the trade at Faustus yourself.
 
 ```
 src/PoeMarketWatch.Core/    API client, rate limiting, credentials, stat index (no UI)
+src/PoeMarketWatch.Core/Voyage/  board, solver, rules, screen readers, session
 src/PoeMarketWatch/         WPF desktop app
 tests/PoeMarketWatch.Tests/ xunit; Core is UI-free so these run headless
+tools/VoyageProbe/          decode a screenshot and print the plan, headless
 assets/trade-index.json     generated stat/spawn index (see below)
 ```
+
+## Voyage planner
+
+Placing 9 of 60 charts by hand is the tedious part of the league mechanic, and the
+constraint is real: every path must meet another path or the board edge, and connections
+are mutual. On top of that, two independent adjacency effects change what a square is
+worth — the 12 figurines fixed around the board, and charts that carry their own
+`Adjacent Modifier:`. A chart that buffs its neighbours is worth twice as much in the
+centre (4 neighbours) as in a corner (2).
+
+**Reading the board is two passes**, because the game only shows half of what matters:
+
+1. **Read panel** — one screenshot. Every chart's shape, rotation and area level, decoded
+   from pixels. Enough to solve the layout outright.
+2. **Read mode** — the rest lives only in tooltips. The app names the next chart, you
+   hover it and press `Ctrl+C`, and each copy ticks one off. Same for the 12 figurines.
+
+Pass 2 is **optional**: with nothing hovered you still get a legal layout scored on area
+level. Detail improves the plan; its absence does not block one.
+
+There is deliberately no single "best" board — it depends on what you are farming — so the
+objective is a **rule profile** you pick (sulphur, pack size, quantity, safe), hot-reloaded
+from JSON with no restart. The solver is anytime and says whether the answer was *proved
+optimal* or merely the best found in the budget.
+
+It is a **mirror, not an overlay**: it draws its own board on a second monitor rather than
+painting over the game. It reads the screen and the clipboard, and sends the client
+nothing.
+
+Headless equivalent, and the way to check the calibration still lines up:
+
+```
+dotnet run --project tools/VoyageProbe -- screenshot.png sulphur overlay.png
+```
+
+**Known gap:** the level reader was trained from one capture, which contained only the
+digits 1,2,3,4,6,7,8. A level containing 0, 5 or 9 reads as unknown rather than as a wrong
+number. Teach it from a later capture via `level-digits.json`; no rebuild needed.
 
 ## The stat index
 

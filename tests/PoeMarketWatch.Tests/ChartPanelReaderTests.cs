@@ -167,3 +167,83 @@ public class ChartPanelReaderTests
         Assert.Equal(1920, scaled.ReferenceWidth);
     }
 }
+
+/// <summary>
+/// The calibration must be data, not constants: these coordinates were measured at one
+/// resolution in one window mode, and UI scale, ultrawide monitors and patches all move
+/// them. ScaledTo covers only the pure-resolution case.
+/// </summary>
+public class PanelCalibrationTests
+{
+    private static string TempPath() =>
+        Path.Combine(Path.GetTempPath(), $"panel-calibration-{Guid.NewGuid():N}.json");
+
+    [Fact]
+    public void MissingFileGivesTheMeasuredDefaults()
+    {
+        var loaded = ChartPanelReader.Options.Load(TempPath());
+        Assert.Equal(new ChartPanelReader.Options().OriginX, loaded.OriginX);
+        Assert.Equal(new ChartPanelReader.Options().Pitch, loaded.Pitch);
+    }
+
+    [Fact]
+    public void EditsRoundTrip()
+    {
+        var path = TempPath();
+        try
+        {
+            new ChartPanelReader.Options { OriginX = 1234, Pitch = 50, Rows = 8 }.Save(path);
+            var loaded = ChartPanelReader.Options.Load(path);
+            Assert.Equal(1234, loaded.OriginX);
+            Assert.Equal(50, loaded.Pitch);
+            Assert.Equal(8, loaded.Rows);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Theory]
+    [InlineData(@"{ ""Pitch"": 0 }")]        // would divide the panel into nothing
+    [InlineData(@"{ ""Rows"": 0 }")]
+    [InlineData(@"{ ""GlyphHalf"": 0 }")]
+    [InlineData("{ not json")]
+    public void NonsenseFallsBackRatherThanReadingGarbage(string content)
+    {
+        var path = TempPath();
+        try
+        {
+            File.WriteAllText(path, content);
+            Assert.Equal(new ChartPanelReader.Options().Pitch,
+                         ChartPanelReader.Options.Load(path).Pitch);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void WriteDefaultsDoesNotClobberAnExistingFile()
+    {
+        var path = TempPath();
+        try
+        {
+            new ChartPanelReader.Options { OriginX = 999 }.Save(path);
+            ChartPanelReader.Options.WriteDefaultsIfMissing(path);
+            Assert.Equal(999, ChartPanelReader.Options.Load(path).OriginX);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public void ASavedDefaultCalibrationStillReadsTheRealCapture()
+    {
+        // Round-tripping through JSON must not quietly drop a field the reader needs.
+        var path = TempPath();
+        try
+        {
+            new ChartPanelReader.Options().Save(path);
+            using var px = new BitmapPixels(
+                Path.Combine(AppContext.BaseDirectory, "fixtures", "voyage-panel.png"));
+            Assert.Equal(24, new ChartPanelReader(ChartPanelReader.Options.Load(path)).Read(px).Count);
+        }
+        finally { File.Delete(path); }
+    }
+}
