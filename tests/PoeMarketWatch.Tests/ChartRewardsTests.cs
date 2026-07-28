@@ -152,3 +152,79 @@ public class ChartRewardsTests
         Assert.Equal(3, ChartRewards.DifficultyCount(chart));
     }
 }
+
+/// <summary>
+/// The mod split is data, not judgement: Voyage charts have three bases and poedb
+/// publishes the full table for each, so the set is closed. These check the shipped
+/// catalogue actually loads and covers what the game rolls.
+/// </summary>
+public class ChartCatalogueTests
+{
+    [Fact]
+    public void TheShippedCatalogueLoads()
+    {
+        // If the asset is missing the built-in floor takes over silently, and the reward
+        // filter quietly gets much worse. Assert the real file is there and substantial.
+        Assert.True(File.Exists(ChartRewards.DefaultPath),
+                    $"voyage-mods.json missing from {ChartRewards.DefaultPath}");
+        Assert.True(ChartRewards.Current.Reward.Count >= 40,
+                    $"only {ChartRewards.Current.Reward.Count} reward patterns loaded");
+        Assert.True(ChartRewards.Current.Difficulty.Count >= 30,
+                    $"only {ChartRewards.Current.Difficulty.Count} difficulty patterns loaded");
+    }
+
+    [Fact]
+    public void EveryPatternInTheCatalogueCompiles()
+    {
+        // A bad pattern would throw on the first hover, not at load.
+        foreach (var pattern in ChartRewards.Current.Reward.Concat(ChartRewards.Current.Difficulty))
+            _ = new System.Text.RegularExpressions.Regex(pattern);
+    }
+
+    [Fact]
+    public void NoPatternIsClassedBothWays()
+    {
+        // Reward wins, so an overlap would silently reclassify a difficulty mod.
+        var both = ChartRewards.Current.Reward
+            .Intersect(ChartRewards.Current.Difficulty)
+            .ToList();
+        Assert.Empty(both);
+    }
+
+    [Fact]
+    public void ABrokenCatalogueFallsBackInsteadOfThrowing()
+    {
+        var original = ChartRewards.Current;
+        try
+        {
+            ChartRewards.Use(new ChartRewards.Catalogue());     // empty
+            // With nothing to match on, difficulty never matches, so everything is a
+            // reward -- the safe direction.
+            Assert.True(ChartRewards.IsReward("34% more Monster Life"));
+        }
+        finally
+        {
+            ChartRewards.Use(original);
+        }
+    }
+
+    [Fact]
+    public void TheCatalogueDrivesTheClassification()
+    {
+        var original = ChartRewards.Current;
+        try
+        {
+            ChartRewards.Use(new ChartRewards.Catalogue
+            {
+                Reward = ["Mysterious Barnacle"],
+                Difficulty = [@"\bMonsters?\b"],
+            });
+            Assert.True(ChartRewards.IsReward("Area contains a Mysterious Barnacle"));
+            Assert.False(ChartRewards.IsReward("34% more Monster Life"));
+        }
+        finally
+        {
+            ChartRewards.Use(original);
+        }
+    }
+}

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace PoeMarketWatch.Core.Voyage;
@@ -10,92 +11,115 @@ namespace PoeMarketWatch.Core.Voyage;
 /// reduced Extra Damage from Critical Strikes". None of that answers the question you are
 /// asking when you look at a planned square, which is what the run pays out.
 ///
-/// Rewards WIN over difficulty, and anything unrecognised is treated as a reward. That
-/// asymmetry is deliberate: the reward vocabulary is open-ended and league-specific, so a
-/// deny-list that hides everything it does not know would quietly swallow the next new
-/// good modifier. The difficulty vocabulary is the standard, stable map-mod pool, so
-/// listing it is tractable. The cost of the choice is an occasional extra line, not a
-/// hidden payout.
+/// The split is DATA, not judgement. Voyage charts have exactly three bases and poedb
+/// publishes the full mod table for each, so the set is closed and enumerable rather than
+/// something to infer from wording. <c>assets/voyage-mods.json</c> holds it, generated
+/// from those tables, and is editable without a rebuild -- which matters for a league
+/// mechanic that will change.
 ///
-/// Every pattern is taken from real chart text or from poedb's tables for the three
-/// Voyage bases (Coral Reef, Coral Forest, Sandy Seabed).
+/// Two ordering rules make it work:
+///   * REWARD is checked first, so a payout that happens to mention monsters -- extra
+///     Rare Monsters, Essence-imprisoned monsters, Wildwood Wisps -- is not lost to the
+///     difficulty list.
+///   * A line matching NEITHER counts as a reward. The list is complete for this league,
+///     but a patch that adds a payout must not have it silently hidden; the cost of being
+///     wrong this way is an extra line, the other way it is a missing one.
 /// </summary>
 public static class ChartRewards
 {
-    /// <summary>
-    /// Things a chart pays out. Checked FIRST, so a reward that happens to mention
-    /// monsters -- "25% increased number of Rare Monsters", "Rare monsters ... are
-    /// imprisoned by Essences" -- is not lost to the difficulty patterns below.
-    /// </summary>
-    private static readonly Regex Reward = new(string.Join("|",
-    [
-        // Containers and spawns.
-        @"additional Imprisoned Monsters",
-        @"additional (?:Diviner's |Arcanist's |Operative's )?Strongboxes",
-        @"additional packs of",
-        @"additional Messages? in Bottles",
-        @"additional cages? of Tormented Spirits",
-        @"additional cage of Tormented Spirits",
-        @"additional Clusters of Barrels",
-        @"additional Giant Starfish",
-        @"additional Golden Lanterns",
-        @"additional Treasure",
-        @"increased number of (?:Rare|Magic) Monsters",
+    public sealed class Catalogue
+    {
+        public List<string> Reward { get; set; } = [];
+        public List<string> Difficulty { get; set; } = [];
 
-        // Loot conversion and upgrades.
-        @"converted to Gold",
-        @"chance to be Fractured",
-        @"chance to Fracture on death",
-        @"chance to instead drop as",
-        @"imprisoned by Essences",
-        @"to be Possessed",
-        @"Pantheon Modifier",
-        @"drop an additional",
-        @"Flasks found.*Quality",
+        private Regex? _reward;
+        private Regex? _difficulty;
 
-        // The headline stats, in every wording -- note GGG's "Qauntity" typo, which
-        // appears only in the global lines.
-        @"increased Q(?:uantity|auntity) of Items",
-        @"increased Rarity of Items",
-        @"increased Pack Size",
-        @"increased Gold found",
-        @"increased Dead Man's Sulphur",
-        @"increased explicit modifier magnitudes",
+        /// <summary>One alternation per group: dozens of separate matches per line adds up.</summary>
+        internal Regex RewardPattern => _reward ??= Combine(Reward);
+        internal Regex DifficultyPattern => _difficulty ??= Combine(Difficulty);
 
-        // League and set-piece effects.
-        @"Soul Eater",
-        @"Friendly Jellyfish",
-        @"exotic Fish",
-        @"Wildwood Wisps",
-        @"Atziri's Influence",
-        @"Filthscrabble",
-        @"are at least Magic",
-        @"Chart to not be consumed",
+        private static Regex Combine(List<string> patterns) =>
+            new(patterns.Count == 0 ? "(?!)" : string.Join("|", patterns.Select(p => $"(?:{p})")),
+                RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        // A payout REDUCTION still belongs in the payout list -- it is the loot that
-        // changes, and hiding it would flatter the chart.
-        @"cannot drop Equipment, Flasks or Tinctures",
-    ]), RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        public int Count => Reward.Count + Difficulty.Count;
+    }
 
-    /// <summary>
-    /// Monster and area difficulty. Only consulted when nothing above matched, so these
-    /// can be broad.
-    /// </summary>
-    private static readonly Regex Difficulty = new(string.Join("|",
-    [
-        @"\bMonsters?\b",
-        @"Players have [-+]?\d",
-        @"patches of (?:Chilled|Shocked|Burning|Desecrated) Ground",
-        @"less effect of Curses",
-        @"maximum Resistances",
-    ]), RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static Catalogue? _catalogue;
+
+    /// <summary>The loaded mod tables. Reads the asset once, then caches.</summary>
+    public static Catalogue Current => _catalogue ??= Load();
+
+    /// <summary>Override the catalogue, for tests and for a user-supplied file.</summary>
+    public static void Use(Catalogue catalogue) => _catalogue = catalogue;
+
+    public static string DefaultPath =>
+        Path.Combine(AppContext.BaseDirectory, "assets", "voyage-mods.json");
+
+    private static readonly JsonSerializerOptions Json = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
+
+    private static Catalogue Load(string? path = null)
+    {
+        path ??= DefaultPath;
+        try
+        {
+            if (File.Exists(path))
+            {
+                var loaded = JsonSerializer.Deserialize<Catalogue>(File.ReadAllText(path), Json);
+                if (loaded is { Count: > 0 } && Compiles(loaded)) return loaded;
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            // fall through to the built-in minimum
+        }
+
+        // Without the asset the tool still has to tell rewards from monster mods, so this
+        // is a floor rather than a duplicate of the file: the stat lines, the adjacency
+        // payouts, and the monster pool.
+        return new Catalogue
+        {
+            Reward =
+            [
+                @"increased Q(?:uantity|auntity) of Items found",
+                @"increased Rarity of Items found",
+                @"increased Pack Size",
+                @"increased Gold found",
+                @"increased Dead Man's Sulphur",
+                @"additional (?:Strongboxes|packs of|Clusters of Barrels|Imprisoned Monsters)",
+                @"increased number of (?:Rare|Magic) Monsters",
+            ],
+            Difficulty = [@"\bMonsters?\b", @"Players have [-+]?\d", @"Area has patches of"],
+        };
+    }
+
+    /// <summary>A pattern that does not compile would throw at the first hover.</summary>
+    private static bool Compiles(Catalogue catalogue)
+    {
+        try
+        {
+            _ = catalogue.RewardPattern.IsMatch("");
+            _ = catalogue.DifficultyPattern.IsMatch("");
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>Is this line something the chart pays out?</summary>
     public static bool IsReward(string? line)
     {
         if (string.IsNullOrWhiteSpace(line)) return false;
-        if (Reward.IsMatch(line)) return true;
-        return !Difficulty.IsMatch(line);
+        if (Current.RewardPattern.IsMatch(line)) return true;
+        return !Current.DifficultyPattern.IsMatch(line);
     }
 
     /// <summary>Keep only the payout lines, in order.</summary>
