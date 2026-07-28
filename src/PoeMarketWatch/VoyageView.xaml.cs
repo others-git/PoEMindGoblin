@@ -546,8 +546,8 @@ public partial class VoyageView : UserControl
         {
             Title = "Voyage planner",
             Content = this,
-            Width = 1250,
-            Height = 800,
+            Width = 1500,
+            Height = 1040,
             Background = Brushes.Black,
         };
         // Returning the view to its tab on close keeps a single instance and a single

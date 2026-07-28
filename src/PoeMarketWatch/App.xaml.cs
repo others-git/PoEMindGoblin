@@ -47,10 +47,11 @@ public partial class App : Application
             _ => throw new ArgumentException($"unknown view '{view}'"),
         };
 
-        // Arrange at the size the second-monitor window opens at, so what is measured is
-        // what the user will actually see.
-        const int width = 1420;
-        const int height = 880;
+        // The client area the view actually gets inside a default 1500x1040 window,
+        // after the title bar, the app header and the tab strip -- so what is measured
+        // here is what the user will see.
+        const int width = 1484;
+        const int height = 908;
         element.Width = width;
         element.Height = height;
         element.Measure(new Size(width, height));

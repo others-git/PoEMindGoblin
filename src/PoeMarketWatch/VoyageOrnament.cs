@@ -87,19 +87,7 @@ internal static class VoyageOrnament
             StrokeEndLineCap = PenLineCap.Round,
         });
 
-        var number = new TextBlock
-        {
-            Text = label.ToString(),
-            FontFamily = new FontFamily("Georgia"),
-            FontSize = 10,
-            Foreground = ink,
-            TextAlignment = TextAlignment.Center,
-            Width = DesignWidth,
-        };
-        Canvas.SetTop(number, 6.5);
-        art.Children.Add(number);
-
-        var scaled = new Viewbox
+        var carving = new Viewbox
         {
             Child = art,
             Width = DesignWidth * scale,
@@ -107,18 +95,29 @@ internal static class VoyageOrnament
             Stretch = Stretch.Uniform,
         };
 
-        // Left and right figurines are turned to run along their edge, the way the carving
-        // follows the frame in game. The number is counter-rotated so it stays readable --
-        // a sideways digit would defeat the point of labelling them.
+        // Left and right figurines are turned to run along their edge, the way the
+        // carving follows the frame in game.
         var quarter = edge switch { "left" => 90.0, "right" => -90.0, _ => 0.0 };
-        if (quarter == 0) return scaled;
+        FrameworkElement rotated = quarter == 0
+            ? carving
+            : new Grid { Children = { carving }, LayoutTransform = new RotateTransform(quarter) };
 
-        number.LayoutTransform = new RotateTransform(-quarter);
-        return new Grid
+        // The number sits OUTSIDE the rotated art, never inside it. Rotating a TextBlock
+        // within the Canvas pushed it past the Canvas's declared bounds and the Viewbox
+        // clipped it -- "12" came out as ".2". Overlaying it keeps every label upright
+        // and whole whichever edge the figurine is on.
+        var host = new Grid();
+        host.Children.Add(rotated);
+        host.Children.Add(new TextBlock
         {
-            Children = { scaled },
-            LayoutTransform = new RotateTransform(quarter),
-        };
+            Text = label.ToString(),
+            FontFamily = new FontFamily("Georgia"),
+            FontSize = 10 * scale,
+            Foreground = ink,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        return host;
     }
 
     private static Path Figure(string data, Brush fill, Brush? stroke, double dx, double dy)
