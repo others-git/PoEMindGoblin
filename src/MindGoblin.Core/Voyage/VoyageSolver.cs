@@ -119,9 +119,6 @@ public sealed class VoyageSolver
         NodesExplored = 0;
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var deadline = budget ?? TimeSpan.FromSeconds(5);
-        var board = new VoyageBoard(_rows, _cols);
-        var used = new bool[_charts.Count];
-
         // Optimistic remaining value: the best scores any chart could achieve anywhere,
         // largest first. Never underestimates, so pruning against it is safe.
         var bestPossible = BestPossiblePerCell();
@@ -156,15 +153,58 @@ public sealed class VoyageSolver
         }
 
 
+        // Search the RESTRICTED space first, then widen.
+        //
+        // Forbidding edges that open onto the border makes connected boards common rather
+        // than one in ten million, so a pass there finds a good JOINED layout quickly.
+        // Without it the search spends its whole budget on layouts that are rejected for
+        // being cut off, never improves on the seed, and hands back a board chosen for
+        // connectivity alone -- which is how the strongbox profile came to skip every
+        // strongbox chart it had.
+        //
+        // The restriction rules out perfectly good layouts, so it is only ever a head
+        // start: each pass keeps the incumbent, and the final unrestricted pass is free
+        // to beat it. Only that last pass decides whether the answer was proved.
         var exhausted = true;
-        try
+        foreach (var (rule, share) in new[]
+                 {
+                     (BorderRule.All, 0.25),
+                     (BorderRule.NorthAndWest, 0.5),
+                     (BorderRule.None, 1.0),
+                 })
         {
-            Recurse(0, board, used, 0.0, bestPossible, ref best, sw, deadline, ct);
+            _searchRule = rule;
+            exhausted = true;
+
+            // A FRESH board and used-set per pass.
+            //
+            // DeadlineReached unwinds through every recursive frame, and those frames
+            // undo their placement AFTER the recursive call returns -- so an abort leaves
+            // the board half filled and charts marked used. Reusing it meant the next
+            // pass started from that wreckage, bottomed out after two nodes, and reported
+            // itself EXHAUSTED, which is how a search that had explored almost nothing
+            // came to claim it had proved the answer.
+            var board = new VoyageBoard(_rows, _cols);
+            var used = new bool[_charts.Count];
+            if (Trace)
+                Console.Error.WriteLine(
+                    $"    pass {rule,-13} start best={best.Value,10:0.##} bound0={bestPossible[0]:0.##} "
+                    + $"nodes={NodesExplored} t={sw.Elapsed.TotalMilliseconds:0}ms");
+            try
+            {
+                Recurse(0, board, used, 0.0, bestPossible, ref best, sw, deadline * share, ct);
+            }
+            catch (DeadlineReached)
+            {
+                exhausted = false;
+            }
+            if (Trace)
+                Console.Error.WriteLine(
+                    $"    pass {rule,-13} end   best={best.Value,10:0.##} exhausted={exhausted} "
+                    + $"nodes={NodesExplored} t={sw.Elapsed.TotalMilliseconds:0}ms");
+            if (sw.Elapsed >= deadline) break;
         }
-        catch (DeadlineReached)
-        {
-            exhausted = false;
-        }
+        _searchRule = BorderRule.None;
         sw.Stop();
 
         var result = best.Value == double.NegativeInfinity
@@ -218,7 +258,28 @@ public sealed class VoyageSolver
         return null;
     }
 
-    /// <summary>Which board edges a seeded layout may not open onto.</summary>
+    /// <summary>
+    /// Does this face send a path off the board, where the rule forbids it?
+    ///
+    /// An edge open to the border is a path that leads nowhere, and forbidding them is
+    /// what makes connected boards COMMON instead of one in ten million. Used to restrict
+    /// both the seed and the early search passes.
+    /// </summary>
+    private static bool OpensOntoBorder(
+        VoyageBoard board, Cell cell, ChartFace face, BorderRule which)
+    {
+        if (which == BorderRule.None) return false;
+        foreach (var side in Enum.GetValues<Side>())
+        {
+            if (!face.IsOpen(side)) continue;
+            if (board.InBounds(VoyageBoard.Neighbour(cell, side))) continue;
+            if (which == BorderRule.All) return true;
+            if (side is Side.North or Side.West) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Which board edges a layout may not open onto.</summary>
     private enum BorderRule
     {
         /// <summary>No open edge may face the border at all. Tightest, often infeasible.</summary>
@@ -270,7 +331,7 @@ public sealed class VoyageSolver
                 foreach (var rotation in ChartFace.DistinctRotations(chart.Shape))
                 {
                     var face = new ChartFace(chart.Shape, rotation);
-                    if (OpensOntoAForbiddenBorder(cell, face, rule)) continue;
+                    if (OpensOntoBorder(board, cell, face, rule)) continue;
                     if (!board.CanPlace(cell, face)) continue;
                     if (!SatisfiesDecidedNeighbours(board, cell, face)) continue;
 
@@ -285,19 +346,6 @@ public sealed class VoyageSolver
             // Leaving it empty is a legitimate branch, not a failure -- the board does
             // not have to be full.
             return _allowEmpty && LeavingEmptyIsLegal(board, cell) && Dive(index + 1);
-        }
-
-        bool OpensOntoAForbiddenBorder(Cell cell, ChartFace face, BorderRule which)
-        {
-            if (which == BorderRule.None) return false;
-            foreach (var side in Enum.GetValues<Side>())
-            {
-                if (!face.IsOpen(side)) continue;
-                if (board.InBounds(VoyageBoard.Neighbour(cell, side))) continue;
-                if (which == BorderRule.All) return true;
-                if (side is Side.North or Side.West) return true;
-            }
-            return false;
         }
 
         if (!Dive(0)) return null;
@@ -408,8 +456,13 @@ public sealed class VoyageSolver
         for (var i = 0; i < cells.Count; i++)
         {
             var cell = cells[i];
+            // Ordered by an UPPER BOUND on what the chart could be worth here: its own
+            // score plus the most its adjacency could ever pay, which is to all four
+            // neighbours counted both ways. Ordering on the own-score alone buried the
+            // charts whose whole value is what they give the squares around them.
             result[i] = Enumerable.Range(0, _charts.Count)
-                .OrderByDescending(idx => _score(_charts[idx], cell))
+                .OrderByDescending(idx => _score(_charts[idx], cell)
+                                          + Math.Max(0, _charts[idx].AdjacentValue) * 8)
                 .ToArray();
         }
         return result;
@@ -426,6 +479,12 @@ public sealed class VoyageSolver
 
     /// <summary>Set once the seed proves a fully joined board is possible for these charts.</summary>
     private bool _requireConnected;
+
+    /// <summary>Print per-pass diagnostics. Set by a probe, never by the app.</summary>
+    public static bool Trace { get; set; }
+
+    /// <summary>Border restriction in force for the current search pass.</summary>
+    private BorderRule _searchRule = BorderRule.None;
 
     private void Recurse(
         int index, VoyageBoard board, bool[] used, double value,
@@ -523,9 +582,18 @@ public sealed class VoyageSolver
             var chart = _charts[i];
             var gain = _score(chart, cell) + AdjacencyGain(board, cell, chart);
 
-            // Ordered by value, so once a candidate cannot beat the incumbent even in
-            // the best case, neither can any candidate after it.
-            if (value + gain + bound[index + 1] <= best.Value) break;
+            // CONTINUE, not break.
+            //
+            // Breaking here assumed the candidates arrive in descending gain, but they
+            // are ordered by the chart's own score while gain also includes ADJACENCY --
+            // what the chart gives its neighbours and they give it. A chart with a
+            // middling score and a huge adjacency modifier sorts late, so the first weak
+            // candidate ended the loop and took it down with it.
+            //
+            // That is how the strongbox profile came to skip every strongbox chart it
+            // had: chart 33 carried +112 quantity AND three Operative's Strongboxes,
+            // worth several times anything chosen, and was never even tried.
+            if (value + gain + bound[index + 1] <= best.Value) continue;
 
             foreach (var rotation in ChartFace.DistinctRotations(chart.Shape))
             {

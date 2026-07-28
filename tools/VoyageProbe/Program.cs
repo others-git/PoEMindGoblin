@@ -4,6 +4,7 @@ using MindGoblin.Core.Voyage;
 // solver benchmark below.
 if (args.Length > 1 && args[1] == "--feasibility") return Feasibility.Run(args[0]);
 if (args.Length > 1 && args[1] == "--refine") return RefineProbe.Run(args[0]);
+if (args.Length > 2 && args[1] == "--budget") return BudgetProbe.Run(args[0], args[2]);
 if (args.Length > 2 && args[1] == "--save") return SaveProbe.Run(args[0], args[2]);
 
 // probe <screenshot.png> [profile] [overlay-out.png]
