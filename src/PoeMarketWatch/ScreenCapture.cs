@@ -38,13 +38,12 @@ public sealed class ScreenCapture
 
     private const int SM_CXSCREEN = 0, SM_CYSCREEN = 1;
 
+    /// <summary>Size of the primary screen, for turning fractional layouts into pixels.</summary>
+    public static Rectangle PrimaryScreenBounds() =>
+        new(0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+
     /// <summary>Capture the whole primary screen.</summary>
-    public static Bitmap CapturePrimaryScreen()
-    {
-        var w = GetSystemMetrics(SM_CXSCREEN);
-        var h = GetSystemMetrics(SM_CYSCREEN);
-        return CaptureRegion(new Rectangle(0, 0, w, h));
-    }
+    public static Bitmap CapturePrimaryScreen() => CaptureRegion(PrimaryScreenBounds());
 
     public static Bitmap CaptureRegion(Rectangle bounds)
     {

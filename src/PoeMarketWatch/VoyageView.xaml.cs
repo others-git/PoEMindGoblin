@@ -39,12 +39,15 @@ public partial class VoyageView : UserControl
         new() { Interval = TimeSpan.FromMilliseconds(250) };
 
     private VoyageSession _session = new();
+    private HotkeyService? _hotkeys;
+    private int? _captureHotkey;
+    private bool _capturing;
     private VoyageSolver.Solution? _solution;
     private IReadOnlyList<VoyagePlan.Step> _steps = [];
     private Window? _popped;
 
-    /// <summary>What the next Ctrl+C is taken to describe.</summary>
-    private enum Target { Chart, Figurine }
+    /// <summary>What the next capture is taken to describe.</summary>
+    private enum Target { Chart, Figurine, Square }
 
     private Target _target = Target.Chart;
     private int _targetIndex;
@@ -81,6 +84,7 @@ public partial class VoyageView : UserControl
         Loaded += (_, _) =>
         {
             if (ReadModeBtn.IsChecked == true) _clipboardPoll.Start();
+            RegisterCaptureHotkey();
         };
     }
 
@@ -111,16 +115,19 @@ public partial class VoyageView : UserControl
         // Opens the file rather than offering a dialog of spinners: the values are pixel
         // coordinates, and the way to get them right is to run VoyageProbe's overlay,
         // look at where the grid lands, and nudge. A GUI would not make that easier.
+        // Two things are calibrated now -- where the chart panel is, and where the Area
+        // Modifiers panel is -- so this opens the folder rather than one of them.
         try
         {
             ChartPanelReader.Options.WriteDefaultsIfMissing();
-            Process.Start(new ProcessStartInfo(ChartPanelReader.Options.DefaultPath)
-                { UseShellExecute = true });
-            SetStatus("Calibration opened. Save, then Read panel again.");
+            AreaModifierPanel.Options.WriteDefaultsIfMissing();
+            var folder = System.IO.Path.GetDirectoryName(ChartPanelReader.Options.DefaultPath)!;
+            Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
+            SetStatus("Calibration files opened. Save, then read again.");
         }
         catch (Exception ex)
         {
-            SetStatus($"Could not open the calibration file: {ex.Message}", bad: true);
+            SetStatus($"Could not open the calibration folder: {ex.Message}", bad: true);
         }
     }
 
@@ -174,6 +181,95 @@ public partial class VoyageView : UserControl
         }
     }
 
+    // ---- pass 2a: read the Area Modifiers panel ----------------------------------
+
+    /// <summary>
+    /// Bind the capture key.
+    ///
+    /// A SYSTEM-WIDE hotkey, because the whole point is to press it while Path of Exile
+    /// has focus and the square is hovered. Alt-tabbing to click a button would drop the
+    /// hover and the panel would be empty by the time anything was captured.
+    /// </summary>
+    private void RegisterCaptureHotkey()
+    {
+        if (_captureHotkey is not null) return;
+        if (Window.GetWindow(this) is not { } window) return;
+
+        _hotkeys ??= new HotkeyService(window);
+        _captureHotkey = _hotkeys.Register(
+            System.Windows.Input.Key.C,
+            HotkeyService.Mod.Control | HotkeyService.Mod.Alt,
+            () => Dispatcher.Invoke(async () => await CaptureAreaModifiersAsync()));
+
+        CaptureHint.Text = _captureHotkey is null
+            ? "Ctrl+Alt+C is taken by another app"
+            : ScreenOcr.IsAvailable
+                ? "Hover a square in game, press Ctrl+Alt+C"
+                : "No OCR language pack — type modifiers below instead";
+    }
+
+    /// <summary>
+    /// Screenshot the Area Modifiers panel and record what it says about the target square.
+    ///
+    /// The game aggregates the figurine effects per square and shows them here, which is
+    /// why this reads squares rather than figurines: the figurines are carvings, not
+    /// items, so the game will not copy them, but it will total them up for you.
+    /// </summary>
+    private async Task CaptureAreaModifiersAsync()
+    {
+        if (_capturing) return;                     // a held key must not queue captures
+        if (_target != Target.Square || _targetIndex == 0)
+        {
+            SetStatus("Select a board square first, then hover it in game.", bad: true);
+            return;
+        }
+        if (!ScreenOcr.IsAvailable)
+        {
+            SetStatus("Windows has no OCR language pack installed. Type the text below.",
+                      bad: true);
+            return;
+        }
+
+        _capturing = true;
+        var square = _targetIndex;
+        try
+        {
+            var options = AreaModifierPanel.Options.Load();
+            var screen = ScreenCapture.PrimaryScreenBounds();
+            var (x, y, w, h) = options.ToPixels(screen.Width, screen.Height);
+            var raw = await ScreenOcr.ReadRegionAsync(
+                new System.Drawing.Rectangle(x, y, w, h), options.Upscale);
+
+            var lines = AreaModifierPanel.CleanLines(raw);
+            if (lines.Count == 0)
+            {
+                // The panel shows instructions until a square is hovered. Recording that
+                // as "no modifiers" would tick the square off without reading it.
+                SetStatus($"Nothing on the panel — hover square {square} in game first.",
+                          bad: true);
+                return;
+            }
+
+            _session.ApplySquareModifiers(square, lines);
+            _solution = null;
+            SetStatus($"Square {square}: read {lines.Count} "
+                      + (lines.Count == 1 ? "modifier." : "modifiers."));
+            AdvanceTarget();
+            RefreshBoard();
+            RefreshPanel();
+            RebuildModifiers();
+            RefreshProgress();
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Could not read the panel: {ex.Message}", bad: true);
+        }
+        finally
+        {
+            _capturing = false;
+        }
+    }
+
     // ---- pass 2: hover + clipboard -----------------------------------------------
 
     private void OnReadModeChanged(object sender, RoutedEventArgs e)
@@ -222,7 +318,14 @@ public partial class VoyageView : UserControl
             return;
         }
 
-        if (_target == Target.Figurine)
+        if (_target == Target.Square)
+        {
+            var lines = text.Replace("\r\n", "\n").Split('\n')
+                            .Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+            _session.ApplySquareModifiers(_targetIndex, lines);
+            SetStatus($"Square {_targetIndex} {how}.");
+        }
+        else if (_target == Target.Figurine)
         {
             _session.ApplyFigurineText(_targetIndex, text);
             SetStatus($"Figurine {_targetIndex} {how}.");
@@ -282,25 +385,30 @@ public partial class VoyageView : UserControl
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException) { return ""; }
     }
 
-    /// <summary>Move to the next thing needing detail: charts first, then figurines.</summary>
+    /// <summary>
+    /// Move to the next thing needing detail: board squares first, then charts.
+    ///
+    /// Squares lead because they are the cheap half -- nine hovers and a hotkey, no
+    /// clipboard involved -- and because a chart's worth depends on which square it lands
+    /// on, so the board modifiers are what make the chart readings mean anything.
+    /// </summary>
     private void AdvanceTarget()
     {
+        var square = _session.SquaresAwaitingModifiers
+            .FirstOrDefault(i => !_skipped.Contains((Target.Square, i)));
+        if (square > 0)
+        {
+            SetTarget(Target.Square, square,
+                      $"Hover square {square} in game, then press Ctrl+Alt+C.");
+            return;
+        }
+
         var chart = _session.ChartsAwaitingDetail
             .FirstOrDefault(i => !_skipped.Contains((Target.Chart, i)));
         if (chart > 0)
         {
             SetTarget(Target.Chart, chart,
                       $"Hover chart {chart} in game, Ctrl+C — or paste its text below.");
-            return;
-        }
-
-        var figurine = _session.FigurinesAwaitingDetail
-            .FirstOrDefault(f => !_skipped.Contains((Target.Figurine, f.Index)));
-        if (figurine is not null)
-        {
-            SetTarget(Target.Figurine, figurine.Index,
-                      $"Hover the {figurine.Edge} figurine {figurine.Index} — "
-                      + "if it will not copy, type its text below.");
             return;
         }
 
@@ -315,16 +423,24 @@ public partial class VoyageView : UserControl
         _targetIndex = index;
         _skipped.Remove((target, index));
 
-        TargetLabel.Text = index == 0
-            ? "Nothing selected"
-            : target == Target.Chart ? $"chart {index}" : $"figurine {index}";
+        TargetLabel.Text = index == 0 ? "Nothing selected" : target switch
+        {
+            Target.Chart => $"Chart {index}",
+            Target.Figurine => $"Figurine {index}",
+            _ => $"Square {index}",
+        };
 
         if (index != 0)
         {
-            // Show what is already captured so entry doubles as editing.
-            DetailBox.Text = target == Target.Figurine
-                ? _session.Figurines.GetValueOrDefault(index, "")
-                : "";
+            // Show what is already captured, so the box doubles as an editor -- which is
+            // how an OCR misread gets corrected.
+            DetailBox.Text = target switch
+            {
+                Target.Figurine => _session.Figurines.GetValueOrDefault(index, ""),
+                Target.Square => string.Join("\n",
+                    _session.SquareModifiers.GetValueOrDefault(index) ?? []),
+                _ => "",
+            };
         }
         if (status is not null) SetStatus(status);
     }
@@ -332,7 +448,12 @@ public partial class VoyageView : UserControl
     private void OnModifierSelected(object sender, SelectionChangedEventArgs e)
     {
         if (ModifierList.SelectedItem is not ModifierRow row) return;
-        SetTarget(row.Kind == ModifierRow.Sort.Figurine ? Target.Figurine : Target.Chart,
+        SetTarget(row.Kind switch
+                  {
+                      ModifierRow.Sort.Square => Target.Square,
+                      ModifierRow.Sort.Figurine => Target.Figurine,
+                      _ => Target.Chart,
+                  },
                   row.Index,
                   $"{row.Title} selected — copy or type its text below.");
         RefreshBoard();
@@ -344,7 +465,14 @@ public partial class VoyageView : UserControl
     private void OnSolve(object sender, RoutedEventArgs e)
     {
         if (Profile is not { } profile) { SetStatus("No rule profile loaded.", bad: true); return; }
-        if (_session.Charts.Count == 0) { SetStatus("Read the panel first.", bad: true); return; }
+        if (_session.Charts.Count == 0)
+        {
+            // The figurine ring reflects what has been READ, not what has been planned,
+            // so it still has to be redrawn on the path where there is nothing to solve.
+            RefreshBoard();
+            SetStatus("Read the panel first.", bad: true);
+            return;
+        }
 
         _solution = _session.Solve(profile, TimeSpan.FromSeconds(3));
         _steps = _session.Plan(_solution);
@@ -441,11 +569,14 @@ public partial class VoyageView : UserControl
     /// Real pixels, real session, real solver -- the only thing invented is the hover
     /// text, which cannot come from a screenshot. Useful for design work without opening
     /// the game, and as a smoke test that the whole chain still produces a plan.
+    ///
+    /// The screenshot is passed in rather than shipped: it is a capture of somebody's
+    /// game, and a test fixture has no place in a distributable. Without one this still
+    /// populates the figurines, so the board chrome can be inspected on its own.
     /// </summary>
     public void LoadSample(string? screenshot = null)
     {
-        screenshot ??= System.IO.Path.Combine(AppContext.BaseDirectory, "assets", "voyage-panel.png");
-        if (System.IO.File.Exists(screenshot))
+        if (screenshot is not null && System.IO.File.Exists(screenshot))
         {
             using var bmp = new System.Drawing.Bitmap(screenshot);
             using var pixels = new BitmapPixels(bmp);
@@ -464,11 +595,15 @@ public partial class VoyageView : UserControl
         foreach (var index in _session.ByPanelIndex.Keys.Order().Take(samples.Length))
             _session.ApplyChartText(index, samples[i++]);
 
-        foreach (var slot in _session.Layout.Figurines.Take(5))
-            _session.ApplyFigurineText(slot.Index,
-                $"Adjacent Areas contain {4 + slot.Index} additional packs of Sea Beasts");
+        // Squares, not figurines: that is what the Area Modifiers panel reports and what
+        // the capture hotkey fills in.
+        for (var square = 1; square <= 5; square++)
+            _session.ApplySquareModifiers(square,
+                [$"Areas contain {4 + square} additional packs of Sea Beasts",
+                 square % 2 == 0 ? "Areas have 15% increased Quantity of Items found" : "Areas have 20% increased Monster Pack Size"]);
 
         RefreshPanel();
+        RefreshBoard();
         RebuildModifiers();
         RefreshProgress();
         OnSolve(this, new RoutedEventArgs());
@@ -527,7 +662,12 @@ public partial class VoyageView : UserControl
                     BorderThickness = new Thickness(1),
                     Background = new SolidColorBrush(Color.FromRgb(0x18, 0x15, 0x12)),
                     Margin = new Thickness(1),
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    Tag = r * cols + c + 1,
                 };
+                // Squares are the capture target for the Area Modifiers panel, so the
+                // board is how you choose which one the hotkey applies to.
+                cell.MouseLeftButtonUp += OnBoardSquareClicked;
                 Grid.SetRow(cell, r + 1);
                 Grid.SetColumn(cell, c + 1);
                 _boardCells[r, c] = cell;
@@ -577,6 +717,16 @@ public partial class VoyageView : UserControl
         };
     }
 
+    private void OnBoardSquareClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not Border { Tag: int square }) return;
+        SetTarget(Target.Square, square,
+                  $"Hover square {square} in game, then press Ctrl+Alt+C.");
+        RefreshBoard();
+        RefreshPanel();
+        RebuildModifiers();
+    }
+
     private void OnPanelCellClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (sender is not Border { Tag: int index }) return;
@@ -615,24 +765,33 @@ public partial class VoyageView : UserControl
                 var square = r * cols + c + 1;
                 var step = _steps.FirstOrDefault(s => s.Square == square);
                 var isStranded = stranded.Contains(new Cell(r, c));
+                var isTarget = _target == Target.Square && _targetIndex == square;
+                var hasModifiers = _session.SquareModifiers.ContainsKey(square);
                 var cell = _boardCells[r, c];
 
                 cell.Background = new SolidColorBrush(step is null
                     ? Color.FromRgb(0x0E, 0x0C, 0x0A)
                     : isStranded ? Color.FromRgb(0x22, 0x13, 0x10)
                     : Color.FromRgb(0x18, 0x14, 0x10));
-                cell.BorderBrush = new SolidColorBrush(isStranded
-                    ? Color.FromRgb(0x6E, 0x2F, 0x25)
+                cell.BorderBrush = new SolidColorBrush(isTarget
+                    ? Color.FromRgb(0xC9, 0xA2, 0x27)
+                    : isStranded ? Color.FromRgb(0x6E, 0x2F, 0x25)
+                    : hasModifiers ? Color.FromRgb(0x44, 0x5C, 0x38)
                     : step is null ? Color.FromRgb(0x1F, 0x1A, 0x15)
                     : Color.FromRgb(0x3A, 0x2E, 0x1C));
+                cell.BorderThickness = new Thickness(isTarget ? 2 : 1);
                 cell.Child = BoardSquareContent(square, step, isStranded);
-                cell.ToolTip = step is null
-                    ? null
-                    : Tip($"Square {square} · chart {step.ChartNumber}",
-                          $"{step.Chart.Shape}, {step.RotationText}"
+                var squareMods = _session.SquareModifiers.GetValueOrDefault(square);
+                cell.ToolTip = Tip(
+                    step is null ? $"Square {square}" : $"Square {square} · chart {step.ChartNumber}",
+                    step is null
+                        ? "Empty — click to select, then hover it in game"
+                        : $"{step.Chart.Shape}, {step.RotationText}"
                           + (isStranded ? " · cut off from the route" : ""),
-                          DescribeChart(step.Chart),
-                          HasCapturedDetail(step.Chart));
+                    squareMods is { Count: > 0 }
+                        ? squareMods
+                        : ["Area modifiers not read yet."],
+                    squareMods is { Count: > 0 });
             }
         }
     }
@@ -913,17 +1072,16 @@ public partial class VoyageView : UserControl
         var previous = (ModifierList.SelectedItem as ModifierRow)?.Key;
         _modifiers.Clear();
 
-        foreach (var slot in _session.Layout.Figurines)
+        // Squares first: they are what the game aggregates and what the solver uses.
+        for (var square = 1; square <= _session.Layout.Rows * _session.Layout.Cols; square++)
         {
-            var text = _session.Figurines.GetValueOrDefault(slot.Index);
-            var squares = string.Join(",", slot.Adjacent.Select(
-                a => VoyagePlan.SquareNumber(a.ToCell(), _session.Layout.Cols)));
+            var lines = _session.SquareModifiers.GetValueOrDefault(square);
             _modifiers.Add(new ModifierRow(
-                ModifierRow.Sort.Figurine, slot.Index,
-                $"Figurine {slot.Index}", $"sq {squares}",
-                string.IsNullOrWhiteSpace(text) ? "Not read" : text!,
-                captured: !string.IsNullOrWhiteSpace(text),
-                selected: _target == Target.Figurine && _targetIndex == slot.Index));
+                ModifierRow.Sort.Square, square,
+                $"Square {square}", "board",
+                lines is { Count: > 0 } ? string.Join("\n", lines) : "Not read",
+                captured: lines is { Count: > 0 },
+                selected: _target == Target.Square && _targetIndex == square));
         }
 
         var placed = _steps.ToDictionary(st => st.ChartNumber, st => st.Square);
@@ -940,10 +1098,10 @@ public partial class VoyageView : UserControl
                 selected: _target == Target.Chart && _targetIndex == index));
         }
 
-        var unread = _session.FigurinesAwaitingDetail.Count;
+        var unread = _session.SquaresAwaitingModifiers.Count;
         ModifierHeader.Text = unread == 0
             ? "M O D I F I E R S"
-            : $"M O D I F I E R S      {unread} figurines unread";
+            : $"M O D I F I E R S      {unread} squares unread";
 
         if (previous is not null)
             ModifierList.SelectedItem = _modifiers.FirstOrDefault(m => m.Key == previous);
@@ -1015,7 +1173,7 @@ public partial class VoyageView : UserControl
     /// </summary>
     public sealed class ModifierRow
     {
-        public enum Sort { Figurine, Chart }
+        public enum Sort { Square, Figurine, Chart }
 
         public ModifierRow(Sort kind, int index, string title, string where,
                            string text, bool captured, bool selected)

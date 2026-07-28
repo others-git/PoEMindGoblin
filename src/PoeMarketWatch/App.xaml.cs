@@ -25,18 +25,25 @@ public partial class App : Application
     {
         if (e.Args is [ "--render", var view, var path, ..])
         {
-            RenderToFile(view, path, e.Args.Contains("--demo"));
+            // --demo takes the screenshot to populate from. It is not shipped with the
+            // app: it is a capture of somebody's game, and a test fixture has no business
+            // in a distributable.
+            var demoIndex = Array.IndexOf(e.Args, "--demo");
+            var demo = demoIndex >= 0 && demoIndex + 1 < e.Args.Length
+                ? e.Args[demoIndex + 1]
+                : null;
+            RenderToFile(view, path, demoIndex >= 0, demo);
             Shutdown();
             return;
         }
         base.OnStartup(e);
     }
 
-    private static void RenderToFile(string view, string path, bool demo)
+    private static void RenderToFile(string view, string path, bool demo, string? screenshot)
     {
         FrameworkElement element = view.ToLowerInvariant() switch
         {
-            "voyage" => BuildVoyage(demo),
+            "voyage" => BuildVoyage(demo, screenshot),
             _ => throw new ArgumentException($"unknown view '{view}'"),
         };
 
@@ -66,10 +73,10 @@ public partial class App : Application
     /// the real solver, so what gets rendered is what the code produces rather than a
     /// picture of what it is meant to produce.
     /// </summary>
-    private static FrameworkElement BuildVoyage(bool demo)
+    private static FrameworkElement BuildVoyage(bool demo, string? screenshot)
     {
         var view = new VoyageView();
-        if (demo) view.LoadSample();
+        if (demo) view.LoadSample(screenshot);
         return view;
     }
 }

@@ -6,7 +6,10 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- The Windows SDK projection, for the built-in OCR engine (Windows.Media.Ocr).
+         19041 is the floor for the OCR APIs; SupportedOSPlatform guards the calls. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
@@ -29,9 +32,6 @@
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\assets\gem-index.json" Link="assets\gem-index.json"
           CopyToOutputDirectory="PreserveNewest" />
-    <!-- Reference capture, so the offscreen render works without the game running. -->
-    <None Include="..\..\tests\PoeMarketWatch.Tests\fixtures\voyage-panel.png"
-          Link="assets\voyage-panel.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

@@ -22,6 +22,7 @@ public sealed class VoyageSession
 {
     private readonly Dictionary<int, Chart> _charts = new();
     private readonly Dictionary<int, string> _figurines = new();
+    private readonly Dictionary<int, List<string>> _squareModifiers = new();
 
     public VoyageSession(BoardLayout? layout = null)
     {
@@ -38,6 +39,33 @@ public sealed class VoyageSession
 
     /// <summary>Figurine modifier text captured so far, keyed by figurine index.</summary>
     public IReadOnlyDictionary<int, string> Figurines => _figurines;
+
+    /// <summary>Modifiers read off the Area Modifiers panel, keyed by 1-based square.</summary>
+    public IReadOnlyDictionary<int, List<string>> SquareModifiers => _squareModifiers;
+
+    /// <summary>
+    /// Record what the game says applies to a square.
+    ///
+    /// This is the game's OWN aggregate for that square, so it supersedes anything worked
+    /// out from figurines rather than adding to it -- counting both would pay twice for
+    /// the same modifier. Passing no lines clears the square, which is what an accidental
+    /// capture of the empty panel should do.
+    /// </summary>
+    public void ApplySquareModifiers(int square, IReadOnlyList<string>? lines)
+    {
+        if (lines is null || lines.Count == 0) _squareModifiers.Remove(square);
+        else _squareModifiers[square] = lines.ToList();
+    }
+
+    /// <summary>Squares whose Area Modifiers have not been read yet.</summary>
+    public IReadOnlyList<int> SquaresAwaitingModifiers =>
+        Enumerable.Range(1, Layout.Rows * Layout.Cols)
+                  .Where(sq => !_squareModifiers.ContainsKey(sq))
+                  .ToList();
+
+    /// <summary>The cell a 1-based square number refers to.</summary>
+    public Cell CellOf(int square) =>
+        new((square - 1) / Layout.Cols, (square - 1) % Layout.Cols);
 
     /// <summary>
     /// Take a panel read. Charts already carrying hover detail keep it: a re-read after
@@ -118,15 +146,41 @@ public sealed class VoyageSession
     {
         get
         {
-            var total = _charts.Count + Layout.Figurines.Count;
+            var squares = Layout.Rows * Layout.Cols;
+            var total = _charts.Count + squares;
             if (total == 0) return 0;
-            var done = _charts.Count(kv => HasDetail(kv.Value)) + _figurines.Count;
+            var done = _charts.Count(kv => HasDetail(kv.Value)) + _squareModifiers.Count;
             return done / (double)total;
         }
     }
 
-    /// <summary>Board modifiers from the figurine text, bound to the cells they touch.</summary>
-    public IReadOnlyList<BoardModifier> BoardModifiers() => Layout.Bind(_figurines);
+    /// <summary>
+    /// What each square gets from the board, whatever the source.
+    ///
+    /// A square read straight off the Area Modifiers panel uses that and nothing else:
+    /// the panel is the game's own total for that square, so adding figurine-derived
+    /// modifiers on top would count the same effect twice. Figurines still cover the
+    /// squares that have not been read.
+    /// </summary>
+    public IReadOnlyList<BoardModifier> BoardModifiers()
+    {
+        var result = new List<BoardModifier>();
+
+        foreach (var (square, lines) in _squareModifiers)
+        {
+            var cell = CellOf(square);
+            result.AddRange(lines.Select(l => new BoardModifier(l, [cell])));
+        }
+
+        var covered = _squareModifiers.Keys.Select(CellOf).ToHashSet();
+        foreach (var modifier in Layout.Bind(_figurines))
+        {
+            var cells = modifier.AffectedCells.Where(c => !covered.Contains(c)).ToList();
+            if (cells.Count > 0) result.Add(modifier with { AffectedCells = cells });
+        }
+
+        return result;
+    }
 
     /// <summary>
     /// Score every chart against a profile and hand the result to the solver.
