@@ -34,6 +34,7 @@ public sealed class VoyageSolver
     private readonly Func<Chart, Cell, double> _score;
     private readonly bool _allowEmpty;
     private readonly double _strandedPenalty;
+    private readonly int _maxPlacements;
 
     /// <param name="strandedPenalty">
     /// Charged per square left outside the largest connected group. Must be >= 0: the
@@ -47,7 +48,8 @@ public sealed class VoyageSolver
         IReadOnlyList<Chart> charts,
         Func<Chart, Cell, double>? score = null,
         bool allowEmpty = true,
-        double strandedPenalty = 0)
+        double strandedPenalty = 0,
+        int? maxPlacements = null)
     {
         _rows = rows;
         _cols = cols;
@@ -55,7 +57,15 @@ public sealed class VoyageSolver
         _score = score ?? ((c, _) => c.Value);
         _allowEmpty = allowEmpty;
         _strandedPenalty = Math.Max(0, strandedPenalty);
+
+        // "Place UP TO nine Charts onto the board... Your very first Voyage will require
+        // only four Charts." A cap is not the same as leaving cells empty by choice: it
+        // is a limit on how many charts you have to spend.
+        _maxPlacements = Math.Clamp(maxPlacements ?? rows * cols, 0, rows * cols);
     }
+
+    /// <summary>Where a Voyage begins: the bottom-left square, per the in-game help.</summary>
+    public static Cell StartCell(int rows) => new(rows - 1, 0);
 
     /// <summary>Nodes explored on the last solve, so pathological inputs are visible.</summary>
     public long NodesExplored { get; private set; }
@@ -118,12 +128,17 @@ public sealed class VoyageSolver
         _ordering = BuildOrdering();
 
         var best = new Solution(Array.Empty<Placement>(), double.NegativeInfinity);
+        bestRank = double.NegativeInfinity;
 
         // Start from a connected board if one can be found cheaply. Without this the
         // search can run for minutes and still return a layout with a dead corner --
         // measured on a real 24-chart panel, connected boards were roughly one in ten
         // million legal ones, and 2.9M nodes of value-ordered search never reached one.
-        if (_strandedPenalty > 0 && SeedConnected() is { } seed) best = seed;
+        if (SeedConnected() is { } seed)
+        {
+            best = seed;
+            bestRank = seed.Value + seed.Placements.Count * FullnessEpsilon;
+        }
 
 
         var exhausted = true;
@@ -148,8 +163,15 @@ public sealed class VoyageSolver
         };
     }
 
-    /// <summary>Small enough not to disturb any real score, big enough to break a tie.</summary>
-    private const double Epsilon = 1e-9;
+    /// <summary>
+    /// Tie-breakers, ordered by how much they matter and all far below any real score.
+    ///
+    /// Connectivity outranks fullness: a joined board beats a fuller one that strands a
+    /// square, and a fuller board beats an emptier one worth the same. Both only ever
+    /// decide exact ties, which are common when a profile has little to score.
+    /// </summary>
+    private const double StrandedEpsilon = 1e-6;
+    private const double FullnessEpsilon = 1e-9;
 
     /// <summary>Unwinds the recursion when the time budget is spent.</summary>
     private sealed class DeadlineReached : Exception { }
@@ -203,15 +225,28 @@ public sealed class VoyageSolver
         var board = new VoyageBoard(_rows, _cols);
         var used = new bool[_charts.Count];
         var budget = 200_000;      // a seed that costs more than the search is no use
+        var target = Math.Min(_maxPlacements, Math.Min(_rows * _cols, _charts.Count));
 
         bool Dive(int index)
         {
             if (budget-- <= 0) return false;
 
             if (index == _rows * _cols)
-                return board.IsValid() && board.StrandedCells().Count == 0;
+                // As many charts as may be spent, not merely a legal board: the EMPTY
+                // board is trivially valid and trivially connected, and once the seed was
+                // allowed to leave cells empty it returned that instantly.
+                return board.FilledCount == target
+                       && board.IsValid()
+                       && board.StrandedCells().Count == 0;
 
             var cell = new Cell(index / _cols, index % _cols);
+
+            // The seed has to obey the chart cap too. Without this it happily returned a
+            // full board, and since fewer charts is always less value, the capped search
+            // could never beat its own seed -- the cap silently did nothing.
+            if (board.FilledCount >= _maxPlacements)
+                return _allowEmpty && LeavingEmptyIsLegal(board, cell) && Dive(index + 1);
+
             foreach (var i in _ordering[index])
             {
                 if (used[i]) continue;
@@ -231,7 +266,10 @@ public sealed class VoyageSolver
                     board.Clear(cell);
                 }
             }
-            return false;
+
+            // Leaving it empty is a legitimate branch, not a failure -- the board does
+            // not have to be full.
+            return _allowEmpty && LeavingEmptyIsLegal(board, cell) && Dive(index + 1);
         }
 
         bool OpensOntoAForbiddenBorder(Cell cell, ChartFace face, BorderRule which)
@@ -369,6 +407,8 @@ public sealed class VoyageSolver
                 yield return new Cell(r, c);
     }
 
+    private double bestRank = double.NegativeInfinity;
+
     private void Recurse(
         int index, VoyageBoard board, bool[] used, double value,
         double[] bound, ref Solution best,
@@ -407,12 +447,19 @@ public sealed class VoyageSolver
             // which showed as "3 squares cut off from the route" on a board that lost
             // nothing by joining them. Pricing it away keeps the strict-inequality prune
             // above, which is worth more than any tie-breaking at the leaf.
-            var charge = _strandedPenalty > 0 ? _strandedPenalty + Epsilon : 0;
-            var final = value - stranded.Count * charge;
+            // The score reported is the honest one. The tie-breakers only decide which
+            // of two equal boards is kept, and must not leak into the number shown --
+            // "90.000000009" is not a score anybody asked for.
+            var final = value - stranded.Count * _strandedPenalty;
+            var rank = final - stranded.Count * StrandedEpsilon
+                             + board.FilledCount * FullnessEpsilon;
 
-            if (final > best.Value)
+            if (rank > bestRank)
+            {
+                bestRank = rank;
                 best = new Solution(board.Placements.ToList(), final)
                     { StrandedCells = stranded };
+            }
             return;
         }
 
@@ -420,6 +467,15 @@ public sealed class VoyageSolver
         if (value + bound[index] <= best.Value) return;
 
         var cell = new Cell(index / _cols, index % _cols);
+
+        // A cap on how many charts may be spent. Once it is reached the rest of the board
+        // has to stay empty, which is legal -- the game says "up to nine".
+        if (board.FilledCount >= _maxPlacements)
+        {
+            if (_allowEmpty && LeavingEmptyIsLegal(board, cell))
+                Recurse(index + 1, board, used, value, bound, ref best, sw, deadline, ct);
+            return;
+        }
 
         // Try the most valuable charts first.
         //

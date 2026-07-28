@@ -66,6 +66,14 @@ public sealed class VoyageProfile
     public double AreaLevelWeight { get; set; }
 
     /// <summary>
+    /// How many charts to spend, at most. Null means fill the board.
+    ///
+    /// The game says "place UP TO nine Charts", and "your very first Voyage will require
+    /// only four" -- so a plan for fewer is a real thing to ask for, not a degenerate one.
+    /// </summary>
+    public int? MaxCharts { get; set; }
+
+    /// <summary>
     /// Charged per square left off the main route.
     ///
     /// Edge matching permits a dead corner -- an End pointing at the border, closed

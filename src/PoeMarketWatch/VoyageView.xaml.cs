@@ -1033,6 +1033,16 @@ public partial class VoyageView : UserControl
                 Foreground = Brush(0x3A, 0x30, 0x24),
                 HorizontalAlignment = HorizontalAlignment.Center,
             });
+            if (square == _session.StartSquare)
+                stack.Children.Add(new TextBlock
+                {
+                    // "Voyages will always start in the bottom left Chart of the Voyage."
+                    Text = "START",
+                    FontFamily = new FontFamily("Consolas"),
+                    FontSize = 9,
+                    Foreground = Brush(0x5A, 0x50, 0x42),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                });
             return stack;
         }
 
@@ -1052,7 +1062,9 @@ public partial class VoyageView : UserControl
         });
         stack.Children.Add(new TextBlock
         {
-            Text = $"chart {step.ChartNumber} · {step.RotationText}",
+            Text = square == _session.StartSquare
+                ? $"START · chart {step.ChartNumber} · {step.RotationText}"
+                : $"chart {step.ChartNumber} · {step.RotationText}",
             FontFamily = new FontFamily("Consolas"),
             FontSize = 10,
             Foreground = stranded ? Brush(0xB8, 0x50, 0x3E) : Brush(0x94, 0x86, 0x6F),

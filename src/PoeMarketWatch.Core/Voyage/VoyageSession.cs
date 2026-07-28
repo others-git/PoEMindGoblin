@@ -93,6 +93,11 @@ public sealed class VoyageSession
         }
     }
 
+    /// <summary>
+    /// Where the voyage begins. "Voyages will always start in the bottom left Chart."
+    /// </summary>
+    public int StartSquare => VoyagePlan.SquareNumber(VoyageSolver.StartCell(Layout.Rows), Layout.Cols);
+
     /// <summary>The cell a 1-based square number refers to.</summary>
     public Cell CellOf(int square) =>
         new((square - 1) / Layout.Cols, (square - 1) % Layout.Cols);
@@ -267,7 +272,8 @@ public sealed class VoyageSession
             modifiers, (m, _) => profile.ScoreText([m.Description]) * profile.BoardModifierWeight);
 
         return new VoyageSolver(Layout.Rows, Layout.Cols, scored, score,
-                                strandedPenalty: profile.StrandedSquarePenalty)
+                                strandedPenalty: profile.StrandedSquarePenalty,
+                                maxPlacements: profile.MaxCharts)
             .Solve(budget, ct);
     }
 
