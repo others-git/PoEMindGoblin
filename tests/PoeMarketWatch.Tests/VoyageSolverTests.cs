@@ -278,3 +278,65 @@ public class VoyageAnytimeTests
         Assert.True(s.Elapsed > TimeSpan.Zero);
     }
 }
+
+public class VoyageAdjacencyTests
+{
+    private static Chart Plain(string id, double value) =>
+        new(id, id, ChartShape.Crossing, 80, Array.Empty<string>()) { Value = value };
+
+    private static Chart Buffer(string id, double adjacent) =>
+        new(id, id, ChartShape.Crossing, 80, Array.Empty<string>())
+        {
+            Value = 0,
+            AdjacentModifier = "Adjacent Areas contain 2 additional Strongboxes",
+            AdjacentValue = adjacent,
+        };
+
+    [Fact]
+    public void AdjacentModifierIsWorthMoreWithMoreNeighbours()
+    {
+        // The reason placement matters for these: centre touches 4, a corner touches 2.
+        var charts = new List<Chart> { Buffer("box", 10) };
+        charts.AddRange(Enumerable.Range(0, 8).Select(i => Plain($"p{i}", 1)));
+
+        var s = new VoyageSolver(3, 3, charts).Solve(TimeSpan.FromSeconds(2));
+        var placed = s.Placements.Single(p => p.Chart.Id == "box");
+
+        // centre of a 3x3 is the only cell with four neighbours
+        Assert.Equal(new Cell(1, 1), placed.Cell);
+    }
+
+    [Fact]
+    public void AdjacencyCountsInBothDirections()
+    {
+        // Two buffers side by side each buff the other, so the pair is worth 2x, not 1x.
+        var charts = new List<Chart> { Buffer("a", 5), Buffer("b", 5) };
+        var s = new VoyageSolver(1, 2, charts).Solve(TimeSpan.FromSeconds(2));
+        Assert.Equal(2, s.Placements.Count);
+        Assert.Equal(10, s.Value, 3);
+    }
+
+    [Fact]
+    public void ChartWithoutAnAdjacentModifierAddsNothingToNeighbours()
+    {
+        var charts = new List<Chart> { Plain("a", 5), Plain("b", 5) };
+        var s = new VoyageSolver(1, 2, charts).Solve(TimeSpan.FromSeconds(2));
+        Assert.Equal(10, s.Value, 3);   // 5 + 5, no interaction term
+    }
+
+    [Fact]
+    public void VoyageModifierIsGlobalSoItDoesNotDependOnPlacement()
+    {
+        // "8% increased Quantity of Items found in all Voyage Areas" applies wherever the
+        // chart sits, so it belongs in the chart's own value, not the adjacency term.
+        var chart = new Chart("v", "v", ChartShape.Crossing, 80, Array.Empty<string>())
+        {
+            Value = 10,
+            VoyageModifier = "8% increased Quantity of Items found in all Voyage Areas",
+        };
+        Assert.False(chart.HasAdjacentModifier);
+
+        var s = new VoyageSolver(1, 1, new[] { chart }).Solve(TimeSpan.FromSeconds(1));
+        Assert.Equal(10, s.Value, 3);
+    }
+}

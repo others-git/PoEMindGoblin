@@ -1,6 +1,18 @@
 namespace PoeMarketWatch.Core.Voyage;
 
-/// <summary>One chart available to place, independent of where it ends up.</summary>
+/// <summary>
+/// One chart, as the Voyage planner shows it on hover.
+///
+/// Note the two special modifier lines, which behave completely differently:
+///
+///   Voyage Modifier:   "8% increased Quantity of Items found in all Voyage Areas"
+///        Global. Applies wherever the chart sits, so position is irrelevant to it.
+///
+///   Adjacent Modifier: "Adjacent Areas contain 2 additional Strongboxes"
+///        Applies to the NEIGHBOURS of wherever this chart is placed. This is what makes
+///        the objective non-separable: a chart's worth depends on what is next to it, so
+///        a Strongbox chart in the centre (4 neighbours) is worth twice a corner (2).
+/// </summary>
 public sealed record Chart(
     string Id,
     string Name,
@@ -8,8 +20,29 @@ public sealed record Chart(
     int AreaLevel,
     IReadOnlyList<string> Modifiers)
 {
-    /// <summary>Weight used by the optimiser. Set from whatever you are chasing.</summary>
+    /// <summary>Area name shown under the title, e.g. "Seafloor Ridges".</summary>
+    public string AreaName { get; init; } = "";
+
+    /// <summary>Applies to every voyage area regardless of placement. Null when absent.</summary>
+    public string? VoyageModifier { get; init; }
+
+    /// <summary>Applies to the neighbours of wherever this is placed. Null when absent.</summary>
+    public string? AdjacentModifier { get; init; }
+
+    public int RequiresLevel { get; init; }
+    public double ItemQuantity { get; init; }
+    public double ItemRarity { get; init; }
+    public double MonsterPackSize { get; init; }
+    public double GoldFound { get; init; }
+    public double Sulphur { get; init; }
+
+    /// <summary>Own value at a cell, before any neighbour effects.</summary>
     public double Value { get; init; }
+
+    /// <summary>What this chart's Adjacent Modifier is worth to ONE neighbour.</summary>
+    public double AdjacentValue { get; init; }
+
+    public bool HasAdjacentModifier => AdjacentValue != 0 || !string.IsNullOrEmpty(AdjacentModifier);
 
     public override string ToString() => $"{Name} ({Shape}, L{AreaLevel})";
 }

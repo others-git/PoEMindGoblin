@@ -129,6 +129,30 @@ public sealed class VoyageSolver
     private sealed class DeadlineReached : Exception { }
 
     /// <summary>
+    /// Value created by putting <paramref name="chart"/> next to what is already placed.
+    ///
+    /// An Adjacent Modifier ("Adjacent Areas contain 2 additional Strongboxes") buffs the
+    /// squares AROUND its chart, so the objective is not separable per cell -- a chart's
+    /// worth depends on its neighbours. Every pair is scored once, when the second of the
+    /// two is placed, and counted in both directions: the neighbour buffs the newcomer
+    /// and the newcomer buffs the neighbour.
+    ///
+    /// This is why a Strongbox chart belongs in the centre (4 neighbours) rather than a
+    /// corner (2) -- placement doubles its effect.
+    /// </summary>
+    private static double AdjacencyGain(VoyageBoard board, Cell cell, Chart chart)
+    {
+        var gain = 0.0;
+        foreach (var side in Enum.GetValues<Side>())
+        {
+            if (board.At(VoyageBoard.Neighbour(cell, side)) is not { } neighbour) continue;
+            gain += neighbour.Chart.AdjacentValue;   // they buff us
+            gain += chart.AdjacentValue;             // we buff them
+        }
+        return gain;
+    }
+
+    /// <summary>
     /// Upper bound on the value still obtainable from cell <c>i</c> onwards.
     ///
     /// Bounded PER CELL, not per chart. The obvious version -- take each chart's best
@@ -163,6 +187,13 @@ public sealed class VoyageSolver
             .Select(cell => _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c => _score(c, cell))))
             .ToList();
 
+        // Adjacency can only ADD value, so the bound has to allow for it or it stops
+        // being admissible and the search could discard the true best layout. Four
+        // neighbours is the most any cell has; assuming the best adjacent chart on all of
+        // them is loose but safe.
+        var bestAdjacent = _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c => c.AdjacentValue));
+        var adjacencyCeiling = bestAdjacent * 8;   // up to 4 neighbours, counted both ways
+
         // Both are admissible, so the smaller is admissible and never worse than either.
         // Neither alone is enough: A collapses with modifiers, B collapses without them,
         // and each left the search grinding through millions of nodes on its bad case.
@@ -173,7 +204,7 @@ public sealed class VoyageSolver
         {
             byChart[i] = byChart[i + 1] + (i < chartBest.Count ? chartBest[i] : 0);
             byCell[i] = byCell[i + 1] + cellBest[i];
-            suffix[i] = Math.Min(byChart[i], byCell[i]);
+            suffix[i] = Math.Min(byChart[i], byCell[i]) + adjacencyCeiling * (n - i);
         }
         return suffix;
     }
@@ -246,7 +277,7 @@ public sealed class VoyageSolver
         {
             if (used[i]) continue;
             var chart = _charts[i];
-            var gain = _score(chart, cell);
+            var gain = _score(chart, cell) + AdjacencyGain(board, cell, chart);
 
             // Ordered by value, so once a candidate cannot beat the incumbent even in
             // the best case, neither can any candidate after it.
