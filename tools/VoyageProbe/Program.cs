@@ -3,6 +3,7 @@ using PoeMarketWatch.Core.Voyage;
 // With a screenshot path, decode it and print the plan; otherwise run the synthetic
 // solver benchmark below.
 if (args.Length > 1 && args[1] == "--feasibility") return Feasibility.Run(args[0]);
+if (args.Length > 2 && args[1] == "--save") return SaveProbe.Run(args[0], args[2]);
 
 // probe <screenshot.png> [profile] [overlay-out.png]
 if (args.Length > 0)

@@ -228,4 +228,88 @@ public sealed class VoyageSession
             .OrderBy(s => s.Square)
             .ToList();
     }
+
+    // ---- persistence -------------------------------------------------------------
+
+    /// <summary>Capture everything read so far, for writing to disk.</summary>
+    public VoyageSessionState ToState(string? profile = null) => new()
+    {
+        Version = VoyageSessionState.CurrentVersion,
+        Rows = Layout.Rows,
+        Cols = Layout.Cols,
+        Profile = profile,
+        Charts = _charts.OrderBy(kv => kv.Key).Select(kv => new VoyageSessionState.ChartState
+        {
+            PanelIndex = kv.Key,
+            Name = kv.Value.Name,
+            Shape = kv.Value.Shape,
+            AreaLevel = kv.Value.AreaLevel,
+            AreaName = kv.Value.AreaName,
+            VoyageModifier = kv.Value.VoyageModifier,
+            AdjacentModifier = kv.Value.AdjacentModifier,
+            RequiresLevel = kv.Value.RequiresLevel,
+            ItemQuantity = kv.Value.ItemQuantity,
+            ItemRarity = kv.Value.ItemRarity,
+            MonsterPackSize = kv.Value.MonsterPackSize,
+            GoldFound = kv.Value.GoldFound,
+            Sulphur = kv.Value.Sulphur,
+            Modifiers = kv.Value.Modifiers.ToList(),
+        }).ToList(),
+        SquareModifiers = _squareModifiers.ToDictionary(
+            kv => kv.Key.ToString(), kv => kv.Value.ToList()),
+        Figurines = _figurines.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
+    };
+
+    /// <summary>
+    /// Rebuild a session from a saved one.
+    ///
+    /// The board layout comes from the SAVED state, not the current default: a session
+    /// read against a 3x3 board has square numbers that only mean anything on a 3x3
+    /// board, and quietly reinterpreting them on a different size would move every
+    /// modifier to the wrong place.
+    /// </summary>
+    public static VoyageSession FromState(VoyageSessionState state)
+    {
+        var session = new VoyageSession(BoardLayout.Default(state.Rows, state.Cols));
+
+        foreach (var c in state.Charts)
+        {
+            session._charts[c.PanelIndex] = new Chart(
+                $"panel-{c.PanelIndex}", c.Name, c.Shape, c.AreaLevel, c.Modifiers.ToList())
+            {
+                AreaName = c.AreaName,
+                VoyageModifier = c.VoyageModifier,
+                AdjacentModifier = c.AdjacentModifier,
+                RequiresLevel = c.RequiresLevel,
+                ItemQuantity = c.ItemQuantity,
+                ItemRarity = c.ItemRarity,
+                MonsterPackSize = c.MonsterPackSize,
+                GoldFound = c.GoldFound,
+                Sulphur = c.Sulphur,
+            };
+        }
+
+        foreach (var (key, lines) in state.SquareModifiers)
+            if (int.TryParse(key, out var square)) session._squareModifiers[square] = lines.ToList();
+
+        foreach (var (key, text) in state.Figurines)
+            if (int.TryParse(key, out var index)) session._figurines[index] = text;
+
+        return session;
+    }
+
+    /// <summary>Write to disk. Cheap enough to call after every capture.</summary>
+    public void Save(string? path = null, string? profile = null)
+    {
+        var state = ToState(profile);
+        state.SavedAt = DateTimeOffset.Now;
+        state.Save(path);
+    }
+
+    /// <summary>Restore the last session, or a fresh one when there is nothing to restore.</summary>
+    public static (VoyageSession Session, VoyageSessionState? State) Restore(string? path = null)
+    {
+        var state = VoyageSessionState.Load(path);
+        return state is null ? (new VoyageSession(), null) : (FromState(state), state);
+    }
 }

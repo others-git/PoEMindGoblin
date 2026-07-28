@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 using System.Windows;
@@ -39,6 +40,13 @@ public partial class VoyageView : UserControl
         new() { Interval = TimeSpan.FromMilliseconds(250) };
 
     private VoyageSession _session = new();
+    private string? _restoredProfile;
+
+    /// <summary>
+    /// Off for offscreen rendering, so inspecting the layout cannot overwrite a real
+    /// session with sample data. Saving is a side effect the render has no business having.
+    /// </summary>
+    private bool _persistenceEnabled = true;
     private HotkeyService? _hotkeys;
     private int? _captureHotkey;
     private bool _capturing;
@@ -63,6 +71,12 @@ public partial class VoyageView : UserControl
         ModifierList.ItemsSource = _modifiers;
         PlanList.ItemsSource = _plan;
 
+        // Reading a board is slow -- a screenshot, nine hovers, then a hover per chart.
+        // Throwing that away on exit would make the tool worse than doing it by hand.
+        var (restored, state) = VoyageSession.Restore();
+        _session = restored;
+        _restoredProfile = state?.Profile;
+
         _rules.WriteDefaultsIfMissing();
         _rules.Changed += () => Dispatcher.Invoke(LoadProfiles);
         _rules.Error += msg => Dispatcher.Invoke(() => SetStatus($"Rule file: {msg}", bad: true));
@@ -73,8 +87,10 @@ public partial class VoyageView : UserControl
 
         BuildBoard();
         BuildPanel();
+        RefreshPanel();
         RebuildModifiers();
         RefreshProgress();
+        ReportRestored();
 
         // Popping out and docking REPARENT this control, which raises Unloaded/Loaded.
         // Stopping the poll unconditionally on Unloaded would silently kill read mode the
@@ -88,14 +104,49 @@ public partial class VoyageView : UserControl
         };
     }
 
+    // ---- persistence -------------------------------------------------------------
+
+    /// <summary>
+    /// Write the session out.
+    ///
+    /// Called after every capture rather than on exit: the app can be killed, and a save
+    /// that only happens on a clean shutdown is a save that fails exactly when it matters.
+    /// A failure here must never interrupt reading, so it degrades to a status line.
+    /// </summary>
+    private void Persist()
+    {
+        if (!_persistenceEnabled) return;
+        try
+        {
+            _session.Save(profile: Profile?.Name);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            SetStatus($"Could not save the session: {ex.Message}", bad: true);
+        }
+    }
+
+    private void ReportRestored()
+    {
+        if (_session.Charts.Count == 0 && _session.SquareModifiers.Count == 0) return;
+
+        var parts = new List<string>();
+        if (_session.Charts.Count > 0) parts.Add($"{_session.Charts.Count} charts");
+        if (_session.SquareModifiers.Count > 0)
+            parts.Add($"{_session.SquareModifiers.Count} squares");
+        SetStatus($"Restored {string.Join(" and ", parts)} from your last session. "
+                  + "Read panel again if the charts have changed.");
+    }
+
     // ---- rule profiles -----------------------------------------------------------
 
     private void LoadProfiles()
     {
         var previous = (ProfileBox.SelectedItem as VoyageProfile)?.Name;
         ProfileBox.ItemsSource = _rules.Profiles;
-        ProfileBox.SelectedItem = _rules.Profiles.FirstOrDefault(p => p.Name == previous)
-                                  ?? _rules.Profiles.FirstOrDefault();
+        ProfileBox.SelectedItem =
+            _rules.Profiles.FirstOrDefault(p => p.Name == (previous ?? _restoredProfile))
+            ?? _rules.Profiles.FirstOrDefault();
 
         // Edits to the rule file change the objective, so a plan computed under the old
         // rules is stale. Showing it as though it were current would be a lie.
@@ -108,6 +159,7 @@ public partial class VoyageView : UserControl
     private void OnProfileChanged(object sender, SelectionChangedEventArgs e)
     {
         if (Profile is { Description: { } d } && !string.IsNullOrWhiteSpace(d)) SetStatus(d);
+        if (IsLoaded) Persist();          // so the app reopens on the same objective
     }
 
     private void OnCalibrate(object sender, RoutedEventArgs e)
@@ -166,6 +218,7 @@ public partial class VoyageView : UserControl
             _session.ApplyPanelRead(cells);
             _solution = null;
             _plan.Clear();
+            Persist();
             RefreshPanel();
             RefreshBoard();
             RefreshProgress();
@@ -252,6 +305,7 @@ public partial class VoyageView : UserControl
 
             _session.ApplySquareModifiers(square, lines);
             _solution = null;
+            Persist();
             SetStatus($"Square {square}: read {lines.Count} "
                       + (lines.Count == 1 ? "modifier." : "modifiers."));
             AdvanceTarget();
@@ -341,6 +395,7 @@ public partial class VoyageView : UserControl
         }
 
         _solution = null;
+        Persist();
         DetailBox.Clear();
         AdvanceTarget();
         RefreshBoard();
@@ -518,6 +573,7 @@ public partial class VoyageView : UserControl
     private void OnReset(object sender, RoutedEventArgs e)
     {
         _session = new VoyageSession();
+        VoyageSessionState.Delete();
         _solution = null;
         _steps = [];
         _plan.Clear();
@@ -576,6 +632,11 @@ public partial class VoyageView : UserControl
     /// </summary>
     public void LoadSample(string? screenshot = null)
     {
+        // A clean slate, and nothing written back: the sample must not inherit or clobber
+        // a real session that happens to be on disk.
+        _persistenceEnabled = false;
+        _session = new VoyageSession();
+
         if (screenshot is not null && System.IO.File.Exists(screenshot))
         {
             using var bmp = new System.Drawing.Bitmap(screenshot);
