@@ -5,7 +5,4 @@ publish/
 .vs/
 *.dat
 credentials.dat
-publish-next/
-publish-v3/
-publish-v4/
-publish-v5/
+publish/
