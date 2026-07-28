@@ -85,6 +85,14 @@ public sealed class ChartPanelReader
         int Index, int Row, int Col,
         bool North, bool East, bool South, bool West)
     {
+        /// <summary>
+        /// Area level from the "L:83" caption, or null when it could not be read.
+        /// Null is deliberate: see <see cref="LevelReader"/>, which refuses to guess at a
+        /// digit it has no template for rather than report a plausible wrong level.
+        /// </summary>
+        public int? Level { get; init; }
+
+
         public int OpenCount => (North ? 1 : 0) + (East ? 1 : 0) + (South ? 1 : 0) + (West ? 1 : 0);
 
         /// <summary>The shape implied by the openings, or null if they match none.</summary>
@@ -119,12 +127,18 @@ public sealed class ChartPanelReader
         }
 
         public override string ToString() =>
-            $"#{Index} r{Row}c{Col} N{(North ? 1 : 0)}E{(East ? 1 : 0)}S{(South ? 1 : 0)}W{(West ? 1 : 0)} {Shape?.ToString() ?? "?"}";
+            $"#{Index} r{Row}c{Col} N{(North ? 1 : 0)}E{(East ? 1 : 0)}S{(South ? 1 : 0)}W{(West ? 1 : 0)} "
+            + $"{Shape?.ToString() ?? "?"}{(Level is { } l ? $" L{l}" : "")}";
     }
 
     private readonly Options _o;
+    private readonly LevelReader? _levels;
 
-    public ChartPanelReader(Options? options = null) => _o = options ?? new Options();
+    public ChartPanelReader(Options? options = null, LevelReader? levels = null)
+    {
+        _o = options ?? new Options();
+        _levels = levels ?? new LevelReader();
+    }
 
     /// <summary>The path glyph is a saturated green distinct from the parchment behind it.</summary>
     private static bool IsGreen(int r, int g, int b) => g > 90 && g - r > 35 && g - b > 25;
@@ -144,8 +158,12 @@ public sealed class ChartPanelReader
             for (var col = 0; col < o.Cols; col++)
             {
                 var cx = o.OriginX + col * o.Pitch;
-                var cy = o.OriginY + row * o.Pitch + o.GlyphOffsetY;
-                if (ReadCellAt(pixels, o, cx, cy, row, col) is { } cell) found.Add(cell);
+                var cellY = o.OriginY + row * o.Pitch;
+                var cy = cellY + o.GlyphOffsetY;
+                if (ReadCellAt(pixels, o, cx, cy, row, col) is not { } cell) continue;
+                // Only bother with the caption once a glyph is confirmed -- an empty cell
+                // has no level to read.
+                found.Add(cell with { Level = _levels?.Read(pixels, cx, cellY) });
             }
         }
         return found;
