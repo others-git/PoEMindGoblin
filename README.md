@@ -6,6 +6,7 @@ Windows market tool for Path of Exile. Two tools so far:
   async Market / Merchant's Tab listings. See a match the moment it is listed and be one
   keypress from the seller's hideout.
 * **Gem RoI** — which vendor-buyable gems are worth levelling, priced off poe.watch.
+* **Voyage solver** — which chart goes in which board square (core done; UI pending).
 
 Portable: a single self-contained .exe, no installer, no runtime prerequisite.
 
@@ -107,6 +108,61 @@ endpoints 404 on every league including Standard, `api.poe.ninja` does not resol
 the HTML served to a plain client has no script tags at all. poe.watch is an open JSON API
 carrying `gemLevel` / `gemQuality` / `gemIsCorrupted` per row, which is exactly the axis
 this needs. It is a different dataset and may disagree or lag.
+
+## Voyage solver
+
+Places charts on the Voyage board so every path connects to another path or the border,
+maximising whatever you are farming.
+
+Output is the instruction you actually need — both grids numbered row-major from 1, the
+board 1-9 and the chart panel 1-60:
+
+```
+square 1 <- chart 33  Kraken Shelf Chart (End, rotate 90°)
+square 5 <- chart 18  Coral Reef Chart (Crossing, as-is)
+```
+
+### Anytime, not exhaustive
+
+The five shapes come from the trade site's `chart_shape` filter — End (the half-step dead
+end), Corner, Straight, Junction, Crossing — so the set is closed. Even so, 60 charts over
+9 squares with rotations is a large search, and proving optimality once board modifiers
+are involved can run for minutes.
+
+So the search is anytime with a deadline. **100 ms lands within 0.05% of the 5-second
+answer**, and the result carries `ProvedOptimal` so a good layout is never presented as a
+proven best one.
+
+Two bounds are computed and the tighter is used at each depth: per-chart (captures "a
+chart is used once", collapses when modifiers exist) and per-cell (captures buffed-square
+scarcity, collapses when they do not). Neither alone is enough — each left the search
+grinding through millions of nodes on its bad case.
+
+Board modifiers buff **adjacent** squares, so value is scored per `(chart, cell)`: the
+same chart is worth more beside "Adjacent Areas contain 8 additional packs of Sea Beasts"
+than in a dead corner.
+
+### Rules are yours, and hot-reloaded
+
+There is no single best board — it depends what you are farming. Objectives live in
+`%LOCALAPPDATA%\PoeMarketWatch\voyage-rules.json` as named profiles, re-read on save
+with no restart:
+
+```json
+{
+  "name": "pack size",
+  "boardModifierWeight": 1.5,
+  "rules": [ { "pattern": "(\\d+)\\s+additional packs", "weight": 4.0 } ]
+}
+```
+
+Patterns capture the **number** in the modifier text, so "8 additional packs" outranks
+"2" — a flat per-match score would rank them the same. Ships with sulphur, pack size,
+quantity and safe profiles to edit.
+
+Broken JSON keeps the last good profiles and raises an error: a half-saved file mid-edit
+must not blank the tool, but silently ignoring an edit is worse — you would think a weight
+applied when it had not.
 
 ## Authentication
 
