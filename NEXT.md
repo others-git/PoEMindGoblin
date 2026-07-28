@@ -17,8 +17,9 @@ Verified from screenshots and the trade API, not assumed:
 * Every path must meet another path or the border. Connections are **mutual** — an open
   edge facing a closed one is invalid from both sides.
 * **TWO independent sources of adjacency bonus**, both modelled:
-  1. **12 figurines** carved around the board, fixed in place, each with an adjacency mod
-     ("Adjacent Areas contain 8 additional packs of Sea Beasts") → `BoardModifier`.
+  1. **12 figurines** carved around the board, fixed in place. **Every figurine modifier
+     is adjacency-type** — "Adjacent Areas contain 8 additional packs of Sea Beasts" —
+     never global, so a figurine only ever affects the squares it touches. → `BoardModifier`.
   2. **Charts** that carry their own `Adjacent Modifier:` line, which travels with the
      chart → `Chart.AdjacentValue`. A Strongbox chart in the centre touches 4 neighbours
      and is worth double a corner.
@@ -71,8 +72,6 @@ placement. Their layout is a good reference for what to show; the automation is 
 * **Vaal Orb outcome odds** (gem tool). Wiki challenge-gated, Fandom 402s, poedb has no
   gem section, search results describe PoE2. Defaults 25/25/25/25, every affected row
   labelled, one line to correct.
-* Whether a figurine buffs exactly one square or several — `BoardLayout` supports many
-  per slot, currently defaults to one.
 
 ## Things worth not relearning
 

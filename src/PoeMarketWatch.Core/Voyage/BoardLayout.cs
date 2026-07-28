@@ -5,11 +5,11 @@ namespace PoeMarketWatch.Core.Voyage;
 /// <summary>
 /// Where the board's figurines sit and which squares each one touches.
 ///
-/// The Voyage board is ringed with carved figures -- 12 on a 3x3 board -- and each
-/// carries an adjacency modifier ("Adjacent Areas contain 8 additional packs of Sea
-/// Beasts") that buffs the squares beside it. They are fixed to the board, unlike a
-/// chart's own Adjacent Modifier which travels with the chart. Both exist and both feed
-/// the same objective.
+/// The Voyage board is ringed with carved figures -- 12 on a 3x3 board. Every one of them
+/// carries an ADJACENCY modifier ("Adjacent Areas contain 8 additional packs of Sea
+/// Beasts"); none is global, so a figurine only ever affects the squares it touches.
+/// They are fixed to the board, unlike a chart's own Adjacent Modifier which travels with
+/// the chart. Both exist and both feed the same objective.
 ///
 /// Deliberately data, not constants: board size, figurine count and which cells each
 /// touches are all league-mechanic details that GGG can change, and a hardcoded 3x3 with
