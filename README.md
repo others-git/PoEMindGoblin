@@ -67,6 +67,23 @@ Headless equivalent, and the way to check the calibration still lines up:
 dotnet run --project tools/VoyageProbe -- screenshot.png sulphur overlay.png
 ```
 
+### Chart modifiers
+
+Which modifiers are a payout and which are monster difficulty is **generated, not judged**.
+Voyage charts have exactly three bases and poedb publishes the full mod table for each, so
+the set is closed:
+
+```
+python3 tools/fetch_voyage_mods.py          # -> assets/voyage-mods.json
+```
+
+That pulls all three tables, splits each affix into its stat lines (the league pairs
+danger with payout in a single affix, so this has to be per line), reduces every number to
+`#`, and classifies each line. The app normalises a chart's text the same way and looks it
+up, so matching is exact rather than pattern-guessed. Anything the rules do not cover is
+printed as UNCLASSIFIED and the file records it — a patch that adds a modifier shows up as
+a warning instead of being silently mis-filed. Current: 86 lines, 42 reward, 44 difficulty.
+
 **Known gap:** the level reader was trained from one capture, which contained only the
 digits 1,2,3,4,6,7,8. A level containing 0, 5 or 9 reads as unknown rather than as a wrong
 number. Teach it from a later capture via `level-digits.json`; no rebuild needed.

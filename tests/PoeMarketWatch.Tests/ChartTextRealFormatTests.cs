@@ -94,7 +94,7 @@ public class ChartTextRealFormatTests
         // "9(8-10) additional packs" -- a rule matching "(\d+) additional packs" fails on
         // that, because after the digits comes a bracket rather than a space.
         var c = ChartText.Parse(DeepwaterDescent, "id", ChartShape.Straight)!;
-        Assert.DoesNotContain(c.AdjacentModifier, "(");
+        Assert.DoesNotContain("(", c.AdjacentModifier!);
         Assert.Contains("17% more Monster Life", c.Modifiers);
         Assert.Contains("+18% Monster Chaos Resistance", c.Modifiers);
     }

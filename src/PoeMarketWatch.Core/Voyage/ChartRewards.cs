@@ -29,6 +29,14 @@ public static class ChartRewards
 {
     public sealed class Catalogue
     {
+        /// <summary>
+        /// Every line the three bases can roll, numbers reduced to '#', mapped to
+        /// "reward" or "difficulty". This is the primary lookup: an exact match against
+        /// the real table beats guessing from wording.
+        /// </summary>
+        public Dictionary<string, string> Lines { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Fallback for a line not in the table -- one added by a patch.</summary>
         public List<string> Reward { get; set; } = [];
         public List<string> Difficulty { get; set; } = [];
 
@@ -43,7 +51,7 @@ public static class ChartRewards
             new(patterns.Count == 0 ? "(?!)" : string.Join("|", patterns.Select(p => $"(?:{p})")),
                 RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        public int Count => Reward.Count + Difficulty.Count;
+        public int Count => Lines.Count + Reward.Count + Difficulty.Count;
     }
 
     private static Catalogue? _catalogue;
@@ -114,13 +122,39 @@ public static class ChartRewards
         }
     }
 
+    private static readonly Regex Digits = new(@"\d+(?:\.\d+)?", RegexOptions.Compiled);
+    private static readonly Regex SignedHash = new(@"[-+]#", RegexOptions.Compiled);
+    private static readonly Regex Spaces = new(@"\s+", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Reduce a modifier to its table form: every number becomes '#', signs go with the
+    /// number, whitespace collapses.
+    ///
+    /// This MUST match tools/fetch_voyage_mods.py exactly or the lookup misses. The sign
+    /// rule is the subtle half: poedb renders "+&lt;span&gt;18&lt;/span&gt;%" with the plus outside
+    /// the value, while a copied chart says "+18%", so keeping signs would make the two
+    /// sides disagree on precisely the modifiers that carry one.
+    /// </summary>
+    public static string Normalise(string line) =>
+        Spaces.Replace(SignedHash.Replace(Digits.Replace(line, "#"), "#"), " ").Trim(' ', '.');
+
     /// <summary>Is this line something the chart pays out?</summary>
     public static bool IsReward(string? line)
     {
         if (string.IsNullOrWhiteSpace(line)) return false;
+
+        // The table first: it is the actual mod list, so a hit here is not a judgement.
+        if (Current.Lines.TryGetValue(Normalise(line), out var category))
+            return category.Equals("reward", StringComparison.OrdinalIgnoreCase);
+
+        // Only a line the table does not have reaches the patterns.
         if (Current.RewardPattern.IsMatch(line)) return true;
         return !Current.DifficultyPattern.IsMatch(line);
     }
+
+    /// <summary>Was this line found in the mod table, or only guessed at?</summary>
+    public static bool IsKnown(string? line) =>
+        !string.IsNullOrWhiteSpace(line) && Current.Lines.ContainsKey(Normalise(line));
 
     /// <summary>Keep only the payout lines, in order.</summary>
     public static IReadOnlyList<string> Filter(IEnumerable<string>? lines) =>
