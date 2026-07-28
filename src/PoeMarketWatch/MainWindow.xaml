@@ -44,6 +44,29 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style TargetType="TabItem">
+            <Setter Property="Background" Value="#1C1917"/>
+            <Setter Property="Foreground" Value="#8A7E6C"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="b" Background="Transparent" Padding="16,8"
+                                BorderBrush="Transparent" BorderThickness="0,0,0,2">
+                            <ContentPresenter ContentSource="Header"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="b" Property="BorderBrush" Value="#C8A96A"/>
+                                <Setter Property="Foreground" Value="#C8A96A"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#241F1A"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style TargetType="TextBox">
             <Setter Property="Background" Value="#0E0C0A"/>
             <Setter Property="Foreground" Value="#D8CBB4"/>
@@ -84,7 +107,9 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1">
+        <TabControl Grid.Row="1" Background="#12100E" BorderThickness="0" Padding="0">
+        <TabItem Header="LIVE SEARCH">
+        <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="340" MinWidth="260"/>
                 <ColumnDefinition Width="4"/>
@@ -218,6 +243,12 @@
                 </ListBox>
             </DockPanel>
         </Grid>
+        </TabItem>
+
+        <TabItem Header="GEM RoI">
+            <ContentControl x:Name="GemTabHost"/>
+        </TabItem>
+        </TabControl>
 
         <Border Grid.Row="2" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}"
                 BorderThickness="0,1,0,0" Padding="14,6">

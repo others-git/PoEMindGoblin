@@ -103,6 +103,28 @@ public sealed class AppSettings
     public string TravelHotkey { get; set; } = "Ctrl+Alt+D";
     public bool PlaySound { get; set; } = true;
 
+    // --- gem RoI -----------------------------------------------------------
+    public double GemcutterChaos { get; set; } = 1.0;
+    public double VaalOrbChaos { get; set; } = 1.0;
+
+    /// <summary>
+    /// Vaal Orb outcome odds. Persisted because they could NOT be verified against a
+    /// primary source (see GemRoi.CorruptionOdds) -- the user must be able to correct
+    /// them, and the correction must survive a restart.
+    /// </summary>
+    public double VaalNoChange { get; set; } = 0.25;
+    public double VaalLevelUp { get; set; } = 0.25;
+    public double VaalLevelDown { get; set; } = 0.25;
+    public double VaalQualityChange { get; set; } = 0.25;
+
+    public GemRoi.CorruptionOdds Corruption()
+    {
+        var odds = new GemRoi.CorruptionOdds(
+            VaalNoChange, VaalLevelUp, VaalLevelDown, VaalQualityChange);
+        // A corrupt settings file must not crash the calculator.
+        return odds.IsNormalised ? odds : GemRoi.CorruptionOdds.Default;
+    }
+
     /// <summary>Credentials live in the DPAPI store, never in this file.</summary>
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

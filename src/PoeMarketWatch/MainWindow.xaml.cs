@@ -33,6 +33,10 @@ public partial class MainWindow : Window
         WatchList.ItemsSource = _watches;
         MatchList.ItemsSource = _matches;
 
+        // The gem tool is independent of the live-search machinery: no credentials, no
+        // sockets, just public price data. It shares only AppSettings.
+        GemTabHost.Content = new GemRoiView(_settings);
+
         _tick.Tick += (_, _) => RefreshTransient();
         _tick.Start();
 
