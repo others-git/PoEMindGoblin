@@ -44,6 +44,38 @@ public sealed record Chart(
 
     public bool HasAdjacentModifier => AdjacentValue != 0 || !string.IsNullOrEmpty(AdjacentModifier);
 
+    /// <summary>
+    /// The headline stats rendered back as tooltip lines.
+    ///
+    /// Parsing pulls these into typed fields, which then puts them out of reach of the
+    /// rules -- and rules are regexes over text. Rather than bolt a second, stat-shaped
+    /// scoring system beside the regex one, the stats are offered back in the exact
+    /// wording they have in game, so a "sulphur" profile is written the way the user
+    /// reads the tooltip and one mechanism covers everything.
+    /// </summary>
+    public IEnumerable<string> StatLines()
+    {
+        if (ItemQuantity != 0) yield return $"Item Quantity: +{ItemQuantity:0.##}%";
+        if (ItemRarity != 0) yield return $"Item Rarity: +{ItemRarity:0.##}%";
+        if (MonsterPackSize != 0) yield return $"Monster Pack Size: +{MonsterPackSize:0.##}%";
+        if (GoldFound != 0) yield return $"Gold Found: +{GoldFound:0.##}%";
+        if (Sulphur != 0) yield return $"Dead Man's Sulphur: +{Sulphur:0.##}";
+    }
+
+    /// <summary>
+    /// Everything scored into this chart's OWN value.
+    ///
+    /// Excludes <see cref="AdjacentModifier"/> on purpose: that value is realised through
+    /// the neighbours it buffs and is counted there, via <see cref="AdjacentValue"/>.
+    /// Counting it here as well would pay for it twice.
+    /// </summary>
+    public IEnumerable<string> OwnLines()
+    {
+        foreach (var line in StatLines()) yield return line;
+        if (!string.IsNullOrEmpty(VoyageModifier)) yield return VoyageModifier!;
+        foreach (var m in Modifiers) yield return m;
+    }
+
     public override string ToString() => $"{Name} ({Shape}, L{AreaLevel})";
 }
 

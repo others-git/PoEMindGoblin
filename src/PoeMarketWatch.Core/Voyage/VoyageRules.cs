@@ -68,8 +68,16 @@ public sealed class VoyageProfile
     public double ScoreText(IEnumerable<string> lines) =>
         lines.Sum(line => Rules.Sum(r => r.Score(line)));
 
+    /// <summary>
+    /// A chart's own value: its stats, its global Voyage Modifier and its monster mods,
+    /// plus area level. The Adjacent Modifier is excluded -- see <see cref="Chart.OwnLines"/>.
+    /// </summary>
     public double ScoreChart(Chart chart) =>
-        ScoreText(chart.Modifiers) + chart.AreaLevel * AreaLevelWeight;
+        ScoreText(chart.OwnLines()) + chart.AreaLevel * AreaLevelWeight;
+
+    /// <summary>What a chart's Adjacent Modifier is worth to ONE neighbour.</summary>
+    public double ScoreAdjacent(Chart chart) =>
+        string.IsNullOrEmpty(chart.AdjacentModifier) ? 0 : ScoreText([chart.AdjacentModifier!]);
 
     /// <summary>Builds the (chart, cell) scorer the solver needs from this profile.</summary>
     public Func<Chart, Cell, double> Scorer(IReadOnlyList<BoardModifier> boardModifiers)
@@ -219,9 +227,12 @@ public sealed class VoyageRules : IDisposable
             Description = "Maximise Dead Man's Sulphur.",
             Rules =
             [
+                new VoyageRule { Pattern = @"Dead Man's Sulphur:\s*\+?(\d+(?:\.\d+)?)", Weight = 5.0,
+                                 Comment = "the chart's own sulphur stat, the main source" },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Dead Man's Sulphur", Weight = 1.0 },
-                new VoyageRule { Pattern = @"Dead Man's Sulphur", Weight = 5.0,
-                                 Comment = "flat credit for any sulphur mod the number pattern misses" },
+                new VoyageRule { Pattern = @"increased Dead Man's Sulphur", Weight = 5.0,
+                                 Comment = "flat credit for a sulphur mod the number pattern misses; "
+                                         + "requires 'increased' so it cannot double-fire on the stat line" },
             ],
         },
         new VoyageProfile
@@ -231,6 +242,7 @@ public sealed class VoyageRules : IDisposable
             BoardModifierWeight = 1.5,
             Rules =
             [
+                new VoyageRule { Pattern = @"Monster Pack Size:\s*\+?(\d+)", Weight = 1.0 },
                 new VoyageRule { Pattern = @"(\d+)\s+additional packs", Weight = 4.0 },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = 1.0 },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Monster", Weight = 0.5 },
@@ -242,6 +254,8 @@ public sealed class VoyageRules : IDisposable
             Description = "Maximise item quantity and rarity.",
             Rules =
             [
+                new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 1.0 },
+                new VoyageRule { Pattern = @"Item Rarity:\s*\+?(\d+)", Weight = 0.5 },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Quantity", Weight = 1.0 },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Rarity", Weight = 0.5 },
             ],
