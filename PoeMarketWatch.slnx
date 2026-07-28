@@ -1,9 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/PoeMarketWatch.Core/PoeMarketWatch.Core.csproj" />
-    <Project Path="src/PoeMarketWatch/PoeMarketWatch.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/PoeMarketWatch.Tests/PoeMarketWatch.Tests.csproj" />
-  </Folder>
-</Solution>

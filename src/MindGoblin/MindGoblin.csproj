@@ -1,0 +1,41 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\MindGoblin.Core\MindGoblin.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- The Windows SDK projection, for the built-in OCR engine (Windows.Media.Ocr).
+         19041 is the floor for the OCR APIs; SupportedOSPlatform guards the calls. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>MindGoblin</AssemblyName>
+    <ApplicationIcon></ApplicationIcon>
+    <!-- Portable: one file, no installer, no .NET prerequisite on the target machine.
+         WPF cannot use NativeAOT, so this is IL + a bundled runtime (~150 MB). -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Generated from Path of Building data; see README. -->
+    <None Include="..\..\assets\gem-index.json" Link="assets\gem-index.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\assets\voyage-mods.json" Link="assets\voyage-mods.json"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="10.0.10" />
+  </ItemGroup>
+
+</Project>

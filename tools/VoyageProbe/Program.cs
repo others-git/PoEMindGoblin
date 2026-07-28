@@ -1,4 +1,4 @@
-using PoeMarketWatch.Core.Voyage;
+using MindGoblin.Core.Voyage;
 
 // With a screenshot path, decode it and print the plan; otherwise run the synthetic
 // solver benchmark below.

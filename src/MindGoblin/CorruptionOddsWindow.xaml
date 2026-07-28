@@ -1,0 +1,112 @@
+<Window x:Class="MindGoblin.CorruptionOddsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Vaal Orb outcome odds" Height="470" Width="540" MinHeight="380"
+        WindowStartupLocation="CenterOwner"
+        Background="#12100E" Foreground="#D8CBB4">
+    <Window.Resources>
+        <SolidColorBrush x:Key="Line" Color="#3A322A"/>
+        <SolidColorBrush x:Key="Dim" Color="#8A7E6C"/>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#D8CBB4"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#0E0C0A"/>
+            <Setter Property="Foreground" Value="#D8CBB4"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="CaretBrush" Value="#C8A96A"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#2A241E"/>
+            <Setter Property="Foreground" Value="#D8CBB4"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="16,7"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="MinWidth" Value="88"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Padding="20,20,20,10">
+            <StackPanel>
+                <TextBlock Text="Vaal Orb outcome odds" FontSize="16" FontWeight="SemiBold"
+                           Foreground="#C8A96A" Margin="0,0,0,10"/>
+
+                <Border Background="#1C1917" BorderBrush="#5A3A2A" BorderThickness="1"
+                        Padding="12" Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="These numbers are not verified." FontWeight="SemiBold"
+                                   Foreground="#C4574B" Margin="0,0,0,6"/>
+                        <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#B0A390">
+                            Every primary source was unreachable when this was built: the PoE wiki is
+                            challenge-gated, the Fandom mirror returns 402, and poedb has no gem
+                            corruption section. Search results described Path of Exile 2, whose
+                            outcomes differ. The defaults below are the widely-repeated 25/25/25/25
+                            split, exposed here rather than buried in code because the entire vaal
+                            expected value rests on them. Correct them and every vaal row updates.
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
+                <Grid Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="90"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="No change (corrupted, same level and quality)"/>
+                    <TextBox   Grid.Row="0" Grid.Column="1" x:Name="NoChangeBox" Height="28" Margin="0,4"
+                               TextChanged="OnChanged"/>
+
+                    <TextBlock Grid.Row="1" Text="Level +1  (this is the 21/20 payoff)"/>
+                    <TextBox   Grid.Row="1" Grid.Column="1" x:Name="LevelUpBox" Height="28" Margin="0,4"
+                               TextChanged="OnChanged"/>
+
+                    <TextBlock Grid.Row="2" Text="Level −1  (near worthless)"/>
+                    <TextBox   Grid.Row="2" Grid.Column="1" x:Name="LevelDownBox" Height="28" Margin="0,4"
+                               TextChanged="OnChanged"/>
+
+                    <TextBlock Grid.Row="3" Text="Quality change (priced as the 20/23 landmark)"/>
+                    <TextBox   Grid.Row="3" Grid.Column="1" x:Name="QualityBox" Height="28" Margin="0,4"
+                               TextChanged="OnChanged"/>
+                </Grid>
+
+                <TextBlock x:Name="SumText" Margin="0,8,0,0" FontSize="12"/>
+                <TextBlock Text="Enter proportions that add up to 1.0 (e.g. 0.25 each)."
+                           FontSize="11" Foreground="{StaticResource Dim}" Margin="0,4,0,0"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="1" Background="#1C1917" BorderBrush="{StaticResource Line}"
+                BorderThickness="0,1,0,0" Padding="20,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Content="Reset to 25%" Click="OnReset"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Content="Cancel" Click="OnCancel" IsCancel="True" Margin="0,0,10,0"/>
+                    <Button x:Name="SaveBtn" Content="Save" Click="OnSave" IsDefault="True"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

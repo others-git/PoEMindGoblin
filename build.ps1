@@ -9,14 +9,14 @@ param([switch]$SkipTests)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-Get-Process PoeMarketWatch -ErrorAction SilentlyContinue | ForEach-Object {
+Get-Process MindGoblin -ErrorAction SilentlyContinue | ForEach-Object {
     Write-Host "stopping running instance (pid $($_.Id))"
     Stop-Process -Id $_.Id -Force
     Start-Sleep -Milliseconds 500
 }
 
 if (-not $SkipTests) { dotnet test "$root" -v q }
-dotnet publish "$root\src\PoeMarketWatch\PoeMarketWatch.csproj" -c Release -o "$root\publish"
+dotnet publish "$root\src\MindGoblin\MindGoblin.csproj" -c Release -o "$root\publish"
 
 Write-Host ""
-Write-Host "-> $root\publish\PoeMarketWatch.exe"
+Write-Host "-> $root\publish\MindGoblin.exe"

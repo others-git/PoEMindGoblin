@@ -2,7 +2,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using PoeMarketWatch.Core.Voyage;
+using MindGoblin.Core.Voyage;
 
 /// <summary>
 /// Decode a real screenshot and print the plan.

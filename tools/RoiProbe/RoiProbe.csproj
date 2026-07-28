@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\PoeMarketWatch.Core\PoeMarketWatch.Core.csproj" />
+    <ProjectReference Include="..\..\src\MindGoblin.Core\MindGoblin.Core.csproj" />
     <None Include="..\..\assets\gem-index.json" Link="assets\gem-index.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

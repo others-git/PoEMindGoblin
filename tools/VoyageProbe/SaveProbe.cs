@@ -1,5 +1,5 @@
 using System.Runtime.Versioning;
-using PoeMarketWatch.Core.Voyage;
+using MindGoblin.Core.Voyage;
 
 /// <summary>
 /// Read a screenshot, save the session, read it back. Confirms the on-disk format is

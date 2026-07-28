@@ -1,0 +1,434 @@
+<UserControl x:Class="MindGoblin.VoyageView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#080706" Foreground="#E6DBC2"
+             TextOptions.TextFormattingMode="Display"
+             TextOptions.TextRenderingMode="ClearType">
+
+    <!--
+        Palette and type come from the Voyage screen's own materials: bitumen ink on aged
+        chart paper, tarnished bronze figureheads, verdigris on sea-metal. Brass is spent
+        almost entirely on the plan numbers, because "which chart goes in which square" is
+        the one thing this panel exists to answer and it should be the first thing seen.
+
+        Georgia carries the headings and numerals. PoE sets its UI in Fontin, a humanist
+        serif that is not installed on Windows; Georgia is the nearest that is, and an
+        engraved serif beside the drawn ornaments reads as part of the same object.
+        Consolas carries the plan and the levels, which have to align in a column.
+    -->
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="Abyss"     Color="#080706"/>
+        <SolidColorBrush x:Key="Slate"     Color="#131110"/>
+        <SolidColorBrush x:Key="Raised"    Color="#1B1714"/>
+        <SolidColorBrush x:Key="Silt"      Color="#2A2018"/>
+        <SolidColorBrush x:Key="Brass"     Color="#C9A227"/>
+        <SolidColorBrush x:Key="BrassDim"  Color="#8A6F22"/>
+        <SolidColorBrush x:Key="Verdigris" Color="#86A86A"/>
+        <SolidColorBrush x:Key="Rust"      Color="#B8503E"/>
+        <SolidColorBrush x:Key="Bone"      Color="#E6DBC2"/>
+        <SolidColorBrush x:Key="Ash"       Color="#94866F"/>
+        <SolidColorBrush x:Key="Shade"     Color="#6B5F4E"/>
+
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#E6DBC2"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+
+        <Style x:Key="Eyebrow" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Georgia"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="#6B5F4E"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="#E6DBC2"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="#221B15" BorderBrush="#2A2018"
+                                BorderThickness="1" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#302518"/>
+                                <Setter TargetName="b" Property="BorderBrush" Value="#8A6F22"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Primary" TargetType="Button">
+            <Setter Property="Foreground" Value="#1A1509"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="16,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="#C9A227" BorderThickness="0"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#E0B62C"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="#E6DBC2"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="b" Background="#221B15" BorderBrush="#2A2018"
+                                BorderThickness="1" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#3A2E14"/>
+                                <Setter TargetName="b" Property="BorderBrush" Value="#C9A227"/>
+                                <Setter Property="Foreground" Value="#C9A227"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#302518"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#0C0A09"/>
+            <Setter Property="Foreground" Value="#E6DBC2"/>
+            <Setter Property="BorderBrush" Value="#2A2018"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="CaretBrush" Value="#C9A227"/>
+            <Setter Property="SelectionBrush" Value="#8A6F22"/>
+        </Style>
+
+        <!-- The stock dropdown paints itself with system colours: a near-white popup
+             behind light text, unreadable on this ground. Restyling ComboBoxItem alone
+             leaves the popup chrome light, so the whole control is templated. -->
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="#E6DBC2"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="b" Background="Transparent" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#302518"/>
+                                <Setter Property="Foreground" Value="#C9A227"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Foreground" Value="#E6DBC2"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton Focusable="False" ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay,
+                                                      RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="tb" Background="#221B15"
+                                                BorderBrush="#2A2018" BorderThickness="1">
+                                            <Path HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                  Margin="0,0,10,0" Fill="#6B5F4E"
+                                                  Data="M 0 0 L 7 0 L 3.5 4.5 Z"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="tb" Property="BorderBrush" Value="#8A6F22"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              Margin="10,6,26,6" VerticalAlignment="Center"
+                                              IsHitTestVisible="False"/>
+                            <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
+                                   AllowsTransparency="True" Focusable="False">
+                                <Border Background="#1B1714" BorderBrush="#2A2018" BorderThickness="1"
+                                        MinWidth="{TemplateBinding ActualWidth}">
+                                    <ItemsPresenter/>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Tooltips carry captured modifier text, so they are content, not chrome. -->
+        <Style TargetType="ToolTip">
+            <Setter Property="Foreground" Value="#E6DBC2"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="MaxWidth" Value="400"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToolTip">
+                        <Border Background="#0C0A09" BorderBrush="#2A2018"
+                                BorderThickness="1" Padding="11,9">
+                            <ContentPresenter/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Plain" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border Background="Transparent">
+                                        <ContentPresenter/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ===== toolbar ===== -->
+        <Border Grid.Row="0" Background="{StaticResource Slate}"
+                BorderBrush="{StaticResource Silt}" BorderThickness="0,0,0,1" Padding="16,11">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Read panel" Click="OnReadPanel"
+                            ToolTip="Screenshot the game and decode every chart's shape and level"/>
+                    <ToggleButton x:Name="ReadModeBtn" Content="Read mode" Margin="8,0,0,0"
+                                  Checked="OnReadModeChanged" Unchecked="OnReadModeChanged"
+                                  ToolTip="Watch the clipboard: hover a chart in game, press Ctrl+C"/>
+                    <TextBlock x:Name="CaptureHint" Foreground="#86A86A" FontSize="12"
+                               VerticalAlignment="Center" Margin="12,0,0,0"/>
+                    <Rectangle Width="1" Height="22" Fill="{StaticResource Silt}" Margin="18,0"/>
+                    <TextBlock Text="Optimise for" Foreground="{StaticResource Shade}"
+                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <!-- An explicit ItemTemplate, not DisplayMemberPath: a templated
+                         ComboBox renders SelectionBoxItem through SelectionBoxItemTemplate,
+                         and with only a path set that comes out as the type name. -->
+                    <ComboBox x:Name="ProfileBox" Width="150" VerticalAlignment="Center"
+                              SelectionChanged="OnProfileChanged">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Name}" Foreground="#E6DBC2"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button Content="Edit rules" Click="OnEditRules" Margin="8,0,0,0"
+                            ToolTip="Opens the rule file. Saved edits apply immediately."/>
+                    <Button Content="Restore rules" Click="OnRestoreRules" Margin="6,0,0,0"
+                            ToolTip="Replace every profile with the shipped ones, discarding your edits."/>
+                    <Button Content="Solve" Click="OnSolve" Margin="18,0,0,0"
+                            Style="{StaticResource Primary}"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Content="Calibrate" Click="OnCalibrate" Margin="0,0,8,0"
+                            ToolTip="Panel coordinates. Edit if the read misses charts at your resolution."/>
+                    <Button Content="Clear" Click="OnReset" Margin="0,0,8,0"/>
+                    <Button x:Name="PopOutBtn" Content="Pop out" Click="OnPopOut"
+                            ToolTip="Move to its own window for a second monitor"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ===== modifiers | board | charts ===== -->
+        <Grid Grid.Row="1">
+            <!-- The board is the answer, so it takes the slack; the modifier list is
+                 reference material and gets a fixed, narrower column. -->
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="340" MinWidth="260" MaxWidth="420"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- modifiers: everything captured, and what it applies to -->
+            <DockPanel Grid.Column="0" Margin="16,16,8,16">
+                <TextBlock DockPanel.Dock="Top" x:Name="ModifierHeader" Text="M O D I F I E R S"
+                           Style="{StaticResource Eyebrow}"/>
+                <ListBox x:Name="ModifierList" Style="{StaticResource Plain}"
+                         SelectionChanged="OnModifierSelected">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="11,9" Margin="0,0,0,4"
+                                    Background="{Binding RowBackground}"
+                                    BorderBrush="{Binding Accent}" BorderThickness="2,0,0,0">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Title}" FontFamily="Georgia"
+                                                   FontSize="13" Foreground="{Binding Accent}"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Where}"
+                                                   FontFamily="Consolas" FontSize="11"
+                                                   Foreground="{StaticResource Shade}"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding Text}" FontSize="12"
+                                               Foreground="{Binding TextBrush}"
+                                               TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <!-- board: the answer -->
+            <DockPanel Grid.Column="1" Margin="10,16,10,16">
+                <TextBlock DockPanel.Dock="Top" Text="B O A R D" Style="{StaticResource Eyebrow}"/>
+                <Grid x:Name="BoardHost" DockPanel.Dock="Top" HorizontalAlignment="Center"/>
+
+                <TextBlock DockPanel.Dock="Top" x:Name="SummaryHeader" Text="V O Y A G E"
+                           Style="{StaticResource Eyebrow}" Margin="0,20,0,8"/>
+                <TextBlock DockPanel.Dock="Bottom" x:Name="SolveInfo" FontSize="12"
+                           Foreground="{StaticResource Shade}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                <!-- Bounded, and left-aligned: the board column is wide, and a label at
+                     one end with its number at the other is two columns, not a row. -->
+                <ListBox x:Name="SummaryList" Style="{StaticResource Plain}"
+                         HorizontalAlignment="Left" MaxWidth="440">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Label}" FontFamily="{Binding Font}"
+                                           FontSize="{Binding Size}" Foreground="{Binding Brush}"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock Grid.Column="1" Text="{Binding Value}"
+                                           FontFamily="Consolas" FontSize="12"
+                                           Foreground="{Binding ValueBrush}" Margin="10,0,0,0"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <!-- charts: the panel, mirrored -->
+            <DockPanel Grid.Column="2" Margin="10,16,18,16">
+                <TextBlock DockPanel.Dock="Top" x:Name="PanelHeader" Text="C H A R T S"
+                           Style="{StaticResource Eyebrow}"/>
+                <Border Background="{StaticResource Slate}" BorderBrush="{StaticResource Silt}"
+                        BorderThickness="1" Padding="4">
+                    <UniformGrid x:Name="PanelGrid" Rows="10" Columns="6"/>
+                </Border>
+            </DockPanel>
+        </Grid>
+
+        <!-- ===== capture + status ===== -->
+        <StackPanel Grid.Row="2">
+            <!-- Manual entry. Ctrl+C only works on things the game treats as items, so a
+                 figurine may not be copyable at all; typing or pasting its text must work
+                 or those twelve modifiers can never be captured. -->
+            <Border Background="{StaticResource Slate}" BorderBrush="{StaticResource Silt}"
+                    BorderThickness="0,1,0,0" Padding="16,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="TargetLabel" Text="Nothing selected" FontFamily="Georgia"
+                               FontSize="14" Foreground="{StaticResource Brass}"
+                               VerticalAlignment="Center" Width="140"
+                               TextTrimming="CharacterEllipsis"/>
+                    <TextBox Grid.Column="1" x:Name="DetailBox" Margin="10,0" MaxHeight="86"
+                             AcceptsReturn="True" TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             PreviewKeyDown="OnDetailKeyDown"
+                             ToolTip="Paste or type the hover text. Ctrl+Enter applies."/>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <Button Content="Apply" Click="OnApplyDetail" Margin="0,0,6,0"
+                                ToolTip="Ctrl+Enter"/>
+                        <Button Content="Skip" Click="OnSkipTarget"
+                                ToolTip="Move on without capturing this one"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Background="{StaticResource Abyss}" BorderBrush="{StaticResource Silt}"
+                    BorderThickness="0,1,0,0" Padding="16,9">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="Status" Text="Open the Voyage screen in game, then Read panel."
+                               Foreground="{StaticResource Ash}" TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="90" Height="4" Background="#1B1714" VerticalAlignment="Center">
+                            <Rectangle x:Name="ProgressFill" Fill="{StaticResource Brass}"
+                                       HorizontalAlignment="Left" Width="0"/>
+                        </Border>
+                        <TextBlock x:Name="Progress" Foreground="{StaticResource Ash}"
+                                   FontFamily="Consolas" FontSize="12" Margin="10,0,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </StackPanel>
+    </Grid>
+</UserControl>

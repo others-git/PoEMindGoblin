@@ -1,9 +1,9 @@
-using PoeMarketWatch.Core;
+using MindGoblin.Core;
 
 // Throwaway harness: run the RoI maths against LIVE poe.watch data so the numbers get
 // sanity-checked against the real market before any of this reaches the UI.
 var league = args.Length > 0 ? args[0] : "Allflame";
-const string ua = "poe-market-watch/0.1 (contact: beard1ess@theundead.live)";
+const string ua = "mindgoblin/0.1 (contact: beard1ess@theundead.live)";
 
 using var watch = new PoeWatchClient(ua);
 var gems = await watch.GetAsync("gem", league);

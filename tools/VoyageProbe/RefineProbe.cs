@@ -1,5 +1,5 @@
 using System.Runtime.Versioning;
-using PoeMarketWatch.Core.Voyage;
+using MindGoblin.Core.Voyage;
 
 /// <summary>Load a real saved session and report what refining recovered from it.</summary>
 [SupportedOSPlatform("windows")]

@@ -1,5 +1,5 @@
 using System.Runtime.Versioning;
-using PoeMarketWatch.Core.Voyage;
+using MindGoblin.Core.Voyage;
 
 /// <summary>
 /// Is a fully connected board reachable from a given chart set at all?

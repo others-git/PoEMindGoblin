@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MindGoblin.Core/MindGoblin.Core.csproj" />
+    <Project Path="src/MindGoblin/MindGoblin.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MindGoblin.Tests/MindGoblin.Tests.csproj" />
+  </Folder>
+</Solution>

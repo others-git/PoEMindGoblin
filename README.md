@@ -1,4 +1,4 @@
-# poe-market-watch
+# mindgoblin
 
 Windows market tool for Path of Exile. Two tools so far:
 
@@ -25,10 +25,10 @@ complete the trade at Faustus yourself.
 ## Layout
 
 ```
-src/PoeMarketWatch.Core/    API client, rate limiting, credentials, stat index (no UI)
-src/PoeMarketWatch.Core/Voyage/  board, solver, rules, screen readers, session
-src/PoeMarketWatch/         WPF desktop app
-tests/PoeMarketWatch.Tests/ xunit; Core is UI-free so these run headless
+src/MindGoblin.Core/    API client, rate limiting, credentials, stat index (no UI)
+src/MindGoblin.Core/Voyage/  board, solver, rules, screen readers, session
+src/MindGoblin/         WPF desktop app
+tests/MindGoblin.Tests/ xunit; Core is UI-free so these run headless
 tools/VoyageProbe/          decode a screenshot and print the plan, headless
 assets/trade-index.json     generated stat/spawn index (see below)
 ```
@@ -121,7 +121,7 @@ Regenerate whenever Path of Building is updated:
 
 ```bash
 cd ../path-of-claude
-./.venv/bin/python analyze/export_trade_index.py -o ../poe-market-watch/assets/trade-index.json
+./.venv/bin/python analyze/export_trade_index.py -o ../mindgoblin/assets/trade-index.json
 ```
 
 Current: 23 categories, 746 stats, 2280 spawn rows (235 KB).
@@ -222,7 +222,7 @@ than in a dead corner.
 ### Rules are yours, and hot-reloaded
 
 There is no single best board — it depends what you are farming. Objectives live in
-`%LOCALAPPDATA%\PoeMarketWatch\voyage-rules.json` as named profiles, re-read on save
+`%LOCALAPPDATA%\MindGoblin\voyage-rules.json` as named profiles, re-read on save
 with no restart:
 
 ```json
@@ -284,7 +284,7 @@ Measured against the live API:
 
 So live search and travel require `POESESSID` + `POETOKEN` — full-account session
 cookies, unscoped and not per-app revocable. They are stored DPAPI-encrypted at
-`%LOCALAPPDATA%\PoeMarketWatch\credentials.dat` (CurrentUser scope, so the file is
+`%LOCALAPPDATA%\MindGoblin\credentials.dat` (CurrentUser scope, so the file is
 useless on another machine or to another Windows user), never logged, and deliberately
 kept out of the program directory so a portable exe cannot carry an account around.
 
@@ -319,5 +319,5 @@ Requires the .NET 10 SDK.
 ```bash
 dotnet test                                   # headless, no credentials needed
 dotnet build
-dotnet publish src/PoeMarketWatch -c Release  # portable exe -> publish/
+dotnet publish src/MindGoblin -c Release  # portable exe -> publish/
 ```

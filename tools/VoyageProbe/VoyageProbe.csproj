@@ -9,6 +9,6 @@
     <PackageReference Include="System.Drawing.Common" Version="10.0.10" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\PoeMarketWatch.Core\PoeMarketWatch.Core.csproj" />
+    <ProjectReference Include="..\..\src\MindGoblin.Core\MindGoblin.Core.csproj" />
   </ItemGroup>
 </Project>
