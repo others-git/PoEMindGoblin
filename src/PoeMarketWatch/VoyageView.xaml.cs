@@ -558,6 +558,7 @@ public partial class VoyageView : UserControl
 
         RefreshBoard();
         RefreshPanel();
+        RebuildModifiers();
 
         if (_solution.IsEmpty)
         {
@@ -902,25 +903,24 @@ public partial class VoyageView : UserControl
     }
 
     /// <summary>
-    /// The modifier lines captured for a chart, or a prompt when there are none.
+    /// What a chart pays out, for hover.
     ///
-    /// Shown on hover everywhere a chart appears, which doubles as the check that the
-    /// text was parsed into the fields the rules actually score -- if a modifier is
-    /// missing here, it is missing from the objective too.
+    /// Rewards only. A rare chart carries a dozen affixes and most are monster difficulty
+    /// -- "34% more Monster Life", "+29% Monster Physical Damage Reduction" -- which is
+    /// not what you are asking when you look at a planned square. The held-back count is
+    /// still reported, because silently showing three of twelve lines would read as a
+    /// chart with three modifiers.
     /// </summary>
     private static IReadOnlyList<string> DescribeChart(Chart chart)
     {
-        var lines = new List<string>();
-        if (!string.IsNullOrEmpty(chart.AreaName)) lines.Add(chart.AreaName);
-        if (chart.AreaLevel > 0) lines.Add($"Area level {chart.AreaLevel}");
-        lines.AddRange(chart.StatLines());
-        if (!string.IsNullOrEmpty(chart.VoyageModifier))
-            lines.Add("Voyage: " + chart.VoyageModifier);
-        if (!string.IsNullOrEmpty(chart.AdjacentModifier))
-            lines.Add("Adjacent: " + chart.AdjacentModifier);
-        lines.AddRange(chart.Modifiers);
+        var lines = ChartRewards.Describe(chart).ToList();
+        if (lines.Count == 0)
+            return ["No rewards captured. Select it and copy its text."];
 
-        return lines.Count > 0 ? lines : ["No modifiers captured. Select it and copy its text."];
+        var hidden = ChartRewards.DifficultyCount(chart);
+        if (hidden > 0)
+            lines.Add($"(+{hidden} monster {(hidden == 1 ? "modifier" : "modifiers")} not shown)");
+        return lines;
     }
 
     private static bool HasCapturedDetail(Chart chart) =>
@@ -1203,11 +1203,17 @@ public partial class VoyageView : UserControl
         var previous = (ModifierList.SelectedItem as ModifierRow)?.Key;
         _modifiers.Clear();
 
-        // Voyage-wide modifiers first. They apply to the whole voyage wherever their
-        // chart sits, so unlike everything else here their position is irrelevant -- and
-        // they are the only entries that describe the run as a whole.
+        // Only charts that are actually ON the board. A modifier from a chart sitting
+        // unused in the panel applies to nothing -- listing it would describe a voyage
+        // that is not the one being planned. Before a solve there is no board, so no
+        // chart modifiers appear at all.
+        var planned = _steps.ToDictionary(st => st.ChartNumber, st => st.Square);
+
+        // Voyage-wide first: they apply wherever their chart sits, so unlike everything
+        // else here their position is the one thing about them that does not matter.
         foreach (var (panelIndex, modifier) in _session.VoyageWideModifiers)
         {
+            if (!planned.ContainsKey(panelIndex)) continue;
             _modifiers.Add(new ModifierRow(
                 ModifierRow.Sort.VoyageWide, panelIndex,
                 "Voyage-wide", $"chart {panelIndex}",
@@ -1236,24 +1242,29 @@ public partial class VoyageView : UserControl
                 muted: unreachable.Contains(square)));
         }
 
-        var placed = _steps.ToDictionary(st => st.ChartNumber, st => st.Square);
         foreach (var (index, chart) in _session.ByPanelIndex.OrderBy(kv => kv.Key))
         {
+            if (!planned.TryGetValue(index, out var square)) continue;
             if (!HasCapturedDetail(chart)) continue;
-            var where = placed.TryGetValue(index, out var square) ? $"sq {square}" : "unplaced";
+
+            var rewards = ChartRewards.Describe(chart);
+            if (rewards.Count == 0) continue;
+
             _modifiers.Add(new ModifierRow(
                 ModifierRow.Sort.Chart, index,
                 string.IsNullOrWhiteSpace(chart.Name) ? $"Chart {index}" : $"Chart {index} · {chart.Name}",
-                where,
-                string.Join("\n", DescribeChart(chart)),
+                $"sq {square}",
+                string.Join("\n", rewards),
                 captured: true,
                 selected: _target == Target.Chart && _targetIndex == index));
         }
 
         var unread = _session.SquaresAwaitingModifiers.Count;
-        ModifierHeader.Text = unread == 0
-            ? "M O D I F I E R S"
-            : $"M O D I F I E R S      {unread} squares unread";
+        ModifierHeader.Text = unread > 0
+            ? $"M O D I F I E R S      {unread} squares unread"
+            : _steps.Count == 0
+                ? "M O D I F I E R S      solve to see chart rewards"
+                : "M O D I F I E R S";
 
         if (previous is not null)
             ModifierList.SelectedItem = _modifiers.FirstOrDefault(m => m.Key == previous);
