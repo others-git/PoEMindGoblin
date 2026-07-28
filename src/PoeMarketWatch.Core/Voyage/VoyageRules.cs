@@ -233,21 +233,14 @@ public sealed class VoyageRules : IDisposable
     /// <summary>
     /// The built-in profiles.
     ///
-    /// Every pattern here is written against REAL chart text, taken from captured
-    /// sessions and from poedb's mod tables for the three Voyage chart bases. Two things
-    /// that came out of that and would otherwise be invisible bugs:
+    /// Every pattern is checked against the generated mod table -- see
+    /// ProfileCoverageTests, which fails if a shipped profile contains a rule that matches
+    /// nothing the game can roll, or if a reward line exists that no profile scores. That
+    /// turns "does this rule work?" from a guess into a build failure, which is the whole
+    /// reason for pulling the table in the first place.
     ///
-    ///   * GGG misspells "Quantity" as "Qauntity" -- but only in the global lines,
-    ///     "8% increased Qauntity of Items found in all Voyage Areas". The adjacent and
-    ///     in-area versions spell it correctly. A rule matching "Quantity" therefore
-    ///     scores some rolls and silently misses others, so these match either spelling.
-    ///   * The headline stats are AGGREGATES of the affix lines, so the stat is scored
-    ///     and the contributing lines are dropped at parse time. Scoring both trebles a
-    ///     chart carrying three sulphur affixes.
-    ///
-    /// Adjacency patterns matter as much as the rest: a chart's Adjacent Modifier is
-    /// scored with these same rules and paid to its neighbours, which is what decides
-    /// whether it belongs in the centre or a corner.
+    /// Weights are a starting point, not a claim about the economy. They are the thing
+    /// most worth editing, which is why the file is hot-reloaded.
     /// </summary>
     public static List<VoyageProfile> Defaults() =>
     [
@@ -258,28 +251,12 @@ public sealed class VoyageRules : IDisposable
             Rules =
             [
                 new VoyageRule { Pattern = @"Dead Man's Sulphur:\s*\+?(\d+)", Weight = 5.0,
-                                 Comment = "the chart's own sulphur total, the main source" },
+                                 Comment = "the chart's own total, its largest source" },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Dead Man's Sulphur", Weight = 2.0,
-                                 Comment = "global and adjacent sulphur rolls" },
+                                 Comment = "the global and adjacent rolls" },
             ],
         },
-        new VoyageProfile
-        {
-            Name = "pack size",
-            Description = "Maximise monsters, including what neighbours receive.",
-            BoardModifierWeight = 1.5,
-            Rules =
-            [
-                new VoyageRule { Pattern = @"Monster Pack Size:\s*\+?(\d+)", Weight = 1.0 },
-                new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = 1.5,
-                                 Comment = "global and adjacent pack size" },
-                new VoyageRule { Pattern = @"(\d+)\s+additional packs", Weight = 3.0,
-                                 Comment = "Crabs, Octopi, Sea Beasts -- all worded this way" },
-                new VoyageRule { Pattern = @"(\d+)%\s+increased number of (?:Rare|Magic) Monsters",
-                                 Weight = 0.75 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Imprisoned Monsters", Weight = 2.0 },
-            ],
-        },
+
         new VoyageProfile
         {
             Name = "quantity",
@@ -289,28 +266,126 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 1.0 },
                 new VoyageRule { Pattern = @"Item Rarity:\s*\+?(\d+)", Weight = 0.5 },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Q(?:uantity|auntity) of Items", Weight = 1.5,
-                                 Comment = "matches GGG's 'Qauntity' typo in the global lines" },
+                                 Comment = "GGG spells it 'Qauntity' in the global lines only" },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Rarity of Items", Weight = 0.75 },
+                new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -60,
+                                 Comment = "a global roll that deletes most of the loot" },
+                // Board modifiers, off the figurines rather than the charts.
+                new VoyageRule { Pattern = @"(\d+)%\s+increased explicit modifier magnitudes", Weight = 0.5,
+                                 Comment = "rolls every other modifier higher" },
+                new VoyageRule { Pattern = @"(\d+)% Chance for Chart to not be consumed", Weight = 0.8,
+                                 Comment = "a chart you keep is a voyage you did not pay for" },
             ],
         },
+
         new VoyageProfile
         {
-            Name = "loot boxes",
-            Description = "Strongboxes, barrels, treasure and unique-drop conversions.",
+            Name = "pack size",
+            Description = "Maximise monsters, including what neighbours receive.",
             BoardModifierWeight = 1.5,
             Rules =
             [
-                new VoyageRule { Pattern = @"(\d+)\s+additional (?:Diviner's |Arcanist's |Operative's )?Strongboxes",
-                                 Weight = 6.0 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Clusters of Barrels", Weight = 1.0 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Treasure", Weight = 4.0 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Golden Lanterns", Weight = 3.0 },
-                new VoyageRule { Pattern = @"(\d+)%\s+chance to instead drop as a Unique", Weight = 2.0 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional cages? of Tormented Spirits", Weight = 5.0 },
-                new VoyageRule { Pattern = @"additional cage of Tormented Spirits", Weight = 5.0,
-                                 Comment = "the single-cage roll is worded without a number" },
+                new VoyageRule { Pattern = @"Monster Pack Size:\s*\+?(\d+)", Weight = 1.0 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = 1.5 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional packs of", Weight = 3.0,
+                                 Comment = "Crabs and Octopi" },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased number of (?:Rare|Magic) Monsters", Weight = 0.75 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Imprisoned Monsters", Weight = 4.0 },
+                new VoyageRule { Pattern = @"are at least Magic", Weight = 15 },
+                new VoyageRule { Pattern = @"have Soul Eater", Weight = 10,
+                                 Comment = "worth having where the packs are" },
             ],
         },
+
+        new VoyageProfile
+        {
+            Name = "strongbox",
+            Description = "Arcanist's, Diviner's and Operative's boxes, and the quantity that fills them.",
+            BoardModifierWeight = 1.5,
+            Rules =
+            [
+                // The three named types are the ones worth planning around. Note the
+                // patterns are mutually exclusive: "additional Strongboxes" cannot match
+                // "additional Diviner's Strongboxes", because the type sits between the
+                // two words, so nothing is scored twice.
+                new VoyageRule { Pattern = @"(\d+)\s+additional Arcanist's Strongboxes", Weight = 25,
+                                 Comment = "currency" },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Diviner's Strongboxes", Weight = 25,
+                                 Comment = "divination cards" },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Operative's Strongboxes", Weight = 20 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Strongboxes", Weight = 8,
+                                 Comment = "the plain roll: random types" },
+                // Box contents roll against area quantity and rarity, so the tile's own
+                // stats decide what the boxes are actually worth.
+                new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 0.5 },
+                new VoyageRule { Pattern = @"Item Rarity:\s*\+?(\d+)", Weight = 0.3 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Q(?:uantity|auntity) of Items", Weight = 0.75 },
+                new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -30 },
+            ],
+        },
+
+        new VoyageProfile
+        {
+            Name = "containers",
+            Description = "Barrels, lanterns, spirits and the rest of the openables.",
+            BoardModifierWeight = 1.5,
+            Rules =
+            [
+                new VoyageRule { Pattern = @"(\d+)\s+additional Clusters of Barrels", Weight = 1.5 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Golden Lanterns", Weight = 6 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional cages of Tormented Spirits", Weight = 8 },
+                new VoyageRule { Pattern = @"an additional cage of Tormented Spirits", Weight = 8,
+                                 Comment = "the game writes the singular when the roll is 1" },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Messages in Bottles", Weight = 5 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Giant Starfish", Weight = 4 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Treasure", Weight = 5,
+                                 Comment = "Treasure Anchors" },
+                new VoyageRule { Pattern = @"highly prized and exotic Fish", Weight = 8 },
+                new VoyageRule { Pattern = @"contain Friendly Jellyfish", Weight = 5 },
+                new VoyageRule { Pattern = @"contains Filthscrabble", Weight = 6,
+                                 Comment = "board modifier" },
+                new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 0.3 },
+            ],
+        },
+
+        new VoyageProfile
+        {
+            Name = "rare monsters",
+            Description = "Essences, possession, fractures and everything that rides a rare.",
+            BoardModifierWeight = 1.5,
+            Rules =
+            [
+                new VoyageRule { Pattern = @"imprisoned by Essences", Weight = 40 },
+                new VoyageRule { Pattern = @"(\d+)% chance for Rare Monsters.*to be Possessed", Weight = 0.3 },
+                new VoyageRule { Pattern = @"Rare Monsters.*(\d+)% chance to Fracture on death", Weight = 0.5 },
+                new VoyageRule { Pattern = @"will have a Pantheon Modifier", Weight = 15 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased number of Rare Monsters", Weight = 1.0 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased number of Magic Monsters", Weight = 0.4 },
+                new VoyageRule { Pattern = @"Empowered by (\d+) Wildwood Wisps", Weight = 0.005,
+                                 Comment = "the roll is in thousands" },
+                new VoyageRule { Pattern = @"Atziri's Influence", Weight = 20 },
+                new VoyageRule { Pattern = @"Rare Monsters in Area drop an additional", Weight = 25,
+                                 Comment = "board modifier: an extra currency drop per rare" },
+            ],
+        },
+
+        new VoyageProfile
+        {
+            Name = "uniques",
+            Description = "Jewellery rerolled into uniques, and fractured drops.",
+            BoardModifierWeight = 1.5,
+            Rules =
+            [
+                new VoyageRule { Pattern = @"(\d+)% chance to instead drop as a Unique", Weight = 3.0 },
+                new VoyageRule { Pattern = @"Items dropped.*(\d+)% chance to be Fractured", Weight = 8.0 },
+                new VoyageRule { Pattern = @"Rare Monsters.*(\d+)% chance to Fracture on death", Weight = 0.4 },
+                new VoyageRule { Pattern = @"Item Rarity:\s*\+?(\d+)", Weight = 0.4 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Rarity of Items", Weight = 0.75 },
+                new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -60,
+                                 Comment = "jewellery included, so this guts the profile" },
+            ],
+        },
+
         new VoyageProfile
         {
             Name = "gold",
@@ -319,34 +394,53 @@ public sealed class VoyageRules : IDisposable
             [
                 new VoyageRule { Pattern = @"Gold Found:\s*\+?(\d+)", Weight = 1.0 },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Gold found", Weight = 1.0 },
-                new VoyageRule { Pattern = @"(\d+)% of Equipment dropped by monsters in adjacent Areas is converted to Gold",
+                new VoyageRule { Pattern = @"(\d+)% of Equipment dropped by monsters.*converted to Gold",
                                  Weight = 1.0 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = 0.5,
+                                 Comment = "gold comes off monsters" },
+                new VoyageRule { Pattern = @"(\d+)\s+additional packs of", Weight = 1.0 },
             ],
         },
+
+        new VoyageProfile
+        {
+            Name = "flasks",
+            Description = "Quality flasks, for when that is what you are after.",
+            Rules =
+            [
+                new VoyageRule { Pattern = @"Flasks found.*chance to have (\d+)% Quality", Weight = 2.0 },
+                new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -100,
+                                 Comment = "these two cancel each other out entirely" },
+                new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 0.5 },
+            ],
+        },
+
         new VoyageProfile
         {
             Name = "safe",
-            Description = "Prefer high tier, avoid the monster mods that actually kill you.",
+            Description = "Prefer high tier, avoid the monster mods that actually end runs.",
             AreaLevelWeight = 1.0,
             Rules =
             [
-                // Weighted by what genuinely ends runs, not by what sounds bad. All of
-                // these wordings are taken from real charts.
-                new VoyageRule { Pattern = @"Players have -(\d+)% to all maximum Resistances", Weight = -6 },
+                // Weighted by what genuinely kills, not by what sounds bad. Every wording
+                // is present in the generated table.
+                new VoyageRule { Pattern = @"Players have -?(\d+)% to all maximum Resistances", Weight = -3,
+                                 Comment = "the roll is negative; match the digits either way" },
                 new VoyageRule { Pattern = @"Monsters are Hexproof", Weight = -10 },
                 new VoyageRule { Pattern = @"less effect of Curses on Monsters", Weight = -6 },
                 new VoyageRule { Pattern = @"Monsters cannot be Stunned", Weight = -4 },
                 new VoyageRule { Pattern = @"Monsters cannot be Taunted", Weight = -6 },
-                new VoyageRule { Pattern = @"Action Speed cannot be modified to below Base Value", Weight = -5 },
+                new VoyageRule { Pattern = @"Speed cannot be modified to below Base Value", Weight = -5 },
                 new VoyageRule { Pattern = @"Monster Damage Penetrates (\d+)% Elemental Resistances", Weight = -1 },
                 new VoyageRule { Pattern = @"(\d+)% more Monster Life", Weight = -0.15 },
                 new VoyageRule { Pattern = @"Monsters gain (\d+)% of Maximum Life as Extra Maximum Energy Shield",
                                  Weight = -0.1 },
-                new VoyageRule { Pattern = @"\+(\d+)% to Monster Critical Strike Multiplier", Weight = -0.2 },
+                new VoyageRule { Pattern = @"(\d+)% to Monster Critical Strike Multiplier", Weight = -0.2 },
                 new VoyageRule { Pattern = @"Monsters steal Power, Frenzy and Endurance charges on Hit", Weight = -5 },
                 new VoyageRule { Pattern = @"Monsters' skills Chain (\d+) additional times", Weight = -2 },
                 new VoyageRule { Pattern = @"Monsters fire (\d+) additional Projectiles", Weight = -2 },
-                new VoyageRule { Pattern = @"patches of Shocked Ground", Weight = -3 },
+                new VoyageRule { Pattern = @"Area has patches of", Weight = -3 },
+                new VoyageRule { Pattern = @"(\d+)% increased Monster Damage", Weight = -0.2 },
             ],
         },
     ];

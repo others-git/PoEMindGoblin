@@ -29,9 +29,10 @@ public static class RefineProbe
             .ToList();
         Console.WriteLine($"  {chrome.Count}");
 
-        foreach (var name in new[] { "sulphur", "pack size", "quantity", "loot boxes", "safe" })
+        foreach (var profile0 in VoyageRules.Defaults())
         {
-            var profile = VoyageRules.Defaults().Single(p => p.Name == name);
+            var profile = profile0;
+            var name = profile.Name;
             var s = session.Solve(profile, TimeSpan.FromSeconds(3));
             var plan = session.Plan(s);
             Console.WriteLine($"\n{name,-11} value {s.Value,8:0.#}  stranded {s.StrandedCells.Count}  "

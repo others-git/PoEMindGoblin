@@ -125,6 +125,7 @@ public sealed class VoyageSolver
         // million legal ones, and 2.9M nodes of value-ordered search never reached one.
         if (_strandedPenalty > 0 && SeedConnected() is { } seed) best = seed;
 
+
         var exhausted = true;
         try
         {
@@ -147,6 +148,9 @@ public sealed class VoyageSolver
         };
     }
 
+    /// <summary>Small enough not to disturb any real score, big enough to break a tie.</summary>
+    private const double Epsilon = 1e-9;
+
     /// <summary>Unwinds the recursion when the time budget is spent.</summary>
     private sealed class DeadlineReached : Exception { }
 
@@ -166,11 +170,41 @@ public sealed class VoyageSolver
     /// </summary>
     private Solution? SeedConnected()
     {
+        // Progressively weaker restrictions. The first that yields a connected board wins;
+        // the stricter ones collapse the space enough to find one almost immediately, and
+        // the weaker ones exist because a strict one can be infeasible for a given set of
+        // charts -- which is exactly what happened, and left several profiles returning
+        // layouts with squares cut off.
+        foreach (var closed in new[] { BorderRule.All, BorderRule.NorthAndWest, BorderRule.None })
+            if (SeedConnected(closed) is { } seed)
+                return seed;
+        return null;
+    }
+
+    /// <summary>Which board edges a seeded layout may not open onto.</summary>
+    private enum BorderRule
+    {
+        /// <summary>No open edge may face the border at all. Tightest, often infeasible.</summary>
+        All,
+
+        /// <summary>
+        /// Only the top and left borders. Weaker, and far more often satisfiable: those
+        /// are the sides already decided when a cell is reached in row-major order, so
+        /// constraining them prunes early without ruling out as much.
+        /// </summary>
+        NorthAndWest,
+
+        /// <summary>Nothing forbidden; connectivity is checked at the leaf.</summary>
+        None,
+    }
+
+    private Solution? SeedConnected(BorderRule rule)
+    {
         var board = new VoyageBoard(_rows, _cols);
         var used = new bool[_charts.Count];
         var budget = 200_000;      // a seed that costs more than the search is no use
 
-        bool Dive(int index, double value)
+        bool Dive(int index)
         {
             if (budget-- <= 0) return false;
 
@@ -186,14 +220,13 @@ public sealed class VoyageSolver
                 foreach (var rotation in ChartFace.DistinctRotations(chart.Shape))
                 {
                     var face = new ChartFace(chart.Shape, rotation);
-                    if ( facesTheBorderOpen(cell, face)) continue;
+                    if (OpensOntoAForbiddenBorder(cell, face, rule)) continue;
                     if (!board.CanPlace(cell, face)) continue;
                     if (!SatisfiesDecidedNeighbours(board, cell, face)) continue;
 
-                    var gain = _score(chart, cell) + AdjacencyGain(board, cell, chart);
                     board.Place(new Placement(chart, cell, rotation));
                     used[i] = true;
-                    if (Dive(index + 1, value + gain)) return true;
+                    if (Dive(index + 1)) return true;
                     used[i] = false;
                     board.Clear(cell);
                 }
@@ -201,15 +234,20 @@ public sealed class VoyageSolver
             return false;
         }
 
-        bool facesTheBorderOpen(Cell cell, ChartFace face)
+        bool OpensOntoAForbiddenBorder(Cell cell, ChartFace face, BorderRule which)
         {
+            if (which == BorderRule.None) return false;
             foreach (var side in Enum.GetValues<Side>())
-                if (face.IsOpen(side) && !board.InBounds(VoyageBoard.Neighbour(cell, side)))
-                    return true;
+            {
+                if (!face.IsOpen(side)) continue;
+                if (board.InBounds(VoyageBoard.Neighbour(cell, side))) continue;
+                if (which == BorderRule.All) return true;
+                if (side is Side.North or Side.West) return true;
+            }
             return false;
         }
 
-        if (!Dive(0, 0)) return null;
+        if (!Dive(0)) return null;
 
         // Score it the same way the main search would, so the incumbent is comparable.
         var placements = board.Placements.ToList();
@@ -348,15 +386,30 @@ public sealed class VoyageSolver
             // Cells were only checked against decided neighbours during the search, so
             // the finished layout still has to satisfy the full rule.
             // Cheapest test first: the penalty only ever subtracts, so a board already
-            // behind the incumbent cannot win and neither validity nor connectivity --
-            // both of which allocate -- need computing for it.
+            // level with or behind the incumbent cannot win, and neither validity nor
+            // connectivity -- both of which allocate -- need computing for it. Relaxing
+            // this to "<" to let ties through cost far more than it bought: the search
+            // fully evaluated every equal board and stopped proving optimality inside the
+            // budget. Ties are handled by pricing instead, below.
             if (value <= best.Value) return;
             if (!board.IsValid()) return;
 
             // Connectivity is a property of the WHOLE board, so it cannot be scored per
             // placement like everything else -- it is only knowable here.
             var stranded = _strandedPenalty > 0 ? board.StrandedCells() : [];
-            var final = value - stranded.Count * _strandedPenalty;
+
+            // Charge a hair more than the stated penalty, so a stranded board can never
+            // come out exactly level with a joined one.
+            //
+            // Ties are common when a profile has little to score on the charts in hand:
+            // nine points of value with three squares cut off prices identically to zero
+            // value with none, and whichever the search happened to reach first won --
+            // which showed as "3 squares cut off from the route" on a board that lost
+            // nothing by joining them. Pricing it away keeps the strict-inequality prune
+            // above, which is worth more than any tie-breaking at the leaf.
+            var charge = _strandedPenalty > 0 ? _strandedPenalty + Epsilon : 0;
+            var final = value - stranded.Count * charge;
+
             if (final > best.Value)
                 best = new Solution(board.Placements.ToList(), final)
                     { StrandedCells = stranded };

@@ -63,8 +63,14 @@ public class RealModifierScoringTests
     [InlineData("Rings dropped in adjacent Areas have 20% chance to instead drop as a Unique Ring")]
     [InlineData("Adjacent Areas contain 2 additional cages of Tormented Spirits")]
     [InlineData("Adjacent Areas contain an additional cage of Tormented Spirits")]
-    public void LootRollsAllScore(string line) =>
-        Assert.True(ScoreLine("loot boxes", line) > 0, line);
+    public void LootRollsAllScore(string line)
+    {
+        // Split across two profiles now: strongboxes are worth planning a board around,
+        // the rest of the openables are their own objective.
+        Assert.True(ScoreLine("strongbox", line) > 0 || ScoreLine("containers", line) > 0
+                    || ScoreLine("uniques", line) > 0,
+                    line);
+    }
 
     [Fact]
     public void BiggerAdjacencyRollsAreWorthMore()
@@ -133,7 +139,7 @@ public class RealModifierScoringTests
         Assert.Equal(96, chart.ItemQuantity);
         Assert.Equal(450, Profile("sulphur").ScoreChart(chart));      // 90 x 5, counted once
         Assert.Equal(96, Profile("quantity").ScoreChart(chart));
-        Assert.Equal(17, Profile("loot boxes").ScoreAdjacent(chart)); // 17 barrels x 1.0
+        Assert.Equal(25.5, Profile("containers").ScoreAdjacent(chart)); // 17 barrels x 1.5
         Assert.True(Profile("safe").ScoreChart(chart) < 78);          // level, less the danger
     }
 }
