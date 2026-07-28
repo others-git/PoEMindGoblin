@@ -77,7 +77,7 @@ public class VoyageProfileTests
     [Fact]
     public void SafeProfilePenalisesDangerousMods()
     {
-        var safe = VoyageRules.Defaults().First(p => p.Name == "safe");
+        var safe = VoyageRules.Defaults().First(p => p.Name == "high tier");
         var nasty = Chart("Monsters cannot be Taunted", "Monsters reflect Physical Damage");
         var clean = Chart("30% increased Dead Man's Sulphur found in this Area");
         Assert.True(safe.ScoreChart(clean) > safe.ScoreChart(nasty));

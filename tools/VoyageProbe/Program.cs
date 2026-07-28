@@ -8,7 +8,7 @@ if (args.Length > 2 && args[1] == "--save") return SaveProbe.Run(args[0], args[2
 
 // probe <screenshot.png> [profile] [overlay-out.png]
 if (args.Length > 0)
-    return PanelProbe.Run(args[0], args.Length > 1 ? args[1] : "safe",
+    return PanelProbe.Run(args[0], args.Length > 1 ? args[1] : "high tier",
                           args.Length > 2 ? args[2] : null);
 
 

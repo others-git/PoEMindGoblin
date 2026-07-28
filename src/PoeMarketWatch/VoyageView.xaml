@@ -276,6 +276,8 @@
                     </ComboBox>
                     <Button Content="Edit rules" Click="OnEditRules" Margin="8,0,0,0"
                             ToolTip="Opens the rule file. Saved edits apply immediately."/>
+                    <Button Content="Restore rules" Click="OnRestoreRules" Margin="6,0,0,0"
+                            ToolTip="Replace every profile with the shipped ones, discarding your edits."/>
                     <Button Content="Solve" Click="OnSolve" Margin="18,0,0,0"
                             Style="{StaticResource Primary}"/>
                 </StackPanel>
@@ -338,30 +340,27 @@
                 <TextBlock DockPanel.Dock="Top" Text="B O A R D" Style="{StaticResource Eyebrow}"/>
                 <Grid x:Name="BoardHost" DockPanel.Dock="Top" HorizontalAlignment="Center"/>
 
-                <TextBlock DockPanel.Dock="Top" Text="P L A N" Style="{StaticResource Eyebrow}"
-                           Margin="0,20,0,8"/>
+                <TextBlock DockPanel.Dock="Top" x:Name="SummaryHeader" Text="V O Y A G E"
+                           Style="{StaticResource Eyebrow}" Margin="0,20,0,8"/>
                 <TextBlock DockPanel.Dock="Bottom" x:Name="SolveInfo" FontSize="12"
                            Foreground="{StaticResource Shade}" TextWrapping="Wrap" Margin="0,8,0,0"/>
-                <ListBox x:Name="PlanList" Style="{StaticResource Plain}">
+                <!-- Bounded, and left-aligned: the board column is wide, and a label at
+                     one end with its number at the other is two columns, not a row. -->
+                <ListBox x:Name="SummaryList" Style="{StaticResource Plain}"
+                         HorizontalAlignment="Left" MaxWidth="440">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Grid Margin="0,0,0,3">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding Square}" FontFamily="Georgia" FontSize="16"
-                                           Foreground="{Binding SquareBrush}" Width="24"
-                                           TextAlignment="Right"/>
-                                <TextBlock Grid.Column="1" Text="←" Foreground="{StaticResource Shade}"
-                                           Margin="8,0" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="2" Text="{Binding ChartText}" FontFamily="Georgia"
-                                           FontSize="16" Foreground="#C9A227" Width="72"/>
-                                <TextBlock Grid.Column="3" Text="{Binding Detail}" FontFamily="Consolas"
-                                           FontSize="11" Foreground="{StaticResource Ash}"
-                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding Label}" FontFamily="{Binding Font}"
+                                           FontSize="{Binding Size}" Foreground="{Binding Brush}"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock Grid.Column="1" Text="{Binding Value}"
+                                           FontFamily="Consolas" FontSize="12"
+                                           Foreground="{Binding ValueBrush}" Margin="10,0,0,0"/>
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>

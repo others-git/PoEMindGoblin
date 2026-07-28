@@ -35,12 +35,14 @@ public partial class VoyageView : UserControl
 {
     private readonly VoyageRules _rules = new();
     private readonly ObservableCollection<ModifierRow> _modifiers = new();
-    private readonly ObservableCollection<PlanRow> _plan = new();
+    private readonly ObservableCollection<SummaryRow> _summary = new();
     private readonly DispatcherTimer _clipboardPoll =
         new() { Interval = TimeSpan.FromMilliseconds(250) };
 
     private VoyageSession _session = new();
     private string? _restoredProfile;
+    private IReadOnlyList<string> _added = [];
+    private IReadOnlyList<string> _outdated = [];
 
     /// <summary>
     /// Off for offscreen rendering, so inspecting the layout cannot overwrite a real
@@ -69,7 +71,7 @@ public partial class VoyageView : UserControl
         InitializeComponent();
 
         ModifierList.ItemsSource = _modifiers;
-        PlanList.ItemsSource = _plan;
+        SummaryList.ItemsSource = _summary;
 
         // Reading a board is slow -- a screenshot, nine hovers, then a hover per chart.
         // Throwing that away on exit would make the tool worse than doing it by hand.
@@ -78,6 +80,13 @@ public partial class VoyageView : UserControl
         _restoredProfile = state?.Profile;
 
         _rules.WriteDefaultsIfMissing();
+
+        // A profile added since the rule file was first written would otherwise never
+        // appear -- the file is created once and then left alone, which is right for
+        // something you edit and wrong for shipping new objectives.
+        _added = _rules.AddMissingDefaults();
+        _outdated = _rules.CompareWithDefaults().Outdated;
+
         _rules.Changed += () => Dispatcher.Invoke(LoadProfiles);
         _rules.Error += msg => Dispatcher.Invoke(() => SetStatus($"Rule file: {msg}", bad: true));
         _rules.WatchForChanges();
@@ -91,6 +100,7 @@ public partial class VoyageView : UserControl
         RebuildModifiers();
         RefreshProgress();
         ReportRestored();
+        ReportProfileChanges();
 
         // Popping out and docking REPARENT this control, which raises Unloaded/Loaded.
         // Stopping the poll unconditionally on Unloaded would silently kill read mode the
@@ -124,6 +134,40 @@ public partial class VoyageView : UserControl
         {
             SetStatus($"Could not save the session: {ex.Message}", bad: true);
         }
+    }
+
+    /// <summary>
+    /// Say what changed in the shipped profiles, because otherwise it is invisible: the
+    /// dropdown simply lacks an objective and nothing explains why.
+    /// </summary>
+    private void ReportProfileChanges()
+    {
+        var parts = new List<string>();
+        if (_added.Count > 0)
+            parts.Add($"Added {_added.Count} new profile{(_added.Count == 1 ? "" : "s")}: "
+                      + string.Join(", ", _added));
+        if (_outdated.Count > 0)
+            parts.Add($"{_outdated.Count} profile{(_outdated.Count == 1 ? "" : "s")} differ from "
+                      + $"the shipped rules ({string.Join(", ", _outdated)}) — "
+                      + "Restore rules to take the current ones.");
+
+        if (parts.Count > 0) SetStatus(string.Join("  ", parts));
+    }
+
+    private void OnRestoreRules(object sender, RoutedEventArgs e)
+    {
+        var answer = MessageBox.Show(
+            "Replace every rule profile with the shipped ones?\n\n"
+            + "Any weights you have edited will be lost. The read you have captured is "
+            + "not affected.",
+            "Restore rules", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+        if (answer != MessageBoxResult.OK) return;
+
+        _rules.RestoreDefaults();
+        _added = [];
+        _outdated = [];
+        _solution = null;
+        SetStatus("Rules restored to the shipped defaults. Solve again.");
     }
 
     private void ReportRestored()
@@ -217,7 +261,7 @@ public partial class VoyageView : UserControl
 
             _session.ApplyPanelRead(cells);
             _solution = null;
-            _plan.Clear();
+            _summary.Clear();
             Persist();
             RefreshPanel();
             RefreshBoard();
@@ -553,14 +597,7 @@ public partial class VoyageView : UserControl
         _solution = _session.Solve(profile, TimeSpan.FromSeconds(3));
         _steps = _session.Plan(_solution);
 
-        var stranded = _solution.StrandedCells.ToHashSet();
-        _plan.Clear();
-        foreach (var step in _steps)
-        {
-            var cell = new Cell((step.Square - 1) / _session.Layout.Cols,
-                                (step.Square - 1) % _session.Layout.Cols);
-            _plan.Add(new PlanRow(step, stranded.Contains(cell)));
-        }
+        RefreshSummary();
 
         RefreshBoard();
         RefreshPanel();
@@ -598,7 +635,7 @@ public partial class VoyageView : UserControl
         VoyageSessionState.Delete();
         _solution = null;
         _steps = [];
-        _plan.Clear();
+        _summary.Clear();
         SolveInfo.Text = "";
         _skipped.Clear();
         SetTarget(Target.Chart, 0);
@@ -690,6 +727,54 @@ public partial class VoyageView : UserControl
         RebuildModifiers();
         RefreshProgress();
         OnSolve(this, new RoutedEventArgs());
+    }
+
+    /// <summary>
+    /// What the solved board is worth.
+    ///
+    /// This replaced a list that repeated the plan -- nine rows of "square 1 <- chart 23"
+    /// beside a board already showing exactly that at 34pt. Restating the answer is not
+    /// information; what the board PAYS is, and none of it can be read off the squares.
+    /// </summary>
+    private void RefreshSummary()
+    {
+        _summary.Clear();
+        if (_solution is null || _solution.IsEmpty) return;
+
+        var board = new VoyageBoard(_session.Layout.Rows, _session.Layout.Cols);
+        foreach (var placement in _solution.Placements) board.Place(placement);
+
+        var numbers = _session.ByPanelIndex.ToDictionary(kv => kv.Value.Id, kv => kv.Key,
+                                                         StringComparer.Ordinal);
+        var summary = VoyageSummary.Build(board, numbers, _session.Layout.Cols);
+
+        _summary.Add(SummaryRow.Heading(summary.Headline));
+
+        foreach (var (stat, total) in summary.Stats)
+            _summary.Add(SummaryRow.Stat(stat, $"+{total:0.#}"));
+
+        if (summary.VoyageWide.Count > 0)
+        {
+            _summary.Add(SummaryRow.Section(
+                $"Voyage-wide · {summary.VoyageWide.Count} in effect"));
+            foreach (var modifier in summary.VoyageWide)
+                _summary.Add(SummaryRow.Detail(modifier));
+        }
+
+        if (summary.Adjacencies.Count > 0)
+        {
+            _summary.Add(SummaryRow.Section("Adjacency · reach decides the value"));
+            foreach (var adjacency in summary.Adjacencies)
+                _summary.Add(SummaryRow.Detail(
+                    $"sq {adjacency.Square} · chart {adjacency.ChartNumber} — {adjacency.Modifier}",
+                    $"×{adjacency.Reach}"));
+        }
+
+        var missing = _session.ChartsAwaitingDetail.Count;
+        if (missing > 0)
+            _summary.Add(SummaryRow.Detail(
+                $"{missing} charts in the panel have no modifiers captured, so none of "
+                + "their rewards are counted here."));
     }
 
     // ---- rendering ---------------------------------------------------------------
@@ -1420,30 +1505,37 @@ public partial class VoyageView : UserControl
             Selected ? Color.FromRgb(0x1F, 0x1A, 0x10) : Color.FromRgb(0x13, 0x11, 0x10));
     }
 
-    /// <summary>
-    /// One line of the plan. Square and chart number are separate columns rather than one
-    /// preformatted string so they can be sized and coloured independently — those two
-    /// numbers are what the user is actually reading off the screen.
-    /// </summary>
-    public sealed class PlanRow
+    /// <summary>One line of the summary. Shape carries the meaning, so it is prebuilt.</summary>
+    public sealed class SummaryRow
     {
-        public PlanRow(VoyagePlan.Step step, bool stranded)
+        private SummaryRow(string label, string value, double size, string font, Brush brush)
         {
-            Square = step.Square;
-            ChartText = $"chart {step.ChartNumber}";
-            Detail = stranded
-                ? $"{step.Chart.Shape}, {step.RotationText} — stranded"
-                : $"{step.Chart.Shape}, {step.RotationText}";
-            Stranded = stranded;
+            Label = label;
+            Value = value;
+            Size = size;
+            Font = font;
+            Brush = brush;
         }
 
-        public int Square { get; }
-        public string ChartText { get; }
-        public string Detail { get; }
-        public bool Stranded { get; }
+        public string Label { get; }
+        public string Value { get; }
+        public double Size { get; }
+        public string Font { get; }
+        public Brush Brush { get; }
+        public Brush ValueBrush => new SolidColorBrush(Color.FromRgb(0xC9, 0xA2, 0x27));
 
-        public Brush SquareBrush => new SolidColorBrush(Stranded
-            ? Color.FromRgb(0xB8, 0x50, 0x3E)
-            : Color.FromRgb(0xE6, 0xDB, 0xC2));
+        private static Brush Of(byte r, byte g, byte b) => new SolidColorBrush(Color.FromRgb(r, g, b));
+
+        public static SummaryRow Heading(string text) =>
+            new(text, "", 15, "Georgia", Of(0xE6, 0xDB, 0xC2));
+
+        public static SummaryRow Stat(string name, string total) =>
+            new(name, total, 13, "Segoe UI", Of(0xE6, 0xDB, 0xC2));
+
+        public static SummaryRow Section(string text) =>
+            new(text, "", 11, "Georgia", Of(0x6B, 0x5F, 0x4E));
+
+        public static SummaryRow Detail(string text, string value = "") =>
+            new(text, value, 12, "Segoe UI", Of(0x94, 0x86, 0x6F));
     }
 }

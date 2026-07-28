@@ -55,7 +55,7 @@ level. Detail improves the plan; its absence does not block one.
 There is deliberately no single "best" board — it depends on what you are farming — so the
 objective is a **rule profile** you pick, hot-reloaded from JSON with no restart:
 `sulphur`, `quantity`, `pack size`, `strongbox`, `containers`, `rare monsters`, `uniques`,
-`currency`, `gold`, `flasks`, `safe`. Every rule is checked against the generated mod table by the
+`currency`, `gold`, `flasks`, `high tier`. Every rule is checked against the generated mod table by the
 test suite — a rule that matches nothing the game can roll fails the build, and so does a
 payout no profile scores. The solver is anytime and says whether the answer was *proved
 optimal* or merely the best found in the budget.

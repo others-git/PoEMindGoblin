@@ -92,14 +92,14 @@ public class RealModifierScoringTests
     [InlineData("52% more Monster Life")]
     [InlineData("Area has patches of Shocked Ground which increase Damage taken by 10%")]
     public void DangerousModsArePenalisedByTheSafeProfile(string line) =>
-        Assert.True(ScoreLine("safe", line) < 0, line);
+        Assert.True(ScoreLine("high tier", line) < 0, line);
 
     [Fact]
     public void TheSafeProfileStillPrefersHigherTier()
     {
         var low = new Chart("a", "a", ChartShape.Crossing, 68, []);
         var high = low with { AreaLevel = 83 };
-        Assert.True(Profile("safe").ScoreChart(high) > Profile("safe").ScoreChart(low));
+        Assert.True(Profile("high tier").ScoreChart(high) > Profile("high tier").ScoreChart(low));
     }
 
     [Fact]
@@ -140,6 +140,6 @@ public class RealModifierScoringTests
         Assert.Equal(450, Profile("sulphur").ScoreChart(chart));      // 90 x 5, counted once
         Assert.Equal(96, Profile("quantity").ScoreChart(chart));
         Assert.Equal(25.5, Profile("containers").ScoreAdjacent(chart)); // 17 barrels x 1.5
-        Assert.True(Profile("safe").ScoreChart(chart) < 78);          // level, less the danger
+        Assert.True(Profile("high tier").ScoreChart(chart) < 78);          // level, less the danger
     }
 }

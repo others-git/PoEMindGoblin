@@ -171,8 +171,8 @@ public class ProfileCoverageTests
     public void TheSafeProfilePenalisesTheDangerousHalfOfTheTable()
     {
         // Not all of it -- plenty of monster mods are survivable and should not drag a
-        // chart down. But if it covered only a handful, "safe" would be decorative.
-        var safe = VoyageRules.Defaults().Single(p => p.Name == "safe");
+        // chart down. But if it covered only a handful, "high tier" would be decorative.
+        var safe = VoyageRules.Defaults().Single(p => p.Name == "high tier");
         var penalised = Corpus("difficulty")
             .Count(line => Fillings(line).Any(f => safe.ScoreText([f]) < 0));
 
@@ -184,9 +184,9 @@ public class ProfileCoverageTests
     public void NoProfileRewardsADifficultyLine()
     {
         // A positive score on a monster mod would make a chart look better for being
-        // more dangerous. The "safe" profile is the only one meant to have an opinion.
+        // more dangerous. The "high tier" profile is the only one meant to have an opinion.
         var offenders = new List<string>();
-        foreach (var profile in VoyageRules.Defaults().Where(p => p.Name != "safe"))
+        foreach (var profile in VoyageRules.Defaults().Where(p => p.Name != "high tier"))
             foreach (var line in Corpus("difficulty"))
                 if (profile.ScoreText([WithValues(line)]) > 0)
                     offenders.Add($"{profile.Name} scores +{profile.ScoreText([WithValues(line)])}: {line}");

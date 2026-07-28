@@ -202,6 +202,70 @@ public sealed class VoyageRules : IDisposable
         Save();
     }
 
+    /// <summary>Shipped profiles the file does not have, and ones whose rules have moved on.</summary>
+    public sealed record DefaultsStatus(
+        IReadOnlyList<string> Missing, IReadOnlyList<string> Outdated)
+    {
+        public bool AnythingToDo => Missing.Count > 0 || Outdated.Count > 0;
+    }
+
+    /// <summary>
+    /// Compare what is on disk with what ships.
+    ///
+    /// The file is written once and then never touched again, which is right for
+    /// something the user edits -- but it meant no shipped profile ever reached anyone
+    /// who had already run the app. A whole set of new objectives, and fixes to rules
+    /// that matched nothing, sat in the binary and never appeared.
+    /// </summary>
+    public DefaultsStatus CompareWithDefaults()
+    {
+        var shipped = Defaults();
+        var onDisk = Profiles.ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
+
+        var missing = shipped.Where(p => !onDisk.ContainsKey(p.Name)).Select(p => p.Name).ToList();
+        var outdated = shipped
+            .Where(p => onDisk.TryGetValue(p.Name, out var mine) && !SameRules(mine, p))
+            .Select(p => p.Name)
+            .ToList();
+
+        return new DefaultsStatus(missing, outdated);
+    }
+
+    private static bool SameRules(VoyageProfile a, VoyageProfile b) =>
+        a.Rules.Count == b.Rules.Count
+        && a.Rules.Zip(b.Rules).All(pair => pair.First.Pattern == pair.Second.Pattern
+                                            && Math.Abs(pair.First.Weight - pair.Second.Weight) < 1e-9);
+
+    /// <summary>
+    /// Add shipped profiles the file does not have, leaving everything else alone.
+    ///
+    /// Additive on purpose: a new objective should just turn up, but a profile the user
+    /// has tuned must not be overwritten because the shipped weights moved.
+    /// Use <see cref="RestoreDefaults"/> to take the shipped version of everything.
+    /// </summary>
+    public IReadOnlyList<string> AddMissingDefaults()
+    {
+        var status = CompareWithDefaults();
+        if (status.Missing.Count == 0) return [];
+
+        var shipped = Defaults().ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
+        lock (_gate)
+            foreach (var name in status.Missing)
+                _profiles.Add(shipped[name]);
+
+        Save();
+        Changed?.Invoke();
+        return status.Missing;
+    }
+
+    /// <summary>Replace everything with the shipped profiles, discarding local edits.</summary>
+    public void RestoreDefaults()
+    {
+        lock (_gate) _profiles = Defaults();
+        Save();
+        Changed?.Invoke();
+    }
+
     /// <summary>Watch the file so edits made in any editor apply immediately.</summary>
     public void WatchForChanges()
     {
@@ -493,8 +557,9 @@ public sealed class VoyageRules : IDisposable
 
         new VoyageProfile
         {
-            Name = "safe",
-            Description = "Prefer high tier, avoid the monster mods that actually end runs.",
+            Name = "high tier",
+            Description = "Highest area levels, avoiding the monster mods that most often "
+                          + "end a run. The only profile not about loot.",
             AreaLevelWeight = 1.0,
             Rules =
             [

@@ -137,7 +137,7 @@ public class ConnectivityTests
             { Level = 80 }).ToList());
 
         var solution = session.Solve(
-            VoyageRules.Defaults().Single(p => p.Name == "safe"), TimeSpan.FromSeconds(2));
+            VoyageRules.Defaults().Single(p => p.Name == "high tier"), TimeSpan.FromSeconds(2));
 
         Assert.Equal(9, solution.Placements.Count);
         Assert.Empty(solution.StrandedCells);
