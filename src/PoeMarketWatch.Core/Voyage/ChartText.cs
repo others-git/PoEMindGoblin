@@ -135,6 +135,8 @@ public static class ChartText
         var recognised = 0;
         var nextIsImplicit = false;
         var seenImplicit = false;
+        var nextIsVoyage = false;
+        var nextIsAdjacent = false;
 
         foreach (var raw in text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
         {
@@ -163,15 +165,31 @@ public static class ChartText
 
             if (TryShape(line) is { } parsedShape) { shapeHint = parsedShape; recognised++; continue; }
 
-            // Explicit labels are still honoured -- a hand-typed entry may use them.
-            if (StripPrefix(line, "Voyage Modifier") is { Length: > 0 } vm)
-            { voyageMod ??= vm; recognised++; continue; }
-            if (StripPrefix(line, "Adjacent Modifier") is { Length: > 0 } am)
-            { adjacentMod ??= am; recognised++; continue; }
+            // Explicit labels are still honoured: the in-game HOVER uses them where the
+            // copied text uses "{ Implicit Modifier }". The hover also puts the label on
+            // its own line with the value beneath, so an empty value marks the next line
+            // rather than falling through -- untreated, a bare "Adjacent Modifier:" was
+            // taken for the chart's name.
+            if (StripPrefix(line, "Voyage Modifier") is { } vm)
+            {
+                if (vm.Length > 0) voyageMod ??= vm; else nextIsVoyage = true;
+                recognised++;
+                continue;
+            }
+            if (StripPrefix(line, "Adjacent Modifier") is { } am)
+            {
+                if (am.Length > 0) adjacentMod ??= am; else nextIsAdjacent = true;
+                recognised++;
+                continue;
+            }
             if (StripPrefix(line, "Area") is { Length: > 0 } area && !line.StartsWith("Area Level"))
             { areaName = area; recognised++; continue; }
 
             var mod = RolledRange.Replace(line, "");
+
+            // A label seen on the previous line claims this one.
+            if (nextIsVoyage) { voyageMod ??= mod; nextIsVoyage = false; recognised++; continue; }
+            if (nextIsAdjacent) { adjacentMod ??= mod; nextIsAdjacent = false; recognised++; continue; }
 
             // The special modifier is identified by WORDING, not by a label -- the copied
             // text has none. Scope is the whole difference between a chart's own value

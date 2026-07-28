@@ -36,10 +36,14 @@ import urllib.error
 import urllib.request
 from collections import OrderedDict
 
+# Every base linked from poedb's Chart item-class page. Thermal Vents exists as an item
+# but has no mod table published yet, which is a warning rather than a failure -- when it
+# gains one, a refresh picks it up and says so.
 BASES = [
     "Coral_Reef_Chart",
     "Coral_Forest_Chart",
     "Sandy_Seabed_Chart",
+    "Thermal_Vents_Chart",
 ]
 
 URL = "https://poedb.tw/us/{}"
@@ -277,9 +281,12 @@ def main() -> int:
 
         found = extract(page)
         if not found:
-            print(f"error: no mod table found on {base} -- has the page changed?",
-                  file=sys.stderr)
-            return 2
+            # Either the base has no published table yet, or the page changed. Both are
+            # worth saying out loud; only the second is a problem, and losing EVERY base
+            # is how you tell them apart.
+            print(f"warning: no mod table on {base}", file=sys.stderr)
+            per_base[base] = 0
+            continue
 
         per_base[base] = len(found)
         for kind, line in found:
@@ -302,6 +309,10 @@ def main() -> int:
     excluded = sorted(l for l, c in lines.items() if c == "excluded")
     for line in excluded:
         del lines[line]
+
+    if not lines:
+        print("error: no mod table found on any base -- has poedb changed?", file=sys.stderr)
+        return 2
 
     unclassified = sorted(l for l, c in lines.items() if c == "unclassified")
 

@@ -201,6 +201,22 @@ public sealed class VoyageSession
     }
 
     /// <summary>
+    /// The tilesets in the panel, with how many charts open each.
+    ///
+    /// Surfaced because there is no published list of them -- poedb documents the chart
+    /// bases and nothing about the areas they open -- so the only way to learn which
+    /// tilesets exist, and which are worth preferring, is to look at what you are holding.
+    /// </summary>
+    public IReadOnlyList<(string Tileset, int Charts)> Tilesets =>
+        _charts.Values
+            .Where(c => !string.IsNullOrWhiteSpace(c.AreaName))
+            .GroupBy(c => c.AreaName, StringComparer.OrdinalIgnoreCase)
+            .Select(g => (g.Key, g.Count()))
+            .OrderByDescending(g => g.Item2)
+            .ThenBy(g => g.Key, StringComparer.Ordinal)
+            .ToList();
+
+    /// <summary>
     /// What each square gets from the board, whatever the source.
     ///
     /// A square read straight off the Area Modifiers panel uses that and nothing else:

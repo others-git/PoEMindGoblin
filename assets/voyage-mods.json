@@ -1,11 +1,12 @@
 {
-  "_source": "https://poedb.tw/us/{} for Coral_Reef_Chart, Coral_Forest_Chart, Sandy_Seabed_Chart",
+  "_source": "https://poedb.tw/us/{} for Coral_Reef_Chart, Coral_Forest_Chart, Sandy_Seabed_Chart, Thermal_Vents_Chart",
   "_generated_by": "tools/fetch_voyage_mods.py -- do not edit by hand, rerun it",
   "_note": "'lines' maps every modifier the three Voyage bases can roll, with each number reduced to '#', to whether it is a payout or monster difficulty. The app normalises a chart's line the same way and looks it up, so matching is exact. The pattern lists are only a fallback for a line not in the table -- a modifier added by a patch before this file is regenerated.",
   "bases": [
     "Coral_Reef_Chart",
     "Coral_Forest_Chart",
-    "Sandy_Seabed_Chart"
+    "Sandy_Seabed_Chart",
+    "Thermal_Vents_Chart"
   ],
   "counts": {
     "lines": 86,
@@ -16,7 +17,8 @@
     "rows_per_base": {
       "Coral_Reef_Chart": 240,
       "Coral_Forest_Chart": 240,
-      "Sandy_Seabed_Chart": 240
+      "Sandy_Seabed_Chart": 240,
+      "Thermal_Vents_Chart": 0
     }
   },
   "lines": {

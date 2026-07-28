@@ -327,7 +327,7 @@ public sealed class VoyageRules : IDisposable
         new VoyageProfile
         {
             Name = "containers",
-            Description = "Barrels, lanterns, spirits and the rest of the openables.",
+            Description = "Barrels, lanterns, spirits, Sunken Loot and the rest of the openables.",
             BoardModifierWeight = 1.5,
             Rules =
             [
@@ -344,6 +344,16 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"contain Friendly Jellyfish", Weight = 5 },
                 new VoyageRule { Pattern = @"contains Filthscrabble", Weight = 6,
                                  Comment = "board modifier" },
+
+                // TILESET. A chart states which area it opens, and the tilesets are not
+                // equal: Anchorfield is thick with Sunken Loot chests, which no chart
+                // modifier accounts for. There is no published list of tilesets or their
+                // contents -- poedb documents the chart bases and nothing about the areas
+                // -- so this is an OBSERVED preference, not a measured one, and it is the
+                // first thing to retune. The Voyage tab lists the tilesets you hold, so
+                // adding a rule for another is a copy and a number.
+                new VoyageRule { Pattern = @"Area: Anchorfield", Weight = 25,
+                                 Comment = "observed: dense Sunken Loot chests" },
                 new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 0.3 },
             ],
         },

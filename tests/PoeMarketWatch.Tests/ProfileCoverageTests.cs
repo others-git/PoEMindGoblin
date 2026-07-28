@@ -78,6 +78,21 @@ public class ProfileCoverageTests
         "Adjacent Areas contain an additional cage of Tormented Spirits",
     ];
 
+    /// <summary>
+    /// Tilesets, as they appear on a chart.
+    ///
+    /// These are the AREA a chart opens, not a modifier, so they are in no mod table --
+    /// poedb documents the four chart bases and nothing about the areas. Observed ones
+    /// are listed so a rule that prefers a tileset is not reported as dead.
+    /// </summary>
+    private static readonly string[] ObservedTilesets =
+    [
+        "Area: Anchorfield",
+        "Area: Seafloor Ridges",
+        "Area: Abyssal Plain",
+        "Area: Undersea Groves",
+    ];
+
     [Fact]
     public void EveryRuleMatchesSomethingTheGameCanRoll()
     {
@@ -95,6 +110,7 @@ public class ProfileCoverageTests
         all.AddRange(statLines);
         all.AddRange(ObservedBoardModifiers);
         all.AddRange(ObservedChartWordings);
+        all.AddRange(ObservedTilesets);
 
         var dead = new List<string>();
         foreach (var profile in VoyageRules.Defaults())

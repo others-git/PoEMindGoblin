@@ -110,6 +110,13 @@ public sealed class AreaModifierPanel
         new(@"Hover\s+a\s+square|Board\s+to\s+see|relevant\s+Area",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    /// <summary>
+    /// The panel's own sub-heading. It groups what follows rather than being a modifier,
+    /// and was being recorded as one.
+    /// </summary>
+    private static readonly Regex SubHeading =
+        new(@"^Modifiers?\s+from\s+\w+\s*:?\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     /// <summary>Leading bullet glyphs, which OCR renders as a stray '.' or '·'.</summary>
     private static readonly Regex Bullet = new(@"^[\s.·•*\-–—]+", RegexOptions.Compiled);
 
@@ -163,6 +170,7 @@ public sealed class AreaModifierPanel
             if (line.Length == 0) continue;
 
             if (Heading.IsMatch(raw) || Heading.IsMatch(line)) { sawHeading = true; continue; }
+            if (SubHeading.IsMatch(line)) { sawHeading = true; continue; }
             if (Placeholder.IsMatch(line)) { sawPlaceholder = true; continue; }
 
             // Single stray characters are OCR noise off panel borders, never a modifier.

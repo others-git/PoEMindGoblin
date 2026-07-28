@@ -518,6 +518,12 @@ public partial class VoyageView : UserControl
     private void OnModifierSelected(object sender, SelectionChangedEventArgs e)
     {
         if (ModifierList.SelectedItem is not ModifierRow row) return;
+        if (row.Kind == ModifierRow.Sort.Tileset)
+        {
+            SetStatus($"{row.Title}: {row.Where}. Add a rule matching \"Area: {row.Title}\" "
+                      + "to prefer it.");
+            return;
+        }
         SetTarget(row.Kind switch
                   {
                       ModifierRow.Sort.Square => Target.Square,
@@ -662,11 +668,11 @@ public partial class VoyageView : UserControl
 
         var samples = new[]
         {
-            "Tempest Reach\nSeafloor Ridges\nItem Quantity: +42%\nDead Man's Sulphur: +14\n"
+            "Tempest Reach\nAnchorfield\nItem Quantity: +42%\nDead Man's Sulphur: +14\n"
                 + "Voyage Modifier: 8% increased Quantity of Items found in all Voyage Areas",
-            "Drowned Shelf\nKelp Hollows\nMonster Pack Size: +26%\n"
+            "Drowned Shelf\nAnchorfield\nMonster Pack Size: +26%\n"
                 + "Adjacent Modifier: Adjacent Areas contain 4 additional Strongboxes",
-            "Salt Barrens\nBleached Flats\nItem Rarity: +31%\nGold Found: +80%",
+            "Salt Barrens\nAbyssal Plain\nItem Rarity: +31%\nGold Found: +80%",
         };
         var i = 0;
         foreach (var index in _session.ByPanelIndex.Keys.Order().Take(samples.Length))
@@ -1221,6 +1227,23 @@ public partial class VoyageView : UserControl
                 selected: _target == Target.Chart && _targetIndex == panelIndex));
         }
 
+        // Tilesets next. There is no published list of them and they are not equal --
+        // some are thick with Sunken Loot -- so showing which you hold is the only way to
+        // find out what is worth writing a rule for.
+        foreach (var (tileset, count) in _session.Tilesets)
+        {
+            var scored = Profile?.ScoreText([$"Area: {tileset}"]) ?? 0;
+            _modifiers.Add(new ModifierRow(
+                ModifierRow.Sort.Tileset, 0,
+                tileset, count == 1 ? "1 chart" : $"{count} charts",
+                scored != 0
+                    ? $"Worth {scored:0.##} to \"{Profile?.Name}\""
+                    : "No rule for this tileset yet",
+                captured: scored != 0,
+                selected: false,
+                muted: scored == 0));
+        }
+
         // Then squares: what the game aggregates, and what the solver places against.
         var unreachable = _session.SquaresWithoutFigurines.ToHashSet();
         for (var square = 1; square <= _session.Layout.Rows * _session.Layout.Cols; square++)
@@ -1336,7 +1359,7 @@ public partial class VoyageView : UserControl
     /// </summary>
     public sealed class ModifierRow
     {
-        public enum Sort { VoyageWide, Square, Figurine, Chart }
+        public enum Sort { VoyageWide, Tileset, Square, Figurine, Chart }
 
         public ModifierRow(Sort kind, int index, string title, string where,
                            string text, bool captured, bool selected, bool muted = false)
@@ -1371,6 +1394,7 @@ public partial class VoyageView : UserControl
         public Brush Accent => new SolidColorBrush(
             Selected ? Color.FromRgb(0xC9, 0xA2, 0x27)
             : Kind == Sort.VoyageWide ? Color.FromRgb(0xC9, 0xA2, 0x27)
+            : Kind == Sort.Tileset && Captured ? Color.FromRgb(0x8A, 0x6F, 0x22)
             : Muted ? Color.FromRgb(0x2A, 0x20, 0x18)
             : Captured ? Color.FromRgb(0x86, 0xA8, 0x6A)
             : Color.FromRgb(0x2A, 0x20, 0x18));

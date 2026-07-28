@@ -71,6 +71,13 @@ public sealed record Chart(
     /// </summary>
     public IEnumerable<string> OwnLines()
     {
+        // The tileset, as a line a rule can match: "Area: Anchorfield".
+        //
+        // Which tileset a chart opens is a real reward difference -- Anchorfield is thick
+        // with Sunken Loot chests, other sets are not -- and it is stated on every chart.
+        // Exposing it here means preferring a tileset needs no new machinery, just a rule.
+        if (!string.IsNullOrWhiteSpace(AreaName)) yield return "Area: " + AreaName;
+
         foreach (var line in StatLines()) yield return line;
         if (!string.IsNullOrEmpty(VoyageModifier)) yield return VoyageModifier!;
         foreach (var m in Modifiers) yield return m;

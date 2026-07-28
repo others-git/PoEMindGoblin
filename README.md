@@ -87,6 +87,17 @@ up, so matching is exact rather than pattern-guessed. Anything the rules do not 
 printed as UNCLASSIFIED and the file records it — a patch that adds a modifier shows up as
 a warning instead of being silently mis-filed. Current: 86 lines, 42 reward, 44 difficulty.
 
+### Tilesets
+
+Every chart states the area it opens — Anchorfield, Seafloor Ridges, Abyssal Plain,
+Undersea Groves — and they are **not equal**: Anchorfield is thick with Sunken Loot chests,
+which no chart modifier accounts for. There is no published list of them; poedb documents
+the four chart bases and nothing about the areas. So the app captures the tileset, exposes
+it as a scorable line (`Area: Anchorfield`), and the Voyage tab lists which tilesets you
+hold and whether the current profile values them. Adding a preference is a rule and a
+number. The one shipped weight is an **observation, not a measurement**, and is the first
+thing worth retuning.
+
 **Known gap:** the level reader was trained from one capture, which contained only the
 digits 1,2,3,4,6,7,8. A level containing 0, 5 or 9 reads as unknown rather than as a wrong
 number. Teach it from a later capture via `level-digits.json`; no rebuild needed.
