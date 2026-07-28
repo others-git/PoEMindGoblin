@@ -241,7 +241,7 @@ public class ProfileCoverageTests
         // filed as a reward line because it is about the payout -- but it is a negative
         // one, and a profile that ignored it would rank a gutted chart normally.
         const string line = "Monsters in all Voyage Areas cannot drop Equipment, Flasks or Tinctures";
-        foreach (var name in new[] { "quantity", "uniques", "strongbox", "flasks" })
+        foreach (var name in new[] { "quantity", "uniques", "strongbox" })
         {
             var profile = VoyageRules.Defaults().Single(p => p.Name == name);
             Assert.True(profile.ScoreText([line]) < 0, $"{name} does not penalise it");

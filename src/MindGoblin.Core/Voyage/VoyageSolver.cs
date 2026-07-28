@@ -64,6 +64,10 @@ public sealed class VoyageSolver
         _maxPlacements = Math.Clamp(maxPlacements ?? rows * cols, 0, rows * cols);
     }
 
+    /// <summary>Cached: Enum.GetValues allocates a fresh array every call, and these
+    /// loops run per placement in the innermost part of the search.</summary>
+    private static readonly Side[] Sides = Enum.GetValues<Side>();
+
     /// <summary>Where a Voyage begins: the bottom-left square, per the in-game help.</summary>
     public static Cell StartCell(int rows) => new(rows - 1, 0);
 
@@ -165,16 +169,16 @@ public sealed class VoyageSolver
         // The restriction rules out perfectly good layouts, so it is only ever a head
         // start: each pass keeps the incumbent, and the final unrestricted pass is free
         // to beat it. Only that last pass decides whether the answer was proved.
-        var exhausted = true;
-        foreach (var (rule, share) in new[]
-                 {
-                     (BorderRule.All, 0.25),
-                     (BorderRule.NorthAndWest, 0.5),
-                     (BorderRule.None, 1.0),
-                 })
+        // Only the UNRESTRICTED pass can prove anything. The restricted ones search a
+        // deliberately smaller space, so finishing one says nothing about the layouts it
+        // was forbidden from considering -- and if the budget ran out before that pass
+        // started, the honest answer is that nothing was proved.
+        var exhausted = false;
+        foreach (var rule in new[] { BorderRule.All, BorderRule.NorthAndWest, BorderRule.None })
         {
             _searchRule = rule;
-            exhausted = true;
+            var completed = true;
+            _passStartNodes = NodesExplored;
 
             // A FRESH board and used-set per pass.
             //
@@ -192,15 +196,16 @@ public sealed class VoyageSolver
                     + $"nodes={NodesExplored} t={sw.Elapsed.TotalMilliseconds:0}ms");
             try
             {
-                Recurse(0, board, used, 0.0, bestPossible, ref best, sw, deadline * share, ct);
+                Recurse(0, board, used, 0.0, bestPossible, ref best, sw, deadline, ct);
             }
             catch (DeadlineReached)
             {
-                exhausted = false;
+                completed = false;
             }
+            if (rule == BorderRule.None) exhausted = completed;
             if (Trace)
                 Console.Error.WriteLine(
-                    $"    pass {rule,-13} end   best={best.Value,10:0.##} exhausted={exhausted} "
+                    $"    pass {rule,-13} end   best={best.Value,10:0.##} completed={completed} "
                     + $"nodes={NodesExplored} t={sw.Elapsed.TotalMilliseconds:0}ms");
             if (sw.Elapsed >= deadline) break;
         }
@@ -269,7 +274,7 @@ public sealed class VoyageSolver
         VoyageBoard board, Cell cell, ChartFace face, BorderRule which)
     {
         if (which == BorderRule.None) return false;
-        foreach (var side in Enum.GetValues<Side>())
+        foreach (var side in Sides)
         {
             if (!face.IsOpen(side)) continue;
             if (board.InBounds(VoyageBoard.Neighbour(cell, side))) continue;
@@ -354,7 +359,7 @@ public sealed class VoyageSolver
         var placements = board.Placements.ToList();
         var total = placements.Sum(p => _score(p.Chart, p.Cell));
         foreach (var p in placements)
-            foreach (var side in Enum.GetValues<Side>())
+            foreach (var side in Sides)
                 if (board.At(VoyageBoard.Neighbour(p.Cell, side)) is { } n)
                     total += n.Chart.AdjacentValue;      // each ordered pair counted once
 
@@ -376,7 +381,7 @@ public sealed class VoyageSolver
     private static double AdjacencyGain(VoyageBoard board, Cell cell, Chart chart)
     {
         var gain = 0.0;
-        foreach (var side in Enum.GetValues<Side>())
+        foreach (var side in Sides)
         {
             if (board.At(VoyageBoard.Neighbour(cell, side)) is not { } neighbour) continue;
             gain += neighbour.Chart.AdjacentValue;   // they buff us
@@ -421,11 +426,16 @@ public sealed class VoyageSolver
             .ToList();
 
         // Adjacency can only ADD value, so the bound has to allow for it or it stops
-        // being admissible and the search could discard the true best layout. Four
-        // neighbours is the most any cell has; assuming the best adjacent chart on all of
-        // them is loose but safe.
+        // being admissible and the search could discard the true best layout.
+        //
+        // Bounded per adjacent PAIR rather than per cell. Adjacency is scored once per
+        // pair -- when the second of the two is placed -- and each pair is worth at most
+        // both charts' modifiers, so 2 x the best. Charging every remaining CELL for four
+        // neighbours counted both ways triple-counts: on a 3x3 that is 72 x best where
+        // the truth is 24 x best, and a bound that loose prunes almost nothing. It is why
+        // even nine charts on nine cells could not be proved.
         var bestAdjacent = _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c => c.AdjacentValue));
-        var adjacencyCeiling = bestAdjacent * 8;   // up to 4 neighbours, counted both ways
+        var pairsRemaining = AdjacentPairsFrom();
 
         // Both are admissible, so the smaller is admissible and never worse than either.
         // Neither alone is enough: A collapses with modifiers, B collapses without them,
@@ -437,9 +447,36 @@ public sealed class VoyageSolver
         {
             byChart[i] = byChart[i + 1] + (i < chartBest.Count ? chartBest[i] : 0);
             byCell[i] = byCell[i + 1] + cellBest[i];
-            suffix[i] = Math.Min(byChart[i], byCell[i]) + adjacencyCeiling * (n - i);
+            suffix[i] = Math.Min(byChart[i], byCell[i]) + 2 * bestAdjacent * pairsRemaining[i];
         }
         return suffix;
+    }
+
+    /// <summary>
+    /// How many adjacent pairs are still unscored once filling reaches cell i.
+    ///
+    /// A pair is scored when the SECOND of its two cells is placed, so a pair still
+    /// counts from index i if the later of its two indices is at least i. Row-major
+    /// filling makes that the larger index of the two.
+    /// </summary>
+    private int[] AdjacentPairsFrom()
+    {
+        var n = _rows * _cols;
+        var laterIndex = new List<int>();
+        for (var r = 0; r < _rows; r++)
+        {
+            for (var c = 0; c < _cols; c++)
+            {
+                var index = r * _cols + c;
+                if (c + 1 < _cols) laterIndex.Add(index + 1);        // east neighbour
+                if (r + 1 < _rows) laterIndex.Add(index + _cols);    // south neighbour
+            }
+        }
+
+        var remaining = new int[n + 1];
+        for (var i = n - 1; i >= 0; i--)
+            remaining[i] = remaining[i + 1] + laterIndex.Count(l => l == i);
+        return remaining;
     }
 
     /// <summary>
@@ -486,6 +523,20 @@ public sealed class VoyageSolver
     /// <summary>Border restriction in force for the current search pass.</summary>
     private BorderRule _searchRule = BorderRule.None;
 
+    /// <summary>
+    /// Work allowed to a RESTRICTED pass, in nodes.
+    ///
+    /// Bounded by work rather than by a slice of the clock. Taking a fraction of the
+    /// budget meant that on a small board -- where the unrestricted search can finish and
+    /// find the true optimum -- half the time went on passes that could not, and the real
+    /// search ran out before it got there. A node cap is generous on a big instance,
+    /// where these passes are the only thing that finds a joined board at all, and nearly
+    /// free on a small one.
+    /// </summary>
+    private const long RestrictedPassNodes = 250_000;
+
+    private long _passStartNodes;
+
     private void Recurse(
         int index, VoyageBoard board, bool[] used, double value,
         double[] bound, ref Solution best,
@@ -496,7 +547,16 @@ public sealed class VoyageSolver
 
         // Checking the clock every node would cost more than the search; every 4096 is
         // frequent enough to stop promptly and cheap enough not to matter.
-        if ((NodesExplored & 0xFFF) == 0 && sw.Elapsed > deadline) throw new DeadlineReached();
+        if ((NodesExplored & 0xFFF) == 0)
+        {
+            if (sw.Elapsed > deadline) throw new DeadlineReached();
+
+            // A restricted pass is a head start, not the search. Cap its work so the
+            // unrestricted pass keeps the bulk of the budget.
+            if (_searchRule != BorderRule.None
+                && NodesExplored - _passStartNodes > RestrictedPassNodes)
+                throw new DeadlineReached();
+        }
 
         if (index == _rows * _cols)
         {

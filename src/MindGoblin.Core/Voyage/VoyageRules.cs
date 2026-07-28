@@ -341,6 +341,8 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Q(?:uantity|auntity) of Items", Weight = 1.5,
                                  Comment = "GGG spells it 'Qauntity' in the global lines only" },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Rarity of Items", Weight = 0.75 },
+                new VoyageRule { Pattern = @"Flasks found.*chance to have (\d+)% Quality", Weight = 0.4,
+                                 Comment = "a quality flask is a better item, so it belongs here" },
                 new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -60,
                                  Comment = "a global roll that deletes most of the loot" },
                 // Board modifiers, off the figurines rather than the charts.
@@ -543,14 +545,26 @@ public sealed class VoyageRules : IDisposable
 
         new VoyageProfile
         {
-            Name = "flasks",
-            Description = "Quality flasks, for when that is what you are after.",
+            Name = "magic monsters",
+            Description = "Every monster at least Magic, and as many of them as possible.",
+            BoardModifierWeight = 1.5,
             Rules =
             [
-                new VoyageRule { Pattern = @"Flasks found.*chance to have (\d+)% Quality", Weight = 2.0 },
-                new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -100,
-                                 Comment = "these two cancel each other out entirely" },
-                new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 0.5 },
+                // "are at least Magic" upgrades the whole area, so it is worth far more
+                // than a percentage bump to how many Magic monsters spawn.
+                new VoyageRule { Pattern = @"are at least Magic", Weight = 60 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased number of Magic Monsters", Weight = 1.0 },
+                new VoyageRule { Pattern = @"Magic Monsters.*have an additional modifier", Weight = 30,
+                                 Comment = "board modifier: better rolls on every magic pack" },
+                // More monsters of any kind means more of them get upgraded.
+                new VoyageRule { Pattern = @"Monster Pack Size:\s*\+?(\d+)", Weight = 0.5 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = 0.75 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional packs of", Weight = 1.5 },
+                // Rare monsters are not Magic, so a board full of rares is working
+                // against this objective rather than for it.
+                new VoyageRule { Pattern = @"(\d+)%\s+increased number of Rare [Mm]onsters", Weight = -0.25,
+                                 Comment = "a rare is a monster that is not Magic" },
+                new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 0.3 },
             ],
         },
 

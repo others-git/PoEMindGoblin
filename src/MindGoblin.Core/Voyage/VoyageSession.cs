@@ -267,9 +267,25 @@ public sealed class VoyageSession
             AdjacentValue = profile.ScoreAdjacent(c),
         }).ToList();
 
+        // Precompute what the BOARD gives each square, once.
+        //
+        // The scorer is called for every chart at every cell at every node -- millions of
+        // times -- and the obvious version ran the profile's regexes over each board
+        // modifier on every one of those calls. A square's board value depends only on
+        // the square, so it is a lookup. Chart value is already computed once above, so
+        // scoring is now two additions.
         var modifiers = BoardModifiers();
-        var score = VoyageSolver.ScoreWith(
-            modifiers, (m, _) => profile.ScoreText([m.Description]) * profile.BoardModifierWeight);
+        var boardValue = new Dictionary<Cell, double>();
+        foreach (var modifier in modifiers)
+        {
+            var worth = profile.ScoreText([modifier.Description]) * profile.BoardModifierWeight;
+            if (worth == 0) continue;
+            foreach (var cell in modifier.AffectedCells)
+                boardValue[cell] = boardValue.GetValueOrDefault(cell) + worth;
+        }
+
+        double score(Chart chart, Cell cell) =>
+            chart.Value + (boardValue.TryGetValue(cell, out var extra) ? extra : 0);
 
         return new VoyageSolver(Layout.Rows, Layout.Cols, scored, score,
                                 strandedPenalty: profile.StrandedSquarePenalty,

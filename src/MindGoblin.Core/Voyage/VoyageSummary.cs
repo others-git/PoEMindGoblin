@@ -8,6 +8,9 @@ namespace MindGoblin.Core.Voyage;
 /// information. What the board is WORTH is, and it cannot be read off the squares: the
 /// stats have to be totalled, the global modifiers gathered, and the adjacency payouts
 /// multiplied out by how many neighbours each one actually reaches.
+///
+/// Charts on stranded squares are left out entirely: the voyage never reaches them, so
+/// counting their quantity would describe loot nobody collects.
 /// </summary>
 public sealed record VoyageSummary(
     int Charts,
@@ -44,7 +47,12 @@ public sealed record VoyageSummary(
     public static VoyageSummary Build(
         VoyageBoard board, IReadOnlyDictionary<string, int> chartNumbers, int boardCols)
     {
-        var placements = board.Placements.ToList();
+        // A chart on a square cut off from the route is never visited, so it pays
+        // nothing and must not be totalled. The solver already refuses to strand a square
+        // when a joined board exists, but when none does it will, and the summary would
+        // otherwise credit the board with rewards nobody collects.
+        var stranded = board.StrandedCells().ToHashSet();
+        var placements = board.Placements.Where(p => !stranded.Contains(p.Cell)).ToList();
         if (placements.Count == 0) return Empty;
 
         var levels = placements.Select(p => p.Chart.AreaLevel).Where(l => l > 0).ToList();

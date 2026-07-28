@@ -200,7 +200,48 @@ public sealed class VoyageBoard
         return problems;
     }
 
-    public bool IsValid() => Validate().Count == 0;
+    /// <summary>
+    /// Is every connection satisfied? Equivalent to <see cref="Validate"/> being empty.
+    ///
+    /// Written out rather than calling Validate because it runs at every complete board
+    /// in the search -- millions of them -- and Validate allocates a list and a Violation
+    /// object per problem it finds. This allocates nothing and stops at the first fault.
+    /// </summary>
+    public bool IsValid()
+    {
+        for (var r = 0; r < Rows; r++)
+        {
+            for (var c = 0; c < Cols; c++)
+            {
+                if (_cells[r, c] is not { } placement) continue;
+                var face = placement.Face;
+
+                foreach (var side in Sides)
+                {
+                    var open = face.IsOpen(side);
+                    var (dr, dc) = side.Delta();
+                    var nr = r + dr;
+                    var nc = c + dc;
+
+                    // Off the grid: the border satisfies an open path and walls off a
+                    // closed one.
+                    if (nr < 0 || nr >= Rows || nc < 0 || nc >= Cols) continue;
+
+                    var neighbour = _cells[nr, nc];
+                    if (neighbour is null)
+                    {
+                        if (open) return false;      // a path into an empty cell
+                        continue;
+                    }
+                    if (open != neighbour.Face.IsOpen(side.Opposite())) return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /// <summary>Cached: Enum.GetValues allocates a fresh array on every call.</summary>
+    private static readonly Side[] Sides = Enum.GetValues<Side>();
 
     /// <summary>
     /// Groups of squares joined by paths that actually meet, largest first.
@@ -233,7 +274,7 @@ public sealed class VoyageBoard
                 var cell = queue.Dequeue();
                 if (At(cell) is not { } here) continue;
 
-                foreach (var side in Enum.GetValues<Side>())
+                foreach (var side in Sides)
                 {
                     if (!here.Face.IsOpen(side)) continue;
                     var next = Neighbour(cell, side);

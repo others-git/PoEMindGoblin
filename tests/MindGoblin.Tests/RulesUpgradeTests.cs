@@ -141,6 +141,6 @@ public class RulesUpgradeTests : IDisposable
         Assert.Contains("rare monsters", added);
         Assert.Contains("uniques", added);
         Assert.Contains("gold", added);
-        Assert.Contains("flasks", added);
+        Assert.Contains("magic monsters", added);
     }
 }

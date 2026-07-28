@@ -61,6 +61,9 @@ public partial class App : Application
         var target = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
         target.Render(element);
 
+        // The view holds a file watcher; a render is a one-shot and should not leave one.
+        (element as IDisposable)?.Dispose();
+
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(target));
         using var stream = File.Create(path);

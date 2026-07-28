@@ -31,7 +31,7 @@ namespace MindGoblin;
 /// scored on area level, so the tool is useful before the chore is done.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public partial class VoyageView : UserControl
+public partial class VoyageView : UserControl, IDisposable
 {
     private readonly VoyageRules _rules = new();
     private readonly ObservableCollection<ModifierRow> _modifiers = new();
@@ -112,6 +112,23 @@ public partial class VoyageView : UserControl
             if (ReadModeBtn.IsChecked == true) _clipboardPoll.Start();
             RegisterCaptureHotkey();
         };
+    }
+
+    /// <summary>
+    /// Release the things that outlive a window.
+    ///
+    /// VoyageRules holds a FileSystemWatcher and HotkeyService holds a system-wide key
+    /// registration -- neither goes away with the control. It matters most for the
+    /// offscreen renderer, which builds a view per invocation and would otherwise leave a
+    /// watcher behind each time.
+    /// </summary>
+    public void Dispose()
+    {
+        _clipboardPoll.Stop();
+        if (_captureHotkey is { } id) _hotkeys?.Unregister(id);
+        _hotkeys?.Dispose();
+        _rules.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     // ---- persistence -------------------------------------------------------------

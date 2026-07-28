@@ -27,7 +27,13 @@ public partial class MainWindow : Window
         // Both tools are self-contained. The gem calculator wants public price data; the
         // Voyage planner reads the screen and the clipboard. Neither needs the other.
         GemTabHost.Content = new GemRoiView(settings);
-        VoyageTabHost.Content = new VoyageView();
+
+        var voyage = new VoyageView();
+        VoyageTabHost.Content = voyage;
+
+        // The planner owns a file watcher and a system-wide hotkey; neither is released
+        // by the control going away.
+        Closed += (_, _) => voyage.Dispose();
 
         if (carried.Count > 0)
             Title = $"MindGoblin  —  carried {carried.Count} settings files over from the old name";
