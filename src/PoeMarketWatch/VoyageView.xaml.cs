@@ -70,7 +70,15 @@ public partial class VoyageView : UserControl
         RebuildFigurines();
         RefreshProgress();
 
+        // Popping out and docking REPARENT this control, which raises Unloaded/Loaded.
+        // Stopping the poll unconditionally on Unloaded would silently kill read mode the
+        // moment the user moved the window to their second monitor -- the exact workflow
+        // this is for. Pause and resume instead of stop.
         Unloaded += (_, _) => _clipboardPoll.Stop();
+        Loaded += (_, _) =>
+        {
+            if (ReadModeBtn.IsChecked == true) _clipboardPoll.Start();
+        };
     }
 
     // ---- rule profiles -----------------------------------------------------------
@@ -307,11 +315,12 @@ public partial class VoyageView : UserControl
 
     private void OnPopOut(object sender, RoutedEventArgs e)
     {
-        if (_popped is not null) { _popped.Activate(); return; }
+        // Already out: the button says "Dock", so dock it. Closing the window is what
+        // returns the view to its tab, so this is the same path.
+        if (_popped is not null) { _popped.Close(); return; }
 
-        var host = Parent as ContentControl;
-        if (host is not null) host.Content = null;
-        else return;
+        if (Parent is not ContentControl host) return;
+        host.Content = null;
 
         _popped = new Window
         {
