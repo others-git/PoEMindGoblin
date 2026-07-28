@@ -248,6 +248,10 @@
         <TabItem Header="GEM RoI">
             <ContentControl x:Name="GemTabHost"/>
         </TabItem>
+
+        <TabItem Header="VOYAGE">
+            <ContentControl x:Name="VoyageTabHost"/>
+        </TabItem>
         </TabControl>
 
         <Border Grid.Row="2" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}"

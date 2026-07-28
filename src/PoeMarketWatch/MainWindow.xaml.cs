@@ -37,6 +37,10 @@ public partial class MainWindow : Window
         // sockets, just public price data. It shares only AppSettings.
         GemTabHost.Content = new GemRoiView(_settings);
 
+        // The Voyage planner touches neither credentials nor the network: it reads the
+        // screen and the clipboard, and solves locally.
+        VoyageTabHost.Content = new VoyageView();
+
         _tick.Tick += (_, _) => RefreshTransient();
         _tick.Start();
 

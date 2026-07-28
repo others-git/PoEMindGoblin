@@ -350,8 +350,12 @@ public static class VoyagePlan
     public sealed record Step(int Square, int ChartNumber, Chart Chart, int Rotation)
     {
         public string RotationText => Rotation == 0 ? "as-is" : $"rotate {Rotation * 90}°";
+
+        /// <summary>Blank until the chart has been hovered, so it is simply left out.</summary>
+        private string NamePart => string.IsNullOrWhiteSpace(Chart.Name) ? "" : Chart.Name + " ";
+
         public override string ToString() =>
-            $"square {Square} <- chart {ChartNumber}  {Chart.Name} ({Chart.Shape}, {RotationText})";
+            $"square {Square} <- chart {ChartNumber,-3} {NamePart}({Chart.Shape}, {RotationText})";
     }
 
     public static int SquareNumber(Cell cell, int cols) => cell.Row * cols + cell.Col + 1;

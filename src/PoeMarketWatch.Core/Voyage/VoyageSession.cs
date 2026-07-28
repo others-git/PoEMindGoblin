@@ -61,12 +61,10 @@ public sealed class VoyageSession
                 continue;
             }
 
+            // Nameless until hovered: the panel shows no name, and inventing "chart 12"
+            // would print twice in a plan that already leads with the panel number.
             _charts[cell.Index] = new Chart(
-                $"panel-{cell.Index}",
-                $"chart {cell.Index}",
-                shape,
-                cell.Level ?? 0,
-                Array.Empty<string>());
+                $"panel-{cell.Index}", "", shape, cell.Level ?? 0, Array.Empty<string>());
         }
 
         // A chart that is gone from the panel has been used or sold.

@@ -6,6 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="10.0.10" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\PoeMarketWatch.Core\PoeMarketWatch.Core.csproj" />
   </ItemGroup>
 </Project>

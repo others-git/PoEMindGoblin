@@ -1,5 +1,10 @@
 using PoeMarketWatch.Core.Voyage;
 
+// With a screenshot path, decode it and print the plan; otherwise run the synthetic
+// solver benchmark below.
+if (args.Length > 0) return PanelProbe.Run(args[0], args.Length > 1 ? args[1] : "safe");
+
+
 static List<Chart> Make(int n, int seed)
 {
     var rng = new Random(seed);
@@ -34,3 +39,5 @@ Console.WriteLine(board.Render());
 Console.WriteLine("PLAN");
 foreach (var step in VoyagePlan.Describe(final, 3, Make(60, 7)))
     Console.WriteLine("  " + step);
+
+return 0;
