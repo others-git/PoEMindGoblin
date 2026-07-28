@@ -42,6 +42,18 @@ Verified from screenshots and the trade API, not assumed:
 | Stat index | 23 categories, 746 stats, advisory not restrictive |
 | Live search (tabled) | Built, untested against a real session |
 
+## Prior art
+
+**https://voyage.exilekit.dev/** — a community Voyage planner, worth looking at before
+designing the UI. Confirms the board is 9 squares ("0/9" progress) and that filtering by
+desired **Reward** is the natural way to express a goal, which is what our rule profiles
+already do.
+
+It is **manual**: you search for charts, place them yourself, with undo/redo/clear, saved
+in browser storage. That is the gap — placing 9 of 60 charts by hand is the tedious part,
+and it is exactly what the solver removes. Capture the board, pick a profile, get the
+placement. Their layout is a good reference for what to show; the automation is ours.
+
 ## Next
 
 * **Second-monitor mirror app.** Not an overlay — a window reproducing the board and chart
