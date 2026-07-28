@@ -1,36 +1,28 @@
-# mindgoblin
+# MindGoblin
 
-Windows market tool for Path of Exile. Two tools so far:
+A Path of Exile toolkit for Windows. Portable: one self-contained .exe, no installer, no
+runtime prerequisite, and **no credentials** — every tool here uses public data or your
+own screen.
 
-* **Live search** — watch pathofexile.com trade searches over the websocket, aimed at the
-  async Market / Merchant's Tab listings. See a match the moment it is listed and be one
-  keypress from the seller's hideout.
-* **Gem RoI** — which vendor-buyable gems are worth levelling, priced off poe.watch.
 * **Voyage planner** — reads the chart panel off a screenshot and tells you which chart
-  goes in which board square: `square 5 <- chart 23`.
+  goes in which board square, optimised for whatever you are farming.
+* **Gem RoI** — which vendor-buyable gems are worth levelling, priced off poe.watch.
 
-Portable: a single self-contained .exe, no installer, no runtime prerequisite.
+## Not here any more
 
-## What it does / does not do
-
-**Does:** watch many live searches at once, notify on a match, validate your filters
-against real game data, and put you one **keypress** away from travelling.
-
-**Does not:** buy anything for you. GGG's third-party policy allows a tool that turns one
-keypress into one server-side action — that is the same shape as the trade site's own
-whisper button. Automating detection → travel → purchase is multiple server actions from
-zero input, which is botting and gets accounts banned. The keypress stays yours, and you
-complete the trade at Faustus yourself.
+There used to be a live trade-search watcher. It is gone, along with its credential
+storage, rate limiter and stat index — it was never confirmed working end to end against a
+real session, and removing it means the app holds no session cookie, no DPAPI blob and
+nothing worth leaking. The git history has it if it is ever wanted.
 
 ## Layout
 
 ```
-src/MindGoblin.Core/    API client, rate limiting, credentials, stat index (no UI)
+src/MindGoblin.Core/    price data, gem RoI, Voyage model and solver (no UI)
 src/MindGoblin.Core/Voyage/  board, solver, rules, screen readers, session
 src/MindGoblin/         WPF desktop app
 tests/MindGoblin.Tests/ xunit; Core is UI-free so these run headless
 tools/VoyageProbe/          decode a screenshot and print the plan, headless
-assets/trade-index.json     generated stat/spawn index (see below)
 ```
 
 ## Voyage planner
@@ -107,29 +99,6 @@ thing worth retuning.
 digits 1,2,3,4,6,7,8. A level containing 0, 5 or 9 reads as unknown rather than as a wrong
 number. Teach it from a later capture via `level-digits.json`; no rebuild needed.
 
-## The stat index
-
-`assets/trade-index.json` maps every trade stat id to the item categories it can actually
-spawn on, with affix type, mod group, and any influence requirement.
-
-It is **generated**, not hand-maintained — by `analyze/export_trade_index.py` in the
-sibling `path-of-claude` repo, which parses Path of Building's Lua data and reruns PoB's
-own `GetModSpawnWeight`. That logic lives in exactly one place, in Python, and ships here
-as a flat lookup so this app needs no Lua parser and no copy of the spawn rules.
-
-Regenerate whenever Path of Building is updated:
-
-```bash
-cd ../path-of-claude
-./.venv/bin/python analyze/export_trade_index.py -o ../mindgoblin/assets/trade-index.json
-```
-
-Current: 23 categories, 746 stats, 2280 spawn rows (235 KB).
-
-Note it covers **explicit affixes only**. Implicit, crafted, veiled and eldritch stats are
-absent, so the index is used to *warn* ("cannot spawn here", "needs Shaper influence"),
-never to restrict what you may search for — otherwise the app would be less capable than
-the in-game filter.
 
 ## Gem RoI
 
@@ -240,77 +209,6 @@ quantity and safe profiles to edit.
 Broken JSON keeps the last good profiles and raises an error: a half-saved file mid-edit
 must not blank the tool, but silently ignoring an edit is worse — you would think a weight
 applied when it had not.
-
-## Authentication
-
-**Why not OAuth?** Because there is no trade scope. GGG's OAuth has exactly twelve:
-
-| Account | Service |
-|---|---|
-| `account:profile` | `service:leagues` |
-| `account:leagues` | `service:leagues:ladder` |
-| `account:stashes` | `service:pvp_matches` |
-| `account:characters` | `service:pvp_matches:ladder` |
-| `account:league_accounts` | `service:psapi` |
-| `account:item_filter` | `service:cxapi` |
-
-You cannot request a scope that does not exist. Asked directly about trade, GGG said only
-that *"the internal APIs currently used by the trade website will remain available without
-authentication for now."* Currency exchange got a service scope while trade did not, so the
-omission reads as deliberate.
-
-There is a second wall behind the first: a portable exe is a **public client** (no way to
-hold a secret), and public clients *"cannot use any `service:*` scopes"*. So even a
-hypothetical `service:trade` would be unusable here — it would have to be `account:trade`.
-
-Other PoE apps that use OAuth are doing OAuth-shaped things: stash price checks
-(`account:stashes`), build import (`account:characters`), filter management
-(`account:item_filter`). Every tool that does *live search* uses `POESESSID`.
-
-The one OAuth-shaped alternative is `service:psapi`, the raw public-stash river the trade
-site indexes — consume it and you could detect listings with no session cookie at all. But
-it needs a confidential client (a server you run), it means rebuilding poe.ninja's
-ingestion, and it still cannot travel, because that token is minted by the session-gated
-fetch endpoint.
-
-Measured against the live API:
-
-| Endpoint | Auth | Result |
-|---|---|---|
-| `POST /api/trade/search/{league}` | none | 200 |
-| `GET /api/trade/fetch/{ids}?query=` | none | 200, but **no tokens** in the response |
-| `wss://…/api/trade/live/{league}/{id}` | none | **401** |
-| `POST /api/trade/whisper` | none | **401** |
-
-So live search and travel require `POESESSID` + `POETOKEN` — full-account session
-cookies, unscoped and not per-app revocable. They are stored DPAPI-encrypted at
-`%LOCALAPPDATA%\MindGoblin\credentials.dat` (CurrentUser scope, so the file is
-useless on another machine or to another Windows user), never logged, and deliberately
-kept out of the program directory so a portable exe cannot carry an account around.
-
-Revoke by logging out of pathofexile.com.
-
-## Travel
-
-Travel and whisper are the *same* endpoint — `POST /api/trade/whisper` — distinguished by
-a `tok` claim inside a server-signed JWT (`hideout` vs whisper). The token is HS256-signed
-by GGG, scoped to one search (`iss`) and one item (`sub`), and lives **300 seconds**.
-It cannot be forged, only relayed, which is what keeps this inside the rules.
-
-The 5-minute TTL is a real design constraint: tokens cannot be pre-fetched and held, so a
-hotkey press does an authenticated fetch *then* the travel POST.
-
-## Rate limits
-
-Every response carries the policy, and this client obeys it:
-
-```
-x-rate-limit-ip: 5:10:60, 15:60:300, 30:300:1800, 600:21600:3600
-```
-
-`hits:period:penalty`. The limiter stops one slot below every cap, because the bucket is
-**per-IP** and shared with your own browser on the trade site — sitting at the edge means
-someone else's request triggers your 429.
 
 ## Build
 

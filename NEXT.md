@@ -3,9 +3,9 @@
 ## Focus
 
 **Voyage planner** is the live thread. **Gem RoI** is done and working.
-**Live search is tabled** — the code stays (rate limiter, credentials, trade client,
-websocket, diagnosis) but no further work is planned, and its 401 was never confirmed
-fixed end to end.
+**Live search is deleted** — trade client, websocket, rate limiter, credentials and the
+stat index are gone, as is the trade-index asset. It never worked end to end against a
+real session. The app now holds no credentials of any kind.
 
 ## What the Voyage mechanic actually is
 
@@ -46,8 +46,6 @@ Verified from screenshots and the trade API, not assumed:
 | Screen layout | Fractional coords so it survives a resolution change |
 | Panel calibration | JSON file + overlay probe, editable without a rebuild |
 | Gem RoI | 4 paths, 508 vendor gems, live poe.watch prices |
-| Stat index | 23 categories, 746 stats, advisory not restrictive |
-| Live search (tabled) | Built, untested against a real session |
 
 ## Using the Voyage planner
 
