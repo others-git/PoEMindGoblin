@@ -29,6 +29,9 @@
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\assets\gem-index.json" Link="assets\gem-index.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <!-- Reference capture, so the offscreen render works without the game running. -->
+    <None Include="..\..\tests\PoeMarketWatch.Tests\fixtures\voyage-panel.png"
+          Link="assets\voyage-panel.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

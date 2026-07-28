@@ -65,6 +65,17 @@ public sealed class VoyageProfile
     /// <summary>Weight applied to a chart's area level, for when higher tier is the goal.</summary>
     public double AreaLevelWeight { get; set; }
 
+    /// <summary>
+    /// Charged per square left off the main route.
+    ///
+    /// Edge matching permits a dead corner -- an End pointing at the border, closed
+    /// elsewhere, is legal and connects to nothing. Whatever chart lands there is cut
+    /// off, so it is worth something to avoid, but not at any price: a board where one
+    /// stranded square buys a far better nine charts can still be the right board. Set
+    /// to 0 to stop caring, or high to forbid it in practice.
+    /// </summary>
+    public double StrandedSquarePenalty { get; set; } = 40;
+
     public double ScoreText(IEnumerable<string> lines) =>
         lines.Sum(line => Rules.Sum(r => r.Score(line)));
 

@@ -107,7 +107,9 @@
             </Grid>
         </Border>
 
-        <TabControl Grid.Row="1" Background="#12100E" BorderThickness="0" Padding="0">
+        <!-- Voyage first: it is the tool being used. Live search is tabled. -->
+        <TabControl Grid.Row="1" Background="#12100E" BorderThickness="0" Padding="0"
+                    x:Name="Tabs" SelectedIndex="2">
         <TabItem Header="LIVE SEARCH">
         <Grid>
             <Grid.ColumnDefinitions>

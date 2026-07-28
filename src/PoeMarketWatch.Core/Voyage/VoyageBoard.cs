@@ -195,6 +195,63 @@ public sealed class VoyageBoard
 
     public bool IsValid() => Validate().Count == 0;
 
+    /// <summary>
+    /// Groups of squares joined by paths that actually meet, largest first.
+    ///
+    /// Edge matching alone permits a square that is legal and useless: an End pointing at
+    /// the border, closed on its other three sides, satisfies every rule while touching
+    /// nothing. It is a dead corner -- whatever chart goes there is cut off from the rest
+    /// of the route.
+    ///
+    /// This is reported and weighted rather than forbidden. Connecting the whole board is
+    /// clearly preferable, but a stranded square is not illegal, and there are boards
+    /// where one dead corner buys a far better nine charts. That trade is the user's to
+    /// make, so the penalty is a profile setting and the UI names the stranded squares.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<Cell>> Components()
+    {
+        var seen = new HashSet<Cell>();
+        var groups = new List<IReadOnlyList<Cell>>();
+
+        foreach (var start in Placements.Select(p => p.Cell))
+        {
+            if (!seen.Add(start)) continue;
+
+            var group = new List<Cell> { start };
+            var queue = new Queue<Cell>();
+            queue.Enqueue(start);
+
+            while (queue.Count > 0)
+            {
+                var cell = queue.Dequeue();
+                if (At(cell) is not { } here) continue;
+
+                foreach (var side in Enum.GetValues<Side>())
+                {
+                    if (!here.Face.IsOpen(side)) continue;
+                    var next = Neighbour(cell, side);
+                    // Mutual: a path only joins where both sides open onto each other.
+                    if (At(next) is not { } there || !there.Face.IsOpen(side.Opposite())) continue;
+                    if (!seen.Add(next)) continue;
+                    group.Add(next);
+                    queue.Enqueue(next);
+                }
+            }
+            groups.Add(group);
+        }
+
+        return groups.OrderByDescending(g => g.Count).ToList();
+    }
+
+    /// <summary>Squares outside the largest connected group — the dead corners.</summary>
+    public IReadOnlyList<Cell> StrandedCells()
+    {
+        var components = Components();
+        return components.Count <= 1
+            ? []
+            : components.Skip(1).SelectMany(g => g).ToList();
+    }
+
     /// <summary>Sum of the values of everything placed.</summary>
     public double TotalValue() => Placements.Sum(p => p.Chart.Value);
 

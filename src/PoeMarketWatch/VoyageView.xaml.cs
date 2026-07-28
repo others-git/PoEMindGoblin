@@ -33,8 +33,8 @@ namespace PoeMarketWatch;
 public partial class VoyageView : UserControl
 {
     private readonly VoyageRules _rules = new();
-    private readonly ObservableCollection<FigurineRow> _figurines = new();
-    private readonly ObservableCollection<string> _plan = new();
+    private readonly ObservableCollection<ModifierRow> _modifiers = new();
+    private readonly ObservableCollection<PlanRow> _plan = new();
     private readonly DispatcherTimer _clipboardPoll =
         new() { Interval = TimeSpan.FromMilliseconds(250) };
 
@@ -50,11 +50,14 @@ public partial class VoyageView : UserControl
     private int _targetIndex;
     private string _lastClipboard = "";
 
+    /// <summary>Items deliberately passed over, so the checklist cannot stall on one of them.</summary>
+    private readonly HashSet<(Target, int)> _skipped = new();
+
     public VoyageView()
     {
         InitializeComponent();
 
-        FigurineList.ItemsSource = _figurines;
+        ModifierList.ItemsSource = _modifiers;
         PlanList.ItemsSource = _plan;
 
         _rules.WriteDefaultsIfMissing();
@@ -67,7 +70,7 @@ public partial class VoyageView : UserControl
 
         BuildBoard();
         BuildPanel();
-        RebuildFigurines();
+        RebuildModifiers();
         RefreshProgress();
 
         // Popping out and docking REPARENT this control, which raises Unloaded/Loaded.
@@ -87,7 +90,6 @@ public partial class VoyageView : UserControl
     {
         var previous = (ProfileBox.SelectedItem as VoyageProfile)?.Name;
         ProfileBox.ItemsSource = _rules.Profiles;
-        ProfileBox.DisplayMemberPath = nameof(VoyageProfile.Name);
         ProfileBox.SelectedItem = _rules.Profiles.FirstOrDefault(p => p.Name == previous)
                                   ?? _rules.Profiles.FirstOrDefault();
 
@@ -188,7 +190,7 @@ public partial class VoyageView : UserControl
             SetStatus("Read mode off.");
         }
         RefreshPanel();
-        RebuildFigurines();
+        RebuildModifiers();
     }
 
     /// <summary>
@@ -201,27 +203,76 @@ public partial class VoyageView : UserControl
         var text = SafeClipboardText();
         if (text.Length == 0 || text == _lastClipboard) return;
         _lastClipboard = text;
+        Capture(text, "copied");
+    }
+
+    /// <summary>
+    /// Apply captured text to whatever is currently targeted.
+    ///
+    /// Shared by the clipboard watcher and the manual box on purpose: the game only
+    /// supports Ctrl+C on things it treats as items, so a figurine may not be copyable at
+    /// all. Both routes must land in exactly the same place, or the checklist would track
+    /// one of them and not the other.
+    /// </summary>
+    private void Capture(string text, string how)
+    {
+        if (_targetIndex == 0)
+        {
+            SetStatus("Nothing selected — click a chart or a figurine first.", bad: true);
+            return;
+        }
 
         if (_target == Target.Figurine)
         {
             _session.ApplyFigurineText(_targetIndex, text);
-            SetStatus($"Figurine {_targetIndex} captured.");
+            SetStatus($"Figurine {_targetIndex} {how}.");
         }
         else if (_session.ApplyChartText(_targetIndex, text))
         {
-            SetStatus($"Chart {_targetIndex} captured.");
+            SetStatus($"Chart {_targetIndex} {how}.");
         }
         else
         {
-            SetStatus($"That copy did not look like chart {_targetIndex}.", bad: true);
+            SetStatus($"That text did not look like chart {_targetIndex}.", bad: true);
             return;
         }
 
         _solution = null;
+        DetailBox.Clear();
         AdvanceTarget();
+        RefreshBoard();
         RefreshPanel();
-        RebuildFigurines();
+        RebuildModifiers();
         RefreshProgress();
+    }
+
+    private void OnApplyDetail(object sender, RoutedEventArgs e)
+    {
+        var text = DetailBox.Text.Trim();
+        if (text.Length == 0) { SetStatus("Nothing to apply.", bad: true); return; }
+        Capture(text, "entered");
+    }
+
+    private void OnDetailKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        // Ctrl+Enter rather than Enter: the box is multi-line, and tooltip text is too.
+        if (e.Key != System.Windows.Input.Key.Enter) return;
+        if ((System.Windows.Input.Keyboard.Modifiers
+             & System.Windows.Input.ModifierKeys.Control) == 0) return;
+        e.Handled = true;
+        OnApplyDetail(sender, e);
+    }
+
+    /// <summary>Leave this one unread and move on, so one stubborn tooltip cannot stall the pass.</summary>
+    private void OnSkipTarget(object sender, RoutedEventArgs e)
+    {
+        if (_targetIndex == 0) return;
+        _skipped.Add((_target, _targetIndex));
+        DetailBox.Clear();
+        AdvanceTarget();
+        RefreshBoard();
+        RefreshPanel();
+        RebuildModifiers();
     }
 
     private static string SafeClipboardText()
@@ -231,36 +282,61 @@ public partial class VoyageView : UserControl
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException) { return ""; }
     }
 
-    /// <summary>Move to the next thing needing hover: charts first, then figurines.</summary>
+    /// <summary>Move to the next thing needing detail: charts first, then figurines.</summary>
     private void AdvanceTarget()
     {
-        if (_session.ChartsAwaitingDetail.FirstOrDefault() is > 0 and var chart)
+        var chart = _session.ChartsAwaitingDetail
+            .FirstOrDefault(i => !_skipped.Contains((Target.Chart, i)));
+        if (chart > 0)
         {
-            _target = Target.Chart;
-            _targetIndex = chart;
-            SetStatus($"Hover chart {chart} in game and press Ctrl+C.");
+            SetTarget(Target.Chart, chart,
+                      $"Hover chart {chart} in game, Ctrl+C — or paste its text below.");
             return;
         }
 
-        if (_session.FigurinesAwaitingDetail.FirstOrDefault() is { } figurine)
+        var figurine = _session.FigurinesAwaitingDetail
+            .FirstOrDefault(f => !_skipped.Contains((Target.Figurine, f.Index)));
+        if (figurine is not null)
         {
-            _target = Target.Figurine;
-            _targetIndex = figurine.Index;
-            SetStatus($"Hover the {figurine.Edge} figurine {figurine.Index} and press Ctrl+C.");
+            SetTarget(Target.Figurine, figurine.Index,
+                      $"Hover the {figurine.Edge} figurine {figurine.Index} — "
+                      + "if it will not copy, type its text below.");
             return;
         }
 
-        _target = Target.Chart;
-        _targetIndex = 0;
-        SetStatus("Everything read. Pick a profile and solve.");
+        SetTarget(Target.Chart, 0, _skipped.Count == 0
+            ? "Everything read. Pick a profile and solve."
+            : $"Done, {_skipped.Count} skipped. Click one to come back to it.");
     }
 
-    private void OnFigurineSelected(object sender, SelectionChangedEventArgs e)
+    private void SetTarget(Target target, int index, string? status = null)
     {
-        if (FigurineList.SelectedItem is not FigurineRow row) return;
-        _target = Target.Figurine;
-        _targetIndex = row.Index;
-        SetStatus($"Next copy goes to figurine {row.Index} ({row.Edge}).");
+        _target = target;
+        _targetIndex = index;
+        _skipped.Remove((target, index));
+
+        TargetLabel.Text = index == 0
+            ? "Nothing selected"
+            : target == Target.Chart ? $"chart {index}" : $"figurine {index}";
+
+        if (index != 0)
+        {
+            // Show what is already captured so entry doubles as editing.
+            DetailBox.Text = target == Target.Figurine
+                ? _session.Figurines.GetValueOrDefault(index, "")
+                : "";
+        }
+        if (status is not null) SetStatus(status);
+    }
+
+    private void OnModifierSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (ModifierList.SelectedItem is not ModifierRow row) return;
+        SetTarget(row.Kind == ModifierRow.Sort.Figurine ? Target.Figurine : Target.Chart,
+                  row.Index,
+                  $"{row.Title} selected — copy or type its text below.");
+        RefreshBoard();
+        RefreshPanel();
     }
 
     // ---- solving -----------------------------------------------------------------
@@ -273,10 +349,14 @@ public partial class VoyageView : UserControl
         _solution = _session.Solve(profile, TimeSpan.FromSeconds(3));
         _steps = _session.Plan(_solution);
 
+        var stranded = _solution.StrandedCells.ToHashSet();
         _plan.Clear();
         foreach (var step in _steps)
-            _plan.Add($"square {step.Square}  <-  chart {step.ChartNumber,-3} "
-                      + $"{step.Chart.Shape,-8} {step.RotationText}");
+        {
+            var cell = new Cell((step.Square - 1) / _session.Layout.Cols,
+                                (step.Square - 1) % _session.Layout.Cols);
+            _plan.Add(new PlanRow(step, stranded.Contains(cell)));
+        }
 
         RefreshBoard();
         RefreshPanel();
@@ -290,10 +370,21 @@ public partial class VoyageView : UserControl
 
         // Say which it got. An anytime result is usually excellent but not proven, and
         // presenting "good" as "best" would be a lie the user cannot check.
-        SolveInfo.Text = $"value {_solution.Value:0.##} · "
-                       + (_solution.ProvedOptimal ? "proved optimal" : "best found in budget")
-                       + $" · {_solution.NodesExplored:N0} nodes in {_solution.Elapsed.TotalMilliseconds:0} ms";
-        SetStatus($"Placed {_solution.Placements.Count} charts under \"{profile.Name}\".");
+        var note = _solution.StrandedCells.Count == 0
+            ? "every square joined to the route"
+            : "square " + string.Join(", ", _solution.StrandedCells
+                  .Select(c => VoyagePlan.SquareNumber(c, _session.Layout.Cols)).Order())
+              + " cut off from the route";
+
+        SolveInfo.Text = $"Score {_solution.Value:0.##} · "
+                       + (_solution.ProvedOptimal ? "proved best" : "best found in 3s")
+                       + $" · {note}\n{_solution.NodesExplored:N0} "
+                       + (_solution.NodesExplored == 1 ? "layout" : "layouts")
+                       + $" checked in {_solution.Elapsed.TotalMilliseconds:0} ms";
+        SolveInfo.Foreground = new SolidColorBrush(_solution.StrandedCells.Count == 0
+            ? Color.FromRgb(0x6B, 0x5F, 0x4E)
+            : Color.FromRgb(0xB8, 0x50, 0x3E));
+        SetStatus($"Placed {_solution.Placements.Count} charts for \"{profile.Name}\".");
     }
 
     private void OnReset(object sender, RoutedEventArgs e)
@@ -303,10 +394,11 @@ public partial class VoyageView : UserControl
         _steps = [];
         _plan.Clear();
         SolveInfo.Text = "";
-        _targetIndex = 0;
+        _skipped.Clear();
+        SetTarget(Target.Chart, 0);
         RefreshPanel();
         RefreshBoard();
-        RebuildFigurines();
+        RebuildModifiers();
         RefreshProgress();
         SetStatus("Cleared.");
     }
@@ -343,21 +435,91 @@ public partial class VoyageView : UserControl
         _popped.Show();
     }
 
+    /// <summary>
+    /// Fill the view from the reference capture, for looking at the layout.
+    ///
+    /// Real pixels, real session, real solver -- the only thing invented is the hover
+    /// text, which cannot come from a screenshot. Useful for design work without opening
+    /// the game, and as a smoke test that the whole chain still produces a plan.
+    /// </summary>
+    public void LoadSample(string? screenshot = null)
+    {
+        screenshot ??= System.IO.Path.Combine(AppContext.BaseDirectory, "assets", "voyage-panel.png");
+        if (System.IO.File.Exists(screenshot))
+        {
+            using var bmp = new System.Drawing.Bitmap(screenshot);
+            using var pixels = new BitmapPixels(bmp);
+            _session.ApplyPanelRead(new ChartPanelReader().Read(pixels));
+        }
+
+        var samples = new[]
+        {
+            "Tempest Reach\nSeafloor Ridges\nItem Quantity: +42%\nDead Man's Sulphur: +14\n"
+                + "Voyage Modifier: 8% increased Quantity of Items found in all Voyage Areas",
+            "Drowned Shelf\nKelp Hollows\nMonster Pack Size: +26%\n"
+                + "Adjacent Modifier: Adjacent Areas contain 4 additional Strongboxes",
+            "Salt Barrens\nBleached Flats\nItem Rarity: +31%\nGold Found: +80%",
+        };
+        var i = 0;
+        foreach (var index in _session.ByPanelIndex.Keys.Order().Take(samples.Length))
+            _session.ApplyChartText(index, samples[i++]);
+
+        foreach (var slot in _session.Layout.Figurines.Take(5))
+            _session.ApplyFigurineText(slot.Index,
+                $"Adjacent Areas contain {4 + slot.Index} additional packs of Sea Beasts");
+
+        RefreshPanel();
+        RebuildModifiers();
+        RefreshProgress();
+        OnSolve(this, new RoutedEventArgs());
+    }
+
     // ---- rendering ---------------------------------------------------------------
 
     private Border[,] _boardCells = new Border[0, 0];
     private Border[] _panelCells = [];
+    private readonly Dictionary<int, Border> _figurineMarkers = new();
 
+    private const double SquareSize = 108;
+    private const double MarkerSize = 42;
+    private const double MarkerScale = 1.15;
+
+    /// <summary>
+    /// Board plus the ring of figurines around it.
+    ///
+    /// The figurines belong ON the board, not in a list beside it. Each one buffs the ONE
+    /// square it touches, so which square that is *is* the information -- reading "figurine
+    /// 5: adjacent areas contain 8 packs" off a list tells you nothing about where to put
+    /// the chart that wants it. Drawn in the perimeter ring, they answer that at a glance.
+    ///
+    /// Built in code rather than XAML because the count follows from the board size, the
+    /// same reason BoardLayout derives it instead of hardcoding twelve.
+    /// </summary>
     private void BuildBoard()
     {
-        _boardCells = new Border[_session.Layout.Rows, _session.Layout.Cols];
-        BoardGrid.Rows = _session.Layout.Rows;
-        BoardGrid.Columns = _session.Layout.Cols;
-        BoardGrid.Children.Clear();
+        var rows = _session.Layout.Rows;
+        var cols = _session.Layout.Cols;
 
-        for (var r = 0; r < _session.Layout.Rows; r++)
+        _boardCells = new Border[rows, cols];
+        _figurineMarkers.Clear();
+        BoardHost.Children.Clear();
+        BoardHost.RowDefinitions.Clear();
+        BoardHost.ColumnDefinitions.Clear();
+
+        // One ring cell on each side, hence rows + 2.
+        BoardHost.RowDefinitions.Add(new RowDefinition { Height = new GridLength(MarkerSize) });
+        for (var r = 0; r < rows; r++)
+            BoardHost.RowDefinitions.Add(new RowDefinition { Height = new GridLength(SquareSize) });
+        BoardHost.RowDefinitions.Add(new RowDefinition { Height = new GridLength(MarkerSize) });
+
+        BoardHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(MarkerSize) });
+        for (var c = 0; c < cols; c++)
+            BoardHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(SquareSize) });
+        BoardHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(MarkerSize) });
+
+        for (var r = 0; r < rows; r++)
         {
-            for (var c = 0; c < _session.Layout.Cols; c++)
+            for (var c = 0; c < cols; c++)
             {
                 var cell = new Border
                 {
@@ -366,17 +528,85 @@ public partial class VoyageView : UserControl
                     Background = new SolidColorBrush(Color.FromRgb(0x18, 0x15, 0x12)),
                     Margin = new Thickness(1),
                 };
+                Grid.SetRow(cell, r + 1);
+                Grid.SetColumn(cell, c + 1);
                 _boardCells[r, c] = cell;
-                BoardGrid.Children.Add(cell);
+                BoardHost.Children.Add(cell);
             }
         }
+
+        foreach (var slot in _session.Layout.Figurines)
+        {
+            if (RingPosition(slot, rows, cols) is not var (gridRow, gridCol)) continue;
+
+            var marker = new Border
+            {
+                Background = Brushes.Transparent,   // still hit-testable, no chrome drawn
+                Cursor = System.Windows.Input.Cursors.Hand,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Tag = slot.Index,
+            };
+            // Clicking a figurine aims the next Ctrl+C at it, so the board doubles as the
+            // read-mode control -- the list is for reading the text back, not for driving.
+            marker.MouseLeftButtonUp += OnFigurineMarkerClicked;
+            Grid.SetRow(marker, gridRow);
+            Grid.SetColumn(marker, gridCol);
+            _figurineMarkers[slot.Index] = marker;
+            BoardHost.Children.Add(marker);
+        }
+
         RefreshBoard();
+    }
+
+    /// <summary>
+    /// Where a figurine sits in the perimeter ring: outside the square it touches, on the
+    /// edge it belongs to. Returns null when the slot names no cell to sit beside.
+    /// </summary>
+    private static (int Row, int Col)? RingPosition(
+        BoardLayout.FigurineSlot slot, int rows, int cols)
+    {
+        if (slot.Adjacent.FirstOrDefault() is not { } near) return null;
+        return slot.Edge switch
+        {
+            "top" => (0, near.Col + 1),
+            "bottom" => (rows + 1, near.Col + 1),
+            "left" => (near.Row + 1, 0),
+            "right" => (near.Row + 1, cols + 1),
+            _ => null,
+        };
+    }
+
+    private void OnPanelCellClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not Border { Tag: int index }) return;
+        if (!_session.ByPanelIndex.ContainsKey(index))
+        {
+            SetStatus($"Panel cell {index} is empty.", bad: true);
+            return;
+        }
+        SetTarget(Target.Chart, index,
+                  $"Chart {index} selected — copy or paste its text below.");
+        RefreshBoard();
+        RefreshPanel();
+    }
+
+    private void OnFigurineMarkerClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not Border { Tag: int index }) return;
+        SetTarget(Target.Figurine, index, $"Figurine {index} selected — copy or type its text below.");
+        RefreshBoard();
+        RefreshPanel();
+        RebuildModifiers();
     }
 
     private void RefreshBoard()
     {
         if (_boardCells.Length == 0) return;
         var cols = _session.Layout.Cols;
+        RefreshFigurineMarkers();
+
+        var stranded = _solution?.StrandedCells.ToHashSet() ?? [];
 
         for (var r = 0; r < _boardCells.GetLength(0); r++)
         {
@@ -384,12 +614,129 @@ public partial class VoyageView : UserControl
             {
                 var square = r * cols + c + 1;
                 var step = _steps.FirstOrDefault(s => s.Square == square);
-                _boardCells[r, c].Child = BoardSquareContent(square, step);
+                var isStranded = stranded.Contains(new Cell(r, c));
+                var cell = _boardCells[r, c];
+
+                cell.Background = new SolidColorBrush(step is null
+                    ? Color.FromRgb(0x0E, 0x0C, 0x0A)
+                    : isStranded ? Color.FromRgb(0x22, 0x13, 0x10)
+                    : Color.FromRgb(0x18, 0x14, 0x10));
+                cell.BorderBrush = new SolidColorBrush(isStranded
+                    ? Color.FromRgb(0x6E, 0x2F, 0x25)
+                    : step is null ? Color.FromRgb(0x1F, 0x1A, 0x15)
+                    : Color.FromRgb(0x3A, 0x2E, 0x1C));
+                cell.Child = BoardSquareContent(square, step, isStranded);
+                cell.ToolTip = step is null
+                    ? null
+                    : Tip($"Square {square} · chart {step.ChartNumber}",
+                          $"{step.Chart.Shape}, {step.RotationText}"
+                          + (isStranded ? " · cut off from the route" : ""),
+                          DescribeChart(step.Chart),
+                          HasCapturedDetail(step.Chart));
             }
         }
     }
 
-    private static UIElement BoardSquareContent(int square, VoyagePlan.Step? step)
+    /// <summary>
+    /// The modifier lines captured for a chart, or a prompt when there are none.
+    ///
+    /// Shown on hover everywhere a chart appears, which doubles as the check that the
+    /// text was parsed into the fields the rules actually score -- if a modifier is
+    /// missing here, it is missing from the objective too.
+    /// </summary>
+    private static IReadOnlyList<string> DescribeChart(Chart chart)
+    {
+        var lines = new List<string>();
+        if (!string.IsNullOrEmpty(chart.AreaName)) lines.Add(chart.AreaName);
+        if (chart.AreaLevel > 0) lines.Add($"Area level {chart.AreaLevel}");
+        lines.AddRange(chart.StatLines());
+        if (!string.IsNullOrEmpty(chart.VoyageModifier))
+            lines.Add("Voyage: " + chart.VoyageModifier);
+        if (!string.IsNullOrEmpty(chart.AdjacentModifier))
+            lines.Add("Adjacent: " + chart.AdjacentModifier);
+        lines.AddRange(chart.Modifiers);
+
+        return lines.Count > 0 ? lines : ["No modifiers captured. Select it and copy its text."];
+    }
+
+    private static bool HasCapturedDetail(Chart chart) =>
+        !string.IsNullOrEmpty(chart.VoyageModifier) || !string.IsNullOrEmpty(chart.AdjacentModifier)
+        || chart.Modifiers.Count > 0 || chart.StatLines().Any();
+
+    /// <summary>
+    /// Redraw each ring ornament in the state it is now in.
+    ///
+    /// A figurine only ever buffs the ONE square it sits beside, so what matters is where
+    /// an unread one is, not how many are left. On the board that is answerable at a
+    /// glance; in a list it is not.
+    /// </summary>
+    private void RefreshFigurineMarkers()
+    {
+        foreach (var slot in _session.Layout.Figurines)
+        {
+            if (!_figurineMarkers.TryGetValue(slot.Index, out var host)) continue;
+
+            var text = _session.Figurines.GetValueOrDefault(slot.Index);
+            var captured = !string.IsNullOrWhiteSpace(text);
+            var state =
+                _target == Target.Figurine && _targetIndex == slot.Index ? VoyageOrnament.State.Selected
+                : captured ? VoyageOrnament.State.Captured
+                : _skipped.Contains((Target.Figurine, slot.Index)) ? VoyageOrnament.State.Skipped
+                : VoyageOrnament.State.Unread;
+
+            host.Child = VoyageOrnament.Build(slot.Index, slot.Edge, state, MarkerScale);
+
+            var squares = string.Join(", ", slot.Adjacent.Select(
+                a => VoyagePlan.SquareNumber(a.ToCell(), _session.Layout.Cols)));
+            host.ToolTip = Tip($"Figurine {slot.Index} · {slot.Edge}",
+                               $"Buffs square {squares}",
+                               captured ? [text!] : ["Not read yet. Click to select it."],
+                               captured);
+        }
+    }
+
+    /// <summary>A tooltip built the same way everywhere: title, subtitle, then lines.</summary>
+    private static UIElement Tip(string title, string? subtitle,
+                                 IEnumerable<string> lines, bool haveDetail)
+    {
+        var stack = new StackPanel { MaxWidth = 360 };
+        stack.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontFamily = new FontFamily("Georgia"),
+            FontSize = 13,
+            Foreground = Brush(0xC9, 0xA2, 0x27),
+        });
+        if (!string.IsNullOrEmpty(subtitle))
+            stack.Children.Add(new TextBlock
+            {
+                Text = subtitle,
+                FontSize = 11,
+                Foreground = Brush(0x6B, 0x5F, 0x4E),
+                Margin = new Thickness(0, 1, 0, 0),
+            });
+
+        var first = true;
+        foreach (var line in lines)
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = line,
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = haveDetail ? Brush(0xE6, 0xDB, 0xC2) : Brush(0x94, 0x86, 0x6F),
+                FontStyle = haveDetail ? FontStyles.Normal : FontStyles.Italic,
+                Margin = new Thickness(0, first ? 8 : 3, 0, 0),
+            });
+            first = false;
+        }
+        return stack;
+    }
+
+    private static SolidColorBrush Brush(byte r, byte g, byte b) =>
+        new(Color.FromRgb(r, g, b));
+
+    private UIElement BoardSquareContent(int square, VoyagePlan.Step? step, bool stranded)
     {
         var stack = new StackPanel
         {
@@ -400,30 +747,46 @@ public partial class VoyageView : UserControl
         stack.Children.Add(new TextBlock
         {
             Text = square.ToString(),
-            FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x7E, 0x6C)),
+            FontFamily = new FontFamily("Georgia"),
+            FontSize = 12,
+            Foreground = Brush(0x6B, 0x5F, 0x4E),
             HorizontalAlignment = HorizontalAlignment.Center,
         });
 
-        if (step is null) return stack;
+        if (step is null)
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = "empty",
+                FontSize = 11,
+                Foreground = Brush(0x3A, 0x30, 0x24),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 26, 0, 0),
+            });
+            return stack;
+        }
 
-        stack.Children.Add(Glyph(new ChartFace(step.Chart.Shape, step.Rotation), 56,
-                                 Color.FromRgb(0xC8, 0xA9, 0x6A)));
+        var accent = stranded
+            ? Color.FromRgb(0xB8, 0x50, 0x3E)
+            : Color.FromRgb(0xC9, 0xA2, 0x27);
+
+        stack.Children.Add(Glyph(new ChartFace(step.Chart.Shape, step.Rotation), 52, accent));
         stack.Children.Add(new TextBlock
         {
-            // The whole point of the plan: read the number, find that square in the panel.
-            Text = $"chart {step.ChartNumber}",
-            FontSize = 14,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xC8, 0xA9, 0x6A)),
+            // The whole deliverable: read the number, find that square in the panel.
+            Text = step.ChartNumber.ToString(),
+            FontFamily = new FontFamily("Georgia"),
+            FontSize = 22,
+            Foreground = new SolidColorBrush(accent),
             HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 3, 0, 0),
+            Margin = new Thickness(0, 2, 0, 0),
         });
         stack.Children.Add(new TextBlock
         {
-            Text = step.RotationText,
+            Text = stranded ? "stranded · " + step.RotationText : step.RotationText,
+            FontFamily = new FontFamily("Consolas"),
             FontSize = 10,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x7E, 0x6C)),
+            Foreground = stranded ? Brush(0xB8, 0x50, 0x3E) : Brush(0x94, 0x86, 0x6F),
             HorizontalAlignment = HorizontalAlignment.Center,
         });
         return stack;
@@ -446,7 +809,12 @@ public partial class VoyageView : UserControl
                 Width = 52,
                 Height = 52,
                 Margin = new Thickness(1),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Tag = i + 1,
             };
+            // Clickable so the pass is not strictly sequential: one chart that will not
+            // copy should not force the other 59 to wait behind it.
+            cell.MouseLeftButtonUp += OnPanelCellClicked;
             _panelCells[i] = cell;
             PanelGrid.Children.Add(cell);
         }
@@ -465,72 +833,65 @@ public partial class VoyageView : UserControl
 
             if (chart is null)
             {
-                cell.Background = new SolidColorBrush(Color.FromRgb(0x14, 0x12, 0x10));
-                cell.BorderBrush = new SolidColorBrush(Color.FromRgb(0x24, 0x20, 0x1C));
+                cell.Background = new SolidColorBrush(Color.FromRgb(0x0C, 0x0A, 0x09));
+                cell.BorderBrush = new SolidColorBrush(Color.FromRgb(0x16, 0x13, 0x11));
+                cell.BorderThickness = new Thickness(1);
                 cell.Child = null;
+                cell.ToolTip = null;
                 continue;
             }
 
             var isPlanned = used.ContainsKey(index);
-            var isTarget = ReadModeBtn.IsChecked == true
-                           && _target == Target.Chart && _targetIndex == index;
-            var hasDetail = !_session.ChartsAwaitingDetail.Contains(index);
+            // Not gated on read mode: manual entry works without it, and the highlight is
+            // what tells you which chart the box below applies to.
+            var isTarget = _target == Target.Chart && _targetIndex == index;
+            var hasDetail = HasCapturedDetail(chart);
 
             cell.Background = new SolidColorBrush(isPlanned
-                ? Color.FromRgb(0x2A, 0x26, 0x18)
-                : Color.FromRgb(0x1C, 0x19, 0x17));
+                ? Color.FromRgb(0x2A, 0x21, 0x0E)
+                : Color.FromRgb(0x16, 0x13, 0x11));
             cell.BorderBrush = new SolidColorBrush(isTarget
-                ? Color.FromRgb(0xC8, 0xA9, 0x6A)
-                : isPlanned ? Color.FromRgb(0x7F, 0xA6, 0x5B) : Color.FromRgb(0x2A, 0x24, 0x1E));
+                ? Color.FromRgb(0xC9, 0xA2, 0x27)
+                : isPlanned ? Color.FromRgb(0x8A, 0x6F, 0x22)
+                : hasDetail ? Color.FromRgb(0x44, 0x5C, 0x38)
+                : Color.FromRgb(0x24, 0x1D, 0x16));
             cell.BorderThickness = new Thickness(isTarget ? 2 : 1);
 
-            var stack = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
-            var header = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Center,
-            };
-            header.Children.Add(new TextBlock
-            {
-                Text = index.ToString(),
-                FontSize = 10,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x7E, 0x6C)),
-            });
-            header.Children.Add(new TextBlock
-            {
-                // A tick per chart is the checklist: read mode is only bearable if what
-                // is left is visible at a glance.
-                Text = hasDetail ? " ✓" : "",
-                FontSize = 10,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x7F, 0xA6, 0x5B)),
-            });
-            stack.Children.Add(header);
-            stack.Children.Add(Glyph(FaceOf(chart), 26,
-                isPlanned ? Color.FromRgb(0xC8, 0xA9, 0x6A) : Color.FromRgb(0x8A, 0x7E, 0x6C)));
+            var stack = new StackPanel { Margin = new Thickness(0, 3, 0, 0) };
             stack.Children.Add(new TextBlock
             {
-                Text = chart.AreaLevel > 0 ? $"L{chart.AreaLevel}" : "L?",
+                Text = index.ToString(),
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 10,
+                Foreground = new SolidColorBrush(isPlanned
+                    ? Color.FromRgb(0xC9, 0xA2, 0x27)
+                    : Color.FromRgb(0x6B, 0x5F, 0x4E)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
+            stack.Children.Add(Glyph(new ChartFace(chart.Shape, 0), 24,
+                isPlanned ? Color.FromRgb(0xC9, 0xA2, 0x27)
+                : hasDetail ? Color.FromRgb(0x86, 0xA8, 0x6A)
+                : Color.FromRgb(0x7A, 0x6E, 0x5C)));
+            stack.Children.Add(new TextBlock
+            {
+                Text = chart.AreaLevel > 0 ? chart.AreaLevel.ToString() : "··",
+                FontFamily = new FontFamily("Consolas"),
                 FontSize = 9,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x6A, 0x60, 0x52)),
+                Foreground = new SolidColorBrush(Color.FromRgb(0x7A, 0x6E, 0x5C)),
                 HorizontalAlignment = HorizontalAlignment.Center,
             });
 
             cell.Child = stack;
-            cell.ToolTip = Tooltip(index, chart, used.GetValueOrDefault(index));
+            cell.ToolTip = Tip(
+                string.IsNullOrWhiteSpace(chart.Name) ? $"Chart {index}" : $"Chart {index} · {chart.Name}",
+                isPlanned ? $"Goes in square {used[index]}" : "Not in the plan",
+                DescribeChart(chart), hasDetail);
         }
 
         PanelHeader.Text = _session.Charts.Count == 0
-            ? "CHARTS"
-            : $"CHARTS — {_session.Charts.Count} read, {_session.ChartsAwaitingDetail.Count} need hover";
-    }
-
-    private static string Tooltip(int index, Chart chart, int square)
-    {
-        var lines = new List<string> { $"chart {index}: {chart.Name}" };
-        if (!string.IsNullOrEmpty(chart.AreaName)) lines.Add(chart.AreaName);
-        if (square > 0) lines.Add($"→ square {square}");
-        lines.AddRange(ChartText.ScorableLines(chart));
-        return string.Join("\n", lines);
+            ? "C H A R T S"
+            : $"C H A R T S      {_session.Charts.Count} read · "
+              + $"{_session.ChartsAwaitingDetail.Count} without modifiers";
     }
 
     /// <summary>
@@ -539,30 +900,68 @@ public partial class VoyageView : UserControl
     /// </summary>
     private static ChartFace FaceOf(Chart chart) => new(chart.Shape, 0);
 
-    private void RebuildFigurines()
+    /// <summary>
+    /// Everything captured, in one list: the twelve figurines and every chart that has
+    /// modifier text.
+    ///
+    /// One list rather than two because they answer the same question -- "what is actually
+    /// affecting this board?" -- and splitting them by where the text came from would be
+    /// organising the interface around the app's plumbing instead of the user's question.
+    /// </summary>
+    private void RebuildModifiers()
     {
-        _figurines.Clear();
+        var previous = (ModifierList.SelectedItem as ModifierRow)?.Key;
+        _modifiers.Clear();
+
         foreach (var slot in _session.Layout.Figurines)
         {
             var text = _session.Figurines.GetValueOrDefault(slot.Index);
-            _figurines.Add(new FigurineRow(slot.Index, slot.Edge, text));
+            var squares = string.Join(",", slot.Adjacent.Select(
+                a => VoyagePlan.SquareNumber(a.ToCell(), _session.Layout.Cols)));
+            _modifiers.Add(new ModifierRow(
+                ModifierRow.Sort.Figurine, slot.Index,
+                $"Figurine {slot.Index}", $"sq {squares}",
+                string.IsNullOrWhiteSpace(text) ? "Not read" : text!,
+                captured: !string.IsNullOrWhiteSpace(text),
+                selected: _target == Target.Figurine && _targetIndex == slot.Index));
         }
 
-        var left = _session.FigurinesAwaitingDetail.Count;
-        FigurineHeader.Text = left == 0
-            ? $"FIGURINES — all {_figurines.Count} read"
-            : $"FIGURINES — {left} of {_figurines.Count} need hover";
+        var placed = _steps.ToDictionary(st => st.ChartNumber, st => st.Square);
+        foreach (var (index, chart) in _session.ByPanelIndex.OrderBy(kv => kv.Key))
+        {
+            if (!HasCapturedDetail(chart)) continue;
+            var where = placed.TryGetValue(index, out var square) ? $"sq {square}" : "unplaced";
+            _modifiers.Add(new ModifierRow(
+                ModifierRow.Sort.Chart, index,
+                string.IsNullOrWhiteSpace(chart.Name) ? $"Chart {index}" : $"Chart {index} · {chart.Name}",
+                where,
+                string.Join("\n", DescribeChart(chart)),
+                captured: true,
+                selected: _target == Target.Chart && _targetIndex == index));
+        }
+
+        var unread = _session.FigurinesAwaitingDetail.Count;
+        ModifierHeader.Text = unread == 0
+            ? "M O D I F I E R S"
+            : $"M O D I F I E R S      {unread} figurines unread";
+
+        if (previous is not null)
+            ModifierList.SelectedItem = _modifiers.FirstOrDefault(m => m.Key == previous);
     }
 
-    private void RefreshProgress() =>
-        Progress.Text = $"{_session.ReadProgress:P0} read";
+    private void RefreshProgress()
+    {
+        var fraction = _session.ReadProgress;
+        Progress.Text = $"{fraction:P0}";
+        ProgressFill.Width = 90 * Math.Clamp(fraction, 0, 1);
+    }
 
     private void SetStatus(string text, bool bad = false)
     {
         Status.Text = text;
         Status.Foreground = new SolidColorBrush(bad
-            ? Color.FromRgb(0xC4, 0x57, 0x4B)
-            : Color.FromRgb(0x8A, 0x7E, 0x6C));
+            ? Color.FromRgb(0xB8, 0x50, 0x3E)
+            : Color.FromRgb(0x94, 0x86, 0x6F));
     }
 
     /// <summary>
@@ -611,29 +1010,76 @@ public partial class VoyageView : UserControl
         return canvas;
     }
 
-    /// <summary>One figurine row in the checklist.</summary>
-    public sealed class FigurineRow : INotifyPropertyChanged
+    /// <summary>
+    /// One row in the modifier list: a figurine or a chart, and the text captured for it.
+    /// </summary>
+    public sealed class ModifierRow
     {
-        public FigurineRow(int index, string edge, string? text)
+        public enum Sort { Figurine, Chart }
+
+        public ModifierRow(Sort kind, int index, string title, string where,
+                           string text, bool captured, bool selected)
         {
+            Kind = kind;
             Index = index;
-            Edge = edge;
-            Text = text ?? "not read";
-            HasText = !string.IsNullOrWhiteSpace(text);
+            Title = title;
+            Where = where;
+            Text = text;
+            Captured = captured;
+            Selected = selected;
         }
 
+        public Sort Kind { get; }
         public int Index { get; }
-        public string Edge { get; }
-        public string Title => $"{Index}. {Edge}";
-        public string Text { get; }
-        public bool HasText { get; }
-        public string Tick => HasText ? "✓" : "•";
-        public Brush TickBrush => new SolidColorBrush(HasText
-            ? Color.FromRgb(0x7F, 0xA6, 0x5B)
-            : Color.FromRgb(0x6A, 0x60, 0x52));
+        public string Title { get; }
 
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void Raise([CallerMemberName] string? name = null) =>
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        /// <summary>Which board square this affects — the reason position matters.</summary>
+        public string Where { get; }
+
+        public string Text { get; }
+        public bool Captured { get; }
+        public bool Selected { get; }
+
+        /// <summary>Stable identity, so a rebuild can restore the selection.</summary>
+        public string Key => $"{Kind}:{Index}";
+
+        public Brush Accent => new SolidColorBrush(
+            Selected ? Color.FromRgb(0xC9, 0xA2, 0x27)
+            : Captured ? Color.FromRgb(0x86, 0xA8, 0x6A)
+            : Color.FromRgb(0x2A, 0x20, 0x18));
+
+        public Brush TextBrush => new SolidColorBrush(Captured
+            ? Color.FromRgb(0xE6, 0xDB, 0xC2)
+            : Color.FromRgb(0x6B, 0x5F, 0x4E));
+
+        public Brush RowBackground => new SolidColorBrush(
+            Selected ? Color.FromRgb(0x1F, 0x1A, 0x10) : Color.FromRgb(0x13, 0x11, 0x10));
+    }
+
+    /// <summary>
+    /// One line of the plan. Square and chart number are separate columns rather than one
+    /// preformatted string so they can be sized and coloured independently — those two
+    /// numbers are what the user is actually reading off the screen.
+    /// </summary>
+    public sealed class PlanRow
+    {
+        public PlanRow(VoyagePlan.Step step, bool stranded)
+        {
+            Square = step.Square;
+            ChartText = $"chart {step.ChartNumber}";
+            Detail = stranded
+                ? $"{step.Chart.Shape}, {step.RotationText} — stranded"
+                : $"{step.Chart.Shape}, {step.RotationText}";
+            Stranded = stranded;
+        }
+
+        public int Square { get; }
+        public string ChartText { get; }
+        public string Detail { get; }
+        public bool Stranded { get; }
+
+        public Brush SquareBrush => new SolidColorBrush(Stranded
+            ? Color.FromRgb(0xB8, 0x50, 0x3E)
+            : Color.FromRgb(0xE6, 0xDB, 0xC2));
     }
 }

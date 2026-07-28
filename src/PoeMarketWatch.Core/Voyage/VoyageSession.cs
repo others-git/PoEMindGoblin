@@ -150,7 +150,8 @@ public sealed class VoyageSession
         var score = VoyageSolver.ScoreWith(
             modifiers, (m, _) => profile.ScoreText([m.Description]) * profile.BoardModifierWeight);
 
-        return new VoyageSolver(Layout.Rows, Layout.Cols, scored, score)
+        return new VoyageSolver(Layout.Rows, Layout.Cols, scored, score,
+                                strandedPenalty: profile.StrandedSquarePenalty)
             .Solve(budget, ct);
     }
 
