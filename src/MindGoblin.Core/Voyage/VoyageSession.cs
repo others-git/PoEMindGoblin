@@ -294,6 +294,45 @@ public sealed class VoyageSession
     }
 
     /// <summary>
+    /// The order to run the squares in, for a solved board.
+    ///
+    /// A square's worth here is what you actually collect standing on it: the chart's own
+    /// value, what the board grants that square, and what its neighbours push into it.
+    /// That last part is why the route cannot be read off the plan -- a modest chart
+    /// surrounded by generous ones can be worth more than a strong chart in a corner.
+    /// </summary>
+    public VoyageRoute Route(VoyageProfile profile, VoyageSolver.Solution solution)
+    {
+        if (solution.IsEmpty) return VoyageRoute.Empty;
+
+        var board = new VoyageBoard(Layout.Rows, Layout.Cols);
+        foreach (var placement in solution.Placements) board.Place(placement);
+
+        var boardValue = new Dictionary<Cell, double>();
+        foreach (var modifier in BoardModifiers())
+        {
+            var worth = profile.ScoreText([modifier.Description]) * profile.BoardModifierWeight;
+            if (worth == 0) continue;
+            foreach (var cell in modifier.AffectedCells)
+                boardValue[cell] = boardValue.GetValueOrDefault(cell) + worth;
+        }
+
+        return VoyageRoute.Plan(board, placement =>
+        {
+            var worth = profile.ScoreChart(placement.Chart)
+                        + boardValue.GetValueOrDefault(placement.Cell);
+
+            // What the neighbours push in. Received only -- what this chart gives THEM is
+            // counted when they are visited, not here.
+            foreach (var side in Enum.GetValues<Side>())
+                if (board.At(VoyageBoard.Neighbour(placement.Cell, side)) is { } neighbour)
+                    worth += profile.ScoreAdjacent(neighbour.Chart);
+
+            return worth;
+        });
+    }
+
+    /// <summary>
     /// The plan, as "square N &lt;- chart M" steps.
     ///
     /// Chart numbers are PANEL indices, not positions in some internal list: the whole

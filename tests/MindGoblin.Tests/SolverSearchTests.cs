@@ -186,3 +186,55 @@ public class StrandedSummaryTests
         Assert.Equal(2, summary.Charts);
     }
 }
+
+/// <summary>
+/// Solve takes a budget. Honouring it is not a nicety -- the UI passes three seconds and
+/// blocks the dispatcher until it returns.
+/// </summary>
+public class SolverBudgetTests
+{
+    private static Chart Chart(string id, double own, double adjacent = 0) =>
+        new(id, id, ChartShape.Crossing, 80, []) { Value = own, AdjacentValue = adjacent };
+
+    [Theory]
+    [InlineData(200)] [InlineData(1000)] [InlineData(3000)]
+    public void TheBudgetIsRespected(int ms)
+    {
+        // Seeding used to run on a node cap with no clock at all. Six dives -- three
+        // border rules by two orderings -- meant a three-second budget could spend nine
+        // seconds before the search even began.
+        var charts = Enumerable.Range(0, 42)
+            .Select(i => Chart($"c{i}", i % 11, adjacent: i % 7)).ToList();
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var solution = new VoyageSolver(3, 3, charts, strandedPenalty: 40)
+            .Solve(TimeSpan.FromMilliseconds(ms));
+        clock.Stop();
+
+        // Generous: the clock is checked sparsely on purpose. Overrunning by a small
+        // multiple is tolerable, by 3x is the bug.
+        Assert.True(clock.ElapsedMilliseconds < ms * 2 + 750,
+                    $"a {ms}ms budget took {clock.ElapsedMilliseconds}ms");
+        Assert.NotEmpty(solution.Placements);
+    }
+
+    [Fact]
+    public void ShapesThatCannotBeJoinedStillReturnPromptly()
+    {
+        // The worst case for seeding: every border rule fails, under both orderings, so
+        // all six dives run before the search starts.
+        var ends = Enumerable.Range(0, 30)
+            .Select(i => new Chart($"e{i}", $"e{i}", ChartShape.End, 80, []) { Value = i })
+            .ToList();
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        _ = new VoyageSolver(3, 3, ends, strandedPenalty: 40).Solve(TimeSpan.FromMilliseconds(500));
+        clock.Stop();
+
+        // Generous against a 500ms budget, but not SO generous that a seed which ignores
+        // the clock passes: that regression measured 2.9 seconds and a 2500ms bar had
+        // been raised to accommodate it rather than to describe the contract.
+        Assert.True(clock.ElapsedMilliseconds < 1200,
+                    $"took {clock.ElapsedMilliseconds}ms on an unjoinable board");
+    }
+}

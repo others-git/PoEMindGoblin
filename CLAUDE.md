@@ -49,6 +49,10 @@ once that captured a live boss fight instead of the app. Use `--render`.
   facing an *empty in-bounds cell* is invalid — which is why a partial board must form a
   closed cluster (four Corners can, four Crossings cannot).
 * A square cut off from the route is **never visited**, so a chart there is wasted.
+* **Order of visit matters, and it is not shortest-path** — every square gets visited
+  either way. Allflame Lanterns deplete as they are placed, and a single death ends the
+  voyage, so both pressures say the same thing: take the valuable squares EARLY. That is
+  the traveling repairman's problem, solved exactly by subset DP (9 squares = 512 subsets).
 
 ## Gotchas (each of these was a silent bug)
 
@@ -102,6 +106,14 @@ league is newer than any model's cutoff.
   joined board is possible, a layout cutting a square off is rejected. Pricing it was tried
   twice (flat fee; forfeiting the stranded chart's value) and both let profiles choose a
   dead corner.
+* **The seed keeps the BEST of six dives, not the first.** Plain panel order settles
+  existence in a handful of nodes; score order finds a well-valued incumbent but wanders.
+  Returning the first success failed both ways round — score-first blew the clock,
+  plain-first handed back a board the search could not improve on (sulphur 3515 → 2250).
+* **A recursive budget guard must SPEND the budget, not just return false.** Returning
+  false only fails the current branch: the loops above carry on and each candidate still
+  pays its placement checks. The seed's clock check did that, so six dives each ground
+  through all 200k nodes after time was up — a 500ms budget ran 2.9s. Zero the counter.
 * **Scoring must stay O(1) per call.** It runs for every chart at every cell at every node.
   Precompute per-square board value; running the profile's regexes in there cost ~7×.
 * Adjacency is scored **once per adjacent pair**, when the second of the two is placed, and

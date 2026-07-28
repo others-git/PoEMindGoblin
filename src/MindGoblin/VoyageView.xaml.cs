@@ -767,6 +767,23 @@ public partial class VoyageView : UserControl, IDisposable
 
         _summary.Add(SummaryRow.Heading(summary.Headline));
 
+        // The order to run them in. The board says WHERE each chart goes; this says when,
+        // and the two are different questions -- a square is entered from a neighbour that
+        // opens onto it, and the valuable ones are worth reaching before the lanterns thin
+        // out and before anything can go wrong.
+        if (Profile is { } profile)
+        {
+            var route = _session.Route(profile, _solution);
+            if (!route.IsEmpty)
+            {
+                _summary.Add(SummaryRow.Section("Route · from the bottom-left, best first"));
+                _summary.Add(SummaryRow.Route(string.Join("  →  ", route.Squares)));
+                if (route.Unreachable.Count > 0)
+                    _summary.Add(SummaryRow.Detail(
+                        "Never reached: square " + string.Join(", ", route.Unreachable)));
+            }
+        }
+
         foreach (var (stat, total) in summary.Stats)
             _summary.Add(SummaryRow.Stat(stat, $"{(total < 0 ? "" : "+")}{total:0.#}"));
 
@@ -1562,5 +1579,8 @@ public partial class VoyageView : UserControl, IDisposable
 
         public static SummaryRow Detail(string text, string value = "") =>
             new(text, value, 12, "Segoe UI", Of(0x94, 0x86, 0x6F));
+
+        public static SummaryRow Route(string order) =>
+            new(order, "", 15, "Georgia", Of(0xC9, 0xA2, 0x27));
     }
 }

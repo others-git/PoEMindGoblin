@@ -149,7 +149,7 @@ public sealed class VoyageSolver
         // When no connected board exists the constraint is dropped, or the tool would
         // return nothing at all rather than the best available.
         _requireConnected = false;
-        if (SeedConnected() is { } seed)
+        if (SeedConnected(sw, deadline * SeedShare) is { } seed)
         {
             best = seed;
             bestRank = seed.Value + seed.Placements.Count * FullnessEpsilon;
@@ -250,17 +250,51 @@ public sealed class VoyageSolver
     /// an incumbent to beat. Returns null when no such board exists, which is legitimate
     /// -- some chart sets cannot close every border.
     /// </summary>
-    private Solution? SeedConnected()
+    /// <summary>
+    /// How much of the budget the seed may spend.
+    ///
+    /// It needs a clock as well as a node cap. With six dives to try -- three border
+    /// rules by two orderings -- a node cap alone let seeding run for nine seconds on a
+    /// three-second budget, which is not a slow answer, it is the wrong answer to the
+    /// question that was asked.
+    /// </summary>
+    private const double SeedShare = 0.3;
+
+    private Solution? SeedConnected(System.Diagnostics.Stopwatch sw, TimeSpan deadline)
     {
-        // Progressively weaker restrictions. The first that yields a connected board wins;
-        // the stricter ones collapse the space enough to find one almost immediately, and
-        // the weaker ones exist because a strict one can be infeasible for a given set of
-        // charts -- which is exactly what happened, and left several profiles returning
-        // layouts with squares cut off.
+        // Try several dives and keep the BEST, rather than the first that works.
+        //
+        // The two orderings do different jobs. Plain panel order settles EXISTENCE in a
+        // handful of nodes -- and existence is what licenses forbidding stranded squares
+        // at all -- but the board it finds is arbitrary in value. Score order finds a
+        // well-valued board that prunes the real search hard, but can wander for seconds
+        // and is profile-dependent, so relying on it alone meant a profile that ordered
+        // the charts badly was told no joined board existed on a board that plainly had
+        // one.
+        //
+        // Returning the first success got this wrong in both directions: score-first blew
+        // the clock, and plain-first handed back a poor incumbent the search then could
+        // not improve on inside its budget -- sulphur fell from 3515 to 2250 doing
+        // exactly that. So run the cheap one first for the existence proof, then keep
+        // going while the clock allows and take the best board any dive produced.
+        var plain = BuildNeutralOrdering();
+        Solution? best = null;
+
         foreach (var closed in new[] { BorderRule.All, BorderRule.NorthAndWest, BorderRule.None })
-            if (SeedConnected(closed) is { } seed)
-                return seed;
-        return null;
+        {
+            foreach (var ordering in new[] { plain, _ordering })
+            {
+                if (sw.Elapsed > deadline) return best;
+                if (SeedConnected(closed, ordering, sw, deadline) is not { } seed) continue;
+                if (best is null || seed.Value > best.Value) best = seed;
+            }
+
+            // A joined board under a stricter rule is worth more than one under a weaker
+            // rule, and the weaker rules are the expensive ones. Stop once anything works.
+            if (best is not null) return best;
+        }
+
+        return best;
     }
 
     /// <summary>
@@ -301,7 +335,15 @@ public sealed class VoyageSolver
         None,
     }
 
-    private Solution? SeedConnected(BorderRule rule)
+    /// <summary>Panel order, the same for every profile.</summary>
+    private int[][] BuildNeutralOrdering()
+    {
+        var natural = Enumerable.Range(0, _charts.Count).ToArray();
+        return Enumerable.Range(0, _rows * _cols).Select(_ => natural).ToArray();
+    }
+
+    private Solution? SeedConnected(
+        BorderRule rule, int[][] ordering, System.Diagnostics.Stopwatch sw, TimeSpan deadline)
     {
         var board = new VoyageBoard(_rows, _cols);
         var used = new bool[_charts.Count];
@@ -311,6 +353,21 @@ public sealed class VoyageSolver
         bool Dive(int index)
         {
             if (budget-- <= 0) return false;
+
+            // The clock, not just the node count. Checked sparsely -- reading a stopwatch
+            // per node would cost more than the dive it is protecting.
+            //
+            // Spending the BUDGET is what stops the dive. Returning false alone only
+            // fails the current branch: the loops above carry on with the next candidate,
+            // and every one of them costs its placement checks before its child returns
+            // false again. So an expired clock still let each dive grind through all
+            // 200,000 nodes -- six dives of it turned a 500ms budget into 2.9 seconds on
+            // a board of Ends. Zeroing the budget collapses the whole dive at once.
+            if ((budget & 0xFF) == 0 && sw.Elapsed > deadline)
+            {
+                budget = 0;
+                return false;
+            }
 
             if (index == _rows * _cols)
                 // As many charts as may be spent, not merely a legal board: the EMPTY
@@ -328,7 +385,7 @@ public sealed class VoyageSolver
             if (board.FilledCount >= _maxPlacements)
                 return _allowEmpty && LeavingEmptyIsLegal(board, cell) && Dive(index + 1);
 
-            foreach (var i in _ordering[index])
+            foreach (var i in ordering[index])
             {
                 if (used[i]) continue;
                 var chart = _charts[i];
@@ -545,9 +602,11 @@ public sealed class VoyageSolver
         ct.ThrowIfCancellationRequested();
         NodesExplored++;
 
-        // Checking the clock every node would cost more than the search; every 4096 is
-        // frequent enough to stop promptly and cheap enough not to matter.
-        if ((NodesExplored & 0xFFF) == 0)
+        // Checking the clock every node would cost more than the search, but 4096 was too
+        // sparse: work per node varies enormously. On a board of Ends almost every
+        // candidate fails its placement checks, so thousands of candidates are examined
+        // between one node and the next, and a 500ms budget ran for five seconds.
+        if ((NodesExplored & 0xFF) == 0)
         {
             if (sw.Elapsed > deadline) throw new DeadlineReached();
 

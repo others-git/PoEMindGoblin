@@ -35,9 +35,13 @@ public static class RefineProbe
             var name = profile.Name;
             var s = session.Solve(profile, TimeSpan.FromSeconds(3));
             var plan = session.Plan(s);
+            var route = session.Route(profile, s);
             Console.WriteLine($"\n{name,-11} value {s.Value,8:0.#}  stranded {s.StrandedCells.Count}  "
                 + $"{(s.ProvedOptimal ? "proved" : "budget")}  -> "
                 + string.Join(" ", plan.Select(p => $"{p.Square}:{p.ChartNumber}")));
+            Console.WriteLine($"{"",-11} route {route}"
+                + (route.Unreachable.Count > 0
+                    ? $"   NEVER REACHED: {string.Join(",", route.Unreachable)}" : ""));
         }
         return 0;
     }
