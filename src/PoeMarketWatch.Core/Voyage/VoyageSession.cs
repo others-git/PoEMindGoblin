@@ -48,14 +48,20 @@ public sealed class VoyageSession
     ///
     /// This is the game's OWN aggregate for that square, so it supersedes anything worked
     /// out from figurines rather than adding to it -- counting both would pay twice for
-    /// the same modifier. Passing no lines clears the square, which is what an accidental
-    /// capture of the empty panel should do.
+    /// the same modifier.
+    ///
+    /// An EMPTY list is a real answer, not a non-answer: the centre square of a 3x3
+    /// touches none of the twelve perimeter figurines, so "no modifiers here" is the
+    /// truth about it and has to be recordable. Pass null to un-read a square instead.
     /// </summary>
     public void ApplySquareModifiers(int square, IReadOnlyList<string>? lines)
     {
-        if (lines is null || lines.Count == 0) _squareModifiers.Remove(square);
+        if (lines is null) _squareModifiers.Remove(square);
         else _squareModifiers[square] = lines.ToList();
     }
+
+    /// <summary>Forget a square's reading, putting it back on the checklist.</summary>
+    public void ClearSquareModifiers(int square) => _squareModifiers.Remove(square);
 
     /// <summary>Squares whose Area Modifiers have not been read yet.</summary>
     public IReadOnlyList<int> SquaresAwaitingModifiers =>

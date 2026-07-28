@@ -202,8 +202,44 @@ public class SquareModifierTests
         session.ApplySquareModifiers(4, ["a modifier"]);
         Assert.DoesNotContain(4, session.SquaresAwaitingModifiers);
 
-        session.ApplySquareModifiers(4, []);
+        session.ClearSquareModifiers(4);
         Assert.Contains(4, session.SquaresAwaitingModifiers);
+    }
+
+    [Fact]
+    public void ASquareWithNoModifiersCountsAsRead()
+    {
+        // The centre of a 3x3 touches none of the twelve perimeter figurines, so an empty
+        // result there is the truth about it. Treating it as unread left the read pass
+        // stuck on square 5 forever.
+        var session = new VoyageSession();
+        session.ApplySquareModifiers(5, []);
+
+        Assert.DoesNotContain(5, session.SquaresAwaitingModifiers);
+        Assert.Empty(session.SquareModifiers[5]);
+        Assert.Empty(session.BoardModifiers());
+    }
+
+    [Fact]
+    public void NullUnreadsASquareWhereEmptyDoesNot()
+    {
+        var session = new VoyageSession();
+        session.ApplySquareModifiers(5, []);
+        Assert.DoesNotContain(5, session.SquaresAwaitingModifiers);
+
+        session.ApplySquareModifiers(5, null);
+        Assert.Contains(5, session.SquaresAwaitingModifiers);
+    }
+
+    [Fact]
+    public void NoPerimeterFigurineTouchesTheCentreSquare()
+    {
+        // The premise of the above: on the standard ring every figurine sits against one
+        // EDGE square, so the centre can never receive a board modifier from one.
+        var layout = BoardLayout.Default();
+        var centre = new Cell(1, 1);
+        Assert.DoesNotContain(layout.Figurines,
+            f => f.Adjacent.Any(a => a.ToCell() == centre));
     }
 
     [Fact]
@@ -231,5 +267,66 @@ public class SquareModifierTests
         var solution = session.Solve(profile, TimeSpan.FromSeconds(1));
 
         Assert.Equal(80, solution.Value);   // 8 * 10, applied once, on square 5
+    }
+}
+
+/// <summary>
+/// Which of the three empty-looking panels was captured. Conflating them either sticks
+/// the read pass on a square that legitimately has nothing, or records a failed capture
+/// as though the square had been read.
+/// </summary>
+public class PanelStateTests
+{
+    [Fact]
+    public void ThePlaceholderMeansNothingIsHoveredYet()
+    {
+        var reading = AreaModifierPanel.Read([
+            ". Area Modifiers",
+            "Hover a square of the Voyage",
+            "Board to see the relevant Area",
+            "Modifiers",
+        ]);
+        Assert.Equal(AreaModifierPanel.PanelState.Placeholder, reading.State);
+        Assert.False(reading.IsRead);
+    }
+
+    [Fact]
+    public void HeadingWithNothingUnderItMeansTheSquareHasNoModifiers()
+    {
+        // This is square 5 of a 3x3: hovered, and genuinely empty.
+        var reading = AreaModifierPanel.Read([". Area Modifiers"]);
+        Assert.Equal(AreaModifierPanel.PanelState.NoModifiers, reading.State);
+        Assert.True(reading.IsRead);
+        Assert.Empty(reading.Lines);
+    }
+
+    [Fact]
+    public void NoHeadingAtAllMeansTheCaptureMissedThePanel()
+    {
+        // A wrong region reads as empty too, and must NOT be recorded as "no modifiers".
+        Assert.Equal(AreaModifierPanel.PanelState.NotFound, AreaModifierPanel.Read([]).State);
+        Assert.Equal(AreaModifierPanel.PanelState.NotFound, AreaModifierPanel.Read(null).State);
+        Assert.False(AreaModifierPanel.Read(["", "  ", "x"]).IsRead);
+    }
+
+    [Fact]
+    public void ModifiersUnderTheHeadingAreRead()
+    {
+        var reading = AreaModifierPanel.Read([
+            ". Area Modifiers",
+            "Adjacent Areas contain 8 additional packs of Sea Beasts",
+        ]);
+        Assert.Equal(AreaModifierPanel.PanelState.Modifiers, reading.State);
+        Assert.True(reading.IsRead);
+        Assert.Single(reading.Lines);
+    }
+
+    [Fact]
+    public void ModifiersAreStillReadWhenOcrMissesTheHeading()
+    {
+        // The heading distinguishes the EMPTY cases. Actual modifier text is proof enough
+        // on its own that the panel was found.
+        var reading = AreaModifierPanel.Read(["Areas contain 8 additional packs of Sea Beasts"]);
+        Assert.Equal(AreaModifierPanel.PanelState.Modifiers, reading.State);
     }
 }

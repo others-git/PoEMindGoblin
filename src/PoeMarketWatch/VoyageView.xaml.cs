@@ -293,21 +293,27 @@ public partial class VoyageView : UserControl
             var raw = await ScreenOcr.ReadRegionAsync(
                 new System.Drawing.Rectangle(x, y, w, h), options.Upscale);
 
-            var lines = AreaModifierPanel.CleanLines(raw);
-            if (lines.Count == 0)
+            var reading = AreaModifierPanel.Read(raw);
+            if (!reading.IsRead)
             {
-                // The panel shows instructions until a square is hovered. Recording that
-                // as "no modifiers" would tick the square off without reading it.
-                SetStatus($"Nothing on the panel — hover square {square} in game first.",
-                          bad: true);
+                // An empty panel has three meanings and only one of them is an error the
+                // user can fix by hovering. Saying which is the difference between a
+                // useful message and a wrong one.
+                SetStatus(reading.State == AreaModifierPanel.PanelState.Placeholder
+                    ? $"Hover square {square} in game before pressing Ctrl+Alt+C."
+                    : "Could not find the Area Modifiers panel — open the Voyage screen, "
+                      + "or adjust the region under Calibrate.",
+                    bad: true);
                 return;
             }
 
-            _session.ApplySquareModifiers(square, lines);
+            _session.ApplySquareModifiers(square, reading.Lines);
             _solution = null;
             Persist();
-            SetStatus($"Square {square}: read {lines.Count} "
-                      + (lines.Count == 1 ? "modifier." : "modifiers."));
+            SetStatus(reading.Lines.Count == 0
+                ? $"Square {square}: no board modifiers."
+                : $"Square {square}: read {reading.Lines.Count} "
+                  + (reading.Lines.Count == 1 ? "modifier." : "modifiers."));
             AdvanceTarget();
             RefreshBoard();
             RefreshPanel();
@@ -377,7 +383,9 @@ public partial class VoyageView : UserControl
             var lines = text.Replace("\r\n", "\n").Split('\n')
                             .Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
             _session.ApplySquareModifiers(_targetIndex, lines);
-            SetStatus($"Square {_targetIndex} {how}.");
+            SetStatus(lines.Count == 0
+                ? $"Square {_targetIndex}: marked as having no modifiers."
+                : $"Square {_targetIndex} {how}.");
         }
         else if (_target == Target.Figurine)
         {
@@ -407,7 +415,14 @@ public partial class VoyageView : UserControl
     private void OnApplyDetail(object sender, RoutedEventArgs e)
     {
         var text = DetailBox.Text.Trim();
-        if (text.Length == 0) { SetStatus("Nothing to apply.", bad: true); return; }
+
+        // An empty box is meaningful for a square -- it records "this one has no
+        // modifiers", which is the truth about the centre of the board.
+        if (text.Length == 0 && _target != Target.Square)
+        {
+            SetStatus("Nothing to apply.", bad: true);
+            return;
+        }
         Capture(text, "entered");
     }
 
@@ -842,17 +857,17 @@ public partial class VoyageView : UserControl
                     : Color.FromRgb(0x3A, 0x2E, 0x1C));
                 cell.BorderThickness = new Thickness(isTarget ? 2 : 1);
                 cell.Child = BoardSquareContent(square, step, isStranded);
-                var squareMods = _session.SquareModifiers.GetValueOrDefault(square);
+                var squareRead = _session.SquareModifiers.TryGetValue(square, out var squareMods);
                 cell.ToolTip = Tip(
                     step is null ? $"Square {square}" : $"Square {square} · chart {step.ChartNumber}",
                     step is null
-                        ? "Empty — click to select, then hover it in game"
+                        ? "No chart — click to select, then hover it in game"
                         : $"{step.Chart.Shape}, {step.RotationText}"
                           + (isStranded ? " · cut off from the route" : ""),
-                    squareMods is { Count: > 0 }
-                        ? squareMods
-                        : ["Area modifiers not read yet."],
-                    squareMods is { Count: > 0 });
+                    !squareRead ? ["Area modifiers not read yet."]
+                        : squareMods!.Count == 0 ? ["No board modifiers on this square."]
+                        : squareMods!,
+                    squareRead);
             }
         }
     }
@@ -1136,12 +1151,16 @@ public partial class VoyageView : UserControl
         // Squares first: they are what the game aggregates and what the solver uses.
         for (var square = 1; square <= _session.Layout.Rows * _session.Layout.Cols; square++)
         {
-            var lines = _session.SquareModifiers.GetValueOrDefault(square);
+            // Read-with-nothing is a real state: the centre square touches no figurine,
+            // so "No modifiers" and "Not read" must not look the same.
+            var read = _session.SquareModifiers.TryGetValue(square, out var lines);
             _modifiers.Add(new ModifierRow(
                 ModifierRow.Sort.Square, square,
                 $"Square {square}", "board",
-                lines is { Count: > 0 } ? string.Join("\n", lines) : "Not read",
-                captured: lines is { Count: > 0 },
+                !read ? "Not read"
+                    : lines!.Count == 0 ? "No modifiers"
+                    : string.Join("\n", lines!),
+                captured: read,
                 selected: _target == Target.Square && _targetIndex == square));
         }
 

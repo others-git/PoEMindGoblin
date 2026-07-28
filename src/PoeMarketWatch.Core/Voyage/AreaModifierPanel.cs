@@ -113,18 +113,47 @@ public sealed class AreaModifierPanel
     /// <summary>Leading bullet glyphs, which OCR renders as a stray '.' or '·'.</summary>
     private static readonly Regex Bullet = new(@"^[\s.·•*\-–—]+", RegexOptions.Compiled);
 
-    /// <summary>
-    /// Turn raw OCR lines into modifier lines.
-    ///
-    /// Returns empty when the panel was showing its placeholder, which the caller must
-    /// treat as "nothing hovered" rather than "no modifiers" -- silently recording an
-    /// empty result would tick a square off the checklist without reading it.
-    /// </summary>
-    public static IReadOnlyList<string> CleanLines(IEnumerable<string>? lines)
+    /// <summary>What the panel was showing when it was captured.</summary>
+    public enum PanelState
     {
-        if (lines is null) return [];
+        /// <summary>The heading was not found: wrong region, or the screen was not open.</summary>
+        NotFound,
+
+        /// <summary>"Hover a square of the Voyage Board..." -- nothing is hovered yet.</summary>
+        Placeholder,
+
+        /// <summary>A square is hovered and it genuinely has no modifiers.</summary>
+        NoModifiers,
+
+        /// <summary>A square is hovered and these are its modifiers.</summary>
+        Modifiers,
+    }
+
+    public readonly record struct Reading(PanelState State, IReadOnlyList<string> Lines)
+    {
+        /// <summary>True once the square has actually been read, empty result included.</summary>
+        public bool IsRead => State is PanelState.NoModifiers or PanelState.Modifiers;
+    }
+
+    /// <summary>
+    /// Interpret a capture of the panel.
+    ///
+    /// The three empty-looking outcomes are NOT the same and conflating them breaks the
+    /// read pass. The centre square of a 3x3 touches none of the twelve perimeter
+    /// figurines, so it has no board modifiers at all -- an empty panel there is the
+    /// correct answer, and treating it as "nothing hovered" left the checklist stuck on
+    /// square 5 forever. Equally, an empty result because the capture region is wrong
+    /// must NOT be recorded as "this square has no modifiers".
+    ///
+    /// The panel's heading is what tells them apart: it is chrome, always on screen while
+    /// the Voyage window is open, whether or not a square is hovered.
+    /// </summary>
+    public static Reading Read(IEnumerable<string>? lines)
+    {
+        if (lines is null) return new Reading(PanelState.NotFound, []);
 
         var kept = new List<string>();
+        var sawHeading = false;
         var sawPlaceholder = false;
 
         foreach (var raw in lines)
@@ -133,7 +162,7 @@ public sealed class AreaModifierPanel
             var line = Bullet.Replace(raw, "").Trim();
             if (line.Length == 0) continue;
 
-            if (Heading.IsMatch(raw) || Heading.IsMatch(line)) continue;
+            if (Heading.IsMatch(raw) || Heading.IsMatch(line)) { sawHeading = true; continue; }
             if (Placeholder.IsMatch(line)) { sawPlaceholder = true; continue; }
 
             // Single stray characters are OCR noise off panel borders, never a modifier.
@@ -142,11 +171,22 @@ public sealed class AreaModifierPanel
             kept.Add(line);
         }
 
-        // If the placeholder is on screen, no square is hovered and NOTHING here is a
-        // modifier -- including the fragments its own wrapped text leaves behind, such as
-        // a lone "Modifiers" on the last line.
-        return sawPlaceholder ? [] : Join(kept);
+        // No heading and nothing else recognisable: the capture did not find the panel.
+        if (!sawHeading && !sawPlaceholder && kept.Count == 0)
+            return new Reading(PanelState.NotFound, []);
+
+        // The placeholder means no square is hovered. Everything else on the panel then
+        // belongs to it too, including the lone "Modifiers" its wrapped text leaves behind.
+        if (sawPlaceholder) return new Reading(PanelState.Placeholder, []);
+
+        var joined = Join(kept);
+        return new Reading(
+            joined.Count == 0 ? PanelState.NoModifiers : PanelState.Modifiers, joined);
     }
+
+    /// <summary>The modifier lines alone, for callers that do not care why it was empty.</summary>
+    public static IReadOnlyList<string> CleanLines(IEnumerable<string>? lines) =>
+        Read(lines).Lines;
 
     /// <summary>
     /// Rejoin modifier text that OCR split across lines.
