@@ -134,10 +134,25 @@ public sealed class VoyageSolver
         // search can run for minutes and still return a layout with a dead corner --
         // measured on a real 24-chart panel, connected boards were roughly one in ten
         // million legal ones, and 2.9M nodes of value-ordered search never reached one.
+        // The seed is also an EXISTENCE PROOF. If a fully joined board can be built from
+        // these charts, then a layout that strands a square is not a trade-off worth
+        // offering -- an unvisited square is a wasted chart, and no amount of value
+        // elsewhere makes a dead corner the answer the user wanted. So once the seed
+        // succeeds, stranding is forbidden outright rather than priced.
+        //
+        // Pricing it was tried twice and neither held. A flat fee is meaningless across
+        // profiles that score in tens and in thousands, and forfeiting the stranded
+        // chart's own value still left four of eleven profiles choosing a dead corner,
+        // because the layout it bought was worth more than the chart it cost.
+        //
+        // When no connected board exists the constraint is dropped, or the tool would
+        // return nothing at all rather than the best available.
+        _requireConnected = false;
         if (SeedConnected() is { } seed)
         {
             best = seed;
             bestRank = seed.Value + seed.Placements.Count * FullnessEpsilon;
+            _requireConnected = true;
         }
 
 
@@ -409,6 +424,9 @@ public sealed class VoyageSolver
 
     private double bestRank = double.NegativeInfinity;
 
+    /// <summary>Set once the seed proves a fully joined board is possible for these charts.</summary>
+    private bool _requireConnected;
+
     private void Recurse(
         int index, VoyageBoard board, bool[] used, double value,
         double[] bound, ref Solution best,
@@ -438,19 +456,31 @@ public sealed class VoyageSolver
             // placement like everything else -- it is only knowable here.
             var stranded = _strandedPenalty > 0 ? board.StrandedCells() : [];
 
-            // Charge a hair more than the stated penalty, so a stranded board can never
-            // come out exactly level with a joined one.
+            // A chart on a stranded square is FORFEIT, not merely taxed.
             //
-            // Ties are common when a profile has little to score on the charts in hand:
-            // nine points of value with three squares cut off prices identically to zero
-            // value with none, and whichever the search happened to reach first won --
-            // which showed as "3 squares cut off from the route" on a board that lost
-            // nothing by joining them. Pricing it away keeps the strict-inequality prune
-            // above, which is worth more than any tie-breaking at the leaf.
-            // The score reported is the honest one. The tie-breakers only decide which
-            // of two equal boards is kept, and must not leak into the number shown --
+            // The voyage starts in the bottom-left chart and travels by connections, so a
+            // square cut off from that route is never visited and whatever sits there
+            // pays nothing. A flat penalty cannot express that: 40 points is most of a
+            // board under "currency" and a rounding error under "sulphur", so one setting
+            // forbade stranding in one profile and priced it as a bargain in another.
+            // Measured on a real 42-chart panel, five of eleven profiles returned a
+            // layout with a square cut off, having correctly decided that one good
+            // strongbox was worth more than the fee.
+            //
+            // Only the chart's OWN value is voided. What its Adjacent Modifier gives
+            // NEIGHBOURS is left alone -- those modifiers speak of "adjacent Areas", and
+            // whether they still reach from an unvisited square is not something the game
+            // states either way.
+            // A joined board is known to exist, so this one is simply not a candidate.
+            if (_requireConnected && stranded.Count > 0) return;
+
+            var forfeited = stranded.Sum(cell =>
+                board.At(cell) is { } lost ? Math.Max(0, _score(lost.Chart, lost.Cell)) : 0);
+
+            // The score reported is the honest one. The tie-breakers below only decide
+            // which of two equal boards is kept and must not leak into the number shown --
             // "90.000000009" is not a score anybody asked for.
-            var final = value - stranded.Count * _strandedPenalty;
+            var final = value - forfeited - stranded.Count * _strandedPenalty;
             var rank = final - stranded.Count * StrandedEpsilon
                              + board.FilledCount * FullnessEpsilon;
 

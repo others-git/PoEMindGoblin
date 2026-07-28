@@ -751,7 +751,7 @@ public partial class VoyageView : UserControl
         _summary.Add(SummaryRow.Heading(summary.Headline));
 
         foreach (var (stat, total) in summary.Stats)
-            _summary.Add(SummaryRow.Stat(stat, $"+{total:0.#}"));
+            _summary.Add(SummaryRow.Stat(stat, $"{(total < 0 ? "" : "+")}{total:0.#}"));
 
         if (summary.VoyageWide.Count > 0)
         {
@@ -833,6 +833,8 @@ public partial class VoyageView : UserControl
                     Cursor = System.Windows.Input.Cursors.Hand,
                     Tag = r * cols + c + 1,
                 };
+                ToolTipService.SetInitialShowDelay(cell, 0);
+                ToolTipService.SetShowDuration(cell, 120000);
                 // Squares are the capture target for the Area Modifiers panel, so the
                 // board is how you choose which one the hotkey applies to.
                 cell.MouseLeftButtonUp += OnBoardSquareClicked;
@@ -855,6 +857,8 @@ public partial class VoyageView : UserControl
                 VerticalAlignment = VerticalAlignment.Center,
                 Tag = slot.Index,
             };
+            ToolTipService.SetInitialShowDelay(marker, 0);
+            ToolTipService.SetShowDuration(marker, 120000);
             // Clicking a figurine aims the next Ctrl+C at it, so the board doubles as the
             // read-mode control -- the list is for reading the text back, not for driving.
             marker.MouseLeftButtonUp += OnFigurineMarkerClicked;
@@ -1187,6 +1191,10 @@ public partial class VoyageView : UserControl
                 Cursor = System.Windows.Input.Cursors.Hand,
                 Tag = i + 1,
             };
+            // Skimming charts is the whole interaction; a half-second delay per hover
+            // makes it feel broken.
+            ToolTipService.SetInitialShowDelay(cell, 0);
+            ToolTipService.SetShowDuration(cell, 120000);
             // Clickable so the pass is not strictly sequential: one chart that will not
             // copy should not force the other 59 to wait behind it.
             cell.MouseLeftButtonUp += OnPanelCellClicked;

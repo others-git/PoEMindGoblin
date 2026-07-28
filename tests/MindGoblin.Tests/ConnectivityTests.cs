@@ -143,3 +143,84 @@ public class ConnectivityTests
         Assert.Empty(solution.StrandedCells);
     }
 }
+
+/// <summary>
+/// A square cut off from the route is never visited -- the voyage starts bottom-left and
+/// travels by connections -- so a chart there is wasted. Pricing that was tried twice and
+/// neither held.
+/// </summary>
+public class StrandingIsForbiddenTests
+{
+    private static Chart Chart(string id, double value) =>
+        new(id, id, ChartShape.Crossing, 80, []) { Value = value };
+
+    /// <summary>Crossings tile a full board, so a joined layout always exists.</summary>
+    private static IReadOnlyList<Chart> Crossings(int count, double value = 10) =>
+        Enumerable.Range(0, count).Select(i => Chart($"c{i}", value)).ToList();
+
+    [Fact]
+    public void NoLayoutStrandsASquareWhenAJoinedOneExists()
+    {
+        var solution = new VoyageSolver(3, 3, Crossings(20), strandedPenalty: 40)
+            .Solve(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(9, solution.Placements.Count);
+        Assert.Empty(solution.StrandedCells);
+    }
+
+    [Fact]
+    public void AValuableStrandedLayoutIsStillRejected()
+    {
+        // The case that kept slipping through: one chart worth far more than the penalty,
+        // reachable only by cutting a square off. A flat fee said yes; forfeiting the
+        // stranded chart's own value still said yes, because the layout it bought was
+        // worth more than the chart it cost.
+        var charts = Crossings(20, value: 1).ToList();
+        charts.Add(Chart("jackpot", 10_000));
+
+        var solution = new VoyageSolver(3, 3, charts, strandedPenalty: 40)
+            .Solve(TimeSpan.FromSeconds(2));
+
+        Assert.Empty(solution.StrandedCells);
+    }
+
+    [Fact]
+    public void StrandingIsAllowedWhenNoJoinedBoardIsPossible()
+    {
+        // The constraint is dropped rather than returning nothing: an End pointing at the
+        // border, alone, cannot join anything, and the best available answer beats no
+        // answer at all.
+        var north = Enumerable.Range(0, 4)
+            .First(r => new ChartFace(ChartShape.End, r).IsOpen(Side.North));
+        _ = north;
+
+        var ends = Enumerable.Range(0, 2)
+            .Select(i => new Chart($"e{i}", $"e{i}", ChartShape.End, 80, []) { Value = 5 })
+            .ToList();
+
+        var solution = new VoyageSolver(3, 3, ends, strandedPenalty: 40)
+            .Solve(TimeSpan.FromSeconds(2));
+
+        // Whatever it returns must at least be a legal board.
+        var board = new VoyageBoard(3, 3);
+        foreach (var p in solution.Placements) board.Place(p);
+        Assert.Empty(board.Validate());
+    }
+
+    [Fact]
+    public void TheRealPanelNeverStrandsUnderAnyShippedProfile()
+    {
+        // Five of eleven profiles used to return a dead corner on a real 42-chart board.
+        var session = new VoyageSession();
+        session.ApplyPanelRead(Enumerable.Range(1, 20).Select(i =>
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
+            { Level = 80 }).ToList());
+
+        foreach (var profile in VoyageRules.Defaults())
+        {
+            var solution = session.Solve(profile, TimeSpan.FromSeconds(1));
+            Assert.True(solution.StrandedCells.Count == 0,
+                        $"{profile.Name} stranded {solution.StrandedCells.Count} squares");
+        }
+    }
+}

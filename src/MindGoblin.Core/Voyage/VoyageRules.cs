@@ -76,11 +76,10 @@ public sealed class VoyageProfile
     /// <summary>
     /// Charged per square left off the main route.
     ///
-    /// Edge matching permits a dead corner -- an End pointing at the border, closed
-    /// elsewhere, is legal and connects to nothing. Whatever chart lands there is cut
-    /// off, so it is worth something to avoid, but not at any price: a board where one
-    /// stranded square buys a far better nine charts can still be the right board. Set
-    /// to 0 to stop caring, or high to forbid it in practice.
+    /// Charged ON TOP of forfeiting the chart itself. A square cut off from the route is
+    /// never visited, so the solver already voids whatever is placed there; this is the
+    /// additional cost of having burned the slot at all. Set to 0 to charge only the
+    /// forfeit, or high to forbid stranding outright.
     /// </summary>
     public double StrandedSquarePenalty { get; set; } = 40;
 

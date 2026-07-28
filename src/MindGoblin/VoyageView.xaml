@@ -197,6 +197,9 @@
         <!-- Tooltips carry captured modifier text, so they are content, not chrome. -->
         <Style TargetType="ToolTip">
             <Setter Property="Foreground" Value="#E6DBC2"/>
+            <Setter Property="ToolTipService.InitialShowDelay" Value="0"/>
+            <Setter Property="ToolTipService.BetweenShowDelay" Value="0"/>
+            <Setter Property="ToolTipService.ShowDuration" Value="120000"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="MaxWidth" Value="400"/>
             <Setter Property="Template">
@@ -347,21 +350,22 @@
                 <!-- Bounded, and left-aligned: the board column is wide, and a label at
                      one end with its number at the other is two columns, not a row. -->
                 <ListBox x:Name="SummaryList" Style="{StaticResource Plain}"
-                         HorizontalAlignment="Left" MaxWidth="440">
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Grid Margin="0,0,0,3">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
+                            <!-- The number leads. A right-aligned value column reflows
+                                 the moment a scrollbar appears, which walked the figures
+                                 sideways as the list grew. -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                <TextBlock Text="{Binding Value}" FontFamily="Consolas"
+                                           FontSize="{Binding Size}"
+                                           Foreground="{Binding ValueBrush}"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,0"/>
                                 <TextBlock Text="{Binding Label}" FontFamily="{Binding Font}"
                                            FontSize="{Binding Size}" Foreground="{Binding Brush}"
-                                           TextWrapping="Wrap"/>
-                                <TextBlock Grid.Column="1" Text="{Binding Value}"
-                                           FontFamily="Consolas" FontSize="12"
-                                           Foreground="{Binding ValueBrush}" Margin="10,0,0,0"/>
-                            </Grid>
+                                           TextWrapping="Wrap" VerticalAlignment="Center"/>
+                            </StackPanel>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
