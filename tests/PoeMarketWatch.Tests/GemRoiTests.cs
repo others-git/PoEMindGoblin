@@ -179,6 +179,57 @@ public class GemRoiTests
     }
 
     [Fact]
+    public void SortingMustUseNumbersNotFormattedText()
+    {
+        // The bug this guards: a grid sorting the display string ranks "99%" above
+        // "970%", because the compare hits '9' vs '7' at the second character. That
+        // silently buries the best rows mid-table, which is worse than an obvious error.
+        static GemRoi.Result R(double buy, double revenue) =>
+            new("g", GemRoi.Path.LevelOnly, buy, 0, revenue, Array.Empty<string>());
+
+        var nearlyDouble = R(buy: 1.0, revenue: 1.99);   //  99% RoI
+        var tenfold = R(buy: 1.0, revenue: 10.7);        // 970% RoI
+
+        // the formatted text really is misordered -- this is the trap, not a strawman
+        Assert.Equal("99%", nearlyDouble.RoiText);
+        Assert.Equal("970%", tenfold.RoiText);
+        Assert.True(string.CompareOrdinal(nearlyDouble.RoiText, tenfold.RoiText) > 0);
+
+        // ...while the numeric value orders correctly
+        Assert.True(tenfold.RoiValue > nearlyDouble.RoiValue);
+
+        var sorted = new[] { nearlyDouble, tenfold }.OrderByDescending(r => r.RoiValue).ToList();
+        Assert.Equal(tenfold, sorted[0]);
+    }
+
+    [Fact]
+    public void NullRoiSortsBelowEveryRealRatio()
+    {
+        var free = new GemRoi.Result("g", GemRoi.Path.LevelOnly, 0, 0, 5, Array.Empty<string>());
+        var loss = new GemRoi.Result("g", GemRoi.Path.LevelOnly, 100, 0, 1, Array.Empty<string>());
+        Assert.Null(free.Roi);
+        Assert.Equal("-", free.RoiText);
+        Assert.True(loss.RoiValue > free.RoiValue);
+    }
+
+    [Fact]
+    public void CurrencyTextShowsADashRatherThanZero()
+    {
+        var r = new GemRoi().Evaluate(SpellEcho(), GemRoi.Path.LevelOnly, Costs);
+        Assert.Equal("-", r.CurrencyText);
+        Assert.Equal(0, r.CurrencyCost);
+    }
+
+    [Fact]
+    public void ProfitTextCarriesItsSign()
+    {
+        var gain = new GemRoi.Result("g", GemRoi.Path.LevelOnly, 1, 0, 5, Array.Empty<string>());
+        var loss = new GemRoi.Result("g", GemRoi.Path.LevelOnly, 5, 0, 1, Array.Empty<string>());
+        Assert.StartsWith("+", gain.ProfitText);
+        Assert.StartsWith("-", loss.ProfitText);
+    }
+
+    [Fact]
     public void RoiIsNullWhenNothingWasSpent()
     {
         var free = new GemRoi.GemPrices("Free",

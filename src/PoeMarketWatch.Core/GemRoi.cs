@@ -81,6 +81,20 @@ public sealed class GemRoi
 
         /// <summary>False when a price the maths needs was absent, so the row is not trustworthy.</summary>
         public bool IsComplete => Missing.Count == 0;
+
+        // ---- display ----------------------------------------------------------
+        // Formatted text AND the raw number behind it. A grid must sort on the number:
+        // sorting the formatted text puts "99%" above "970%", because a string compare
+        // hits '9' vs '7' at the second character and stops. That silently buries the
+        // best rows in the middle of the table, which is worse than an obvious error.
+        public string BuyText => $"{BuyCost:0.#}c";
+        public string CurrencyText => CurrencyCost > 0 ? $"{CurrencyCost:0.#}c" : "-";
+        public string RevenueText => $"{ExpectedRevenue:0.#}c";
+        public string ProfitText => $"{Profit:+0.#;-0.#;0}c";
+        public string RoiText => Roi is { } r ? r.ToString("P0") : "-";
+
+        /// <summary>Null RoI (nothing was spent) sorts below every real ratio.</summary>
+        public double RoiValue => Roi ?? double.NegativeInfinity;
     }
 
     private const int GcpPerTwentyQuality = 20;

@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-  </PropertyGroup>
+    </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
@@ -27,10 +27,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\assets\trade-index.json" Link="assets\trade-index.json"
-          CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\assets\gem-index.json" Link="assets\gem-index.json"
-          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\assets\trade-index.json" Link="assets\trade-index.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\assets\gem-index.json" Link="assets\gem-index.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

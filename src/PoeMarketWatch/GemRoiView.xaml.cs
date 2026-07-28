@@ -166,11 +166,19 @@ public partial class GemRoiView : UserControl
             _ => Result.Path.ToString(),
         };
 
-        public string BuyText => $"{Result.BuyCost:0.#}c";
-        public string CurrencyText => Result.CurrencyCost > 0 ? $"{Result.CurrencyCost:0.#}c" : "-";
-        public string RevenueText => $"{Result.ExpectedRevenue:0.#}c";
-        public string ProfitText => $"{Result.Profit:+0.#;-0.#;0}c";
-        public string RoiText => Result.Roi is { } r ? r.ToString("P0") : "-";
+        // Text for display; the *Value properties are what the grid sorts on. See the
+        // remarks on GemRoi.Result -- sorting formatted text puts "99%" above "970%".
+        public string BuyText => Result.BuyText;
+        public string CurrencyText => Result.CurrencyText;
+        public string RevenueText => Result.RevenueText;
+        public string ProfitText => Result.ProfitText;
+        public string RoiText => Result.RoiText;
+
+        public double BuyValue => Result.BuyCost;
+        public double CurrencyValue => Result.CurrencyCost;
+        public double RevenueValue => Result.ExpectedRevenue;
+        public double ProfitValue => Result.Profit;
+        public double RoiValue => Result.RoiValue;
 
         /// <summary>Flags the rows whose numbers rest on an unverified assumption.</summary>
         public string Note => Result.Path is GemRoi.Path.VaalOnly or GemRoi.Path.FullChain

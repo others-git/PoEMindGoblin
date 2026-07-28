@@ -109,11 +109,11 @@
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Gem" Binding="{Binding Gem}" Width="2*"/>
                 <DataGridTextColumn Header="Path" Binding="{Binding PathName}" Width="*"/>
-                <DataGridTextColumn Header="Buy" Binding="{Binding BuyText}" Width="0.7*"/>
-                <DataGridTextColumn Header="Currency" Binding="{Binding CurrencyText}" Width="0.7*"/>
-                <DataGridTextColumn Header="Sell (exp.)" Binding="{Binding RevenueText}" Width="0.8*"/>
-                <DataGridTextColumn Header="Profit" Binding="{Binding ProfitText}" Width="0.8*"/>
-                <DataGridTextColumn Header="RoI" Binding="{Binding RoiText}" Width="0.7*"/>
+                <DataGridTextColumn Header="Buy" Binding="{Binding BuyText}" SortMemberPath="BuyValue" Width="0.7*"/>
+                <DataGridTextColumn Header="Currency" Binding="{Binding CurrencyText}" SortMemberPath="CurrencyValue" Width="0.7*"/>
+                <DataGridTextColumn Header="Sell (exp.)" Binding="{Binding RevenueText}" SortMemberPath="RevenueValue" Width="0.8*"/>
+                <DataGridTextColumn Header="Profit" Binding="{Binding ProfitText}" SortMemberPath="ProfitValue" Width="0.8*"/>
+                <DataGridTextColumn Header="RoI" Binding="{Binding RoiText}" SortMemberPath="RoiValue" Width="0.7*"/>
                 <DataGridTextColumn Header="Note" Binding="{Binding Note}" Width="1.2*"/>
             </DataGrid.Columns>
         </DataGrid>
