@@ -107,6 +107,20 @@ league is newer than any model's cutoff.
 * Adjacency is scored **once per adjacent pair**, when the second of the two is placed, and
   counted in both directions.
 
+## Sources, in order of trust
+
+1. **The game itself** — help text, copied item text, the Area Modifiers panel.
+2. **GGG's patch notes on the official forum.** Reachable, authoritative, and where the
+   balance actually lives. 3.29.0b alone moved Golden Lanterns, gated the good strongboxes
+   at area level 67, and made Ends and Straights rarer.
+3. **poedb**, for the generated mod tables.
+4. **SEO strategy sites**, which paraphrase each other and get numbers wrong. Useful for
+   the shape of a strategy, never for a figure.
+
+**Reddit is unreachable** — it blocks Anthropic's crawler at the platform level. Not a
+setting, and not something to route around with a spoofed user agent. If a thread matters,
+paste it in.
+
 ## Community strategy (see `research/`)
 
 Corroborated: plan from the reward outward rather than filling the board; adjacency charts
@@ -119,6 +133,13 @@ multipliers and payouts; the shape is clear, the magnitude would be a guess.
 
 **Discard:** the widely-repeated "centre is 6× a corner". The same article's own example
 gives 12 vs 6 boxes — it is **2×**, which is what the model already says.
+
+**From 3.29.0b, and reflected in the weights:** Golden Lanterns now grant increased
+Quantity as well as being a container; the Diviner/Arcanist/Operative strongboxes spawn by
+default above area level 67, so tier is a precondition for that objective; Ends and
+Straights are rarer, which eases the connectivity problem the solver fights; and lantern
+shrinking is 60% slower, so a full board costs much less time than the strategy sites
+imply.
 
 ## Conventions
 

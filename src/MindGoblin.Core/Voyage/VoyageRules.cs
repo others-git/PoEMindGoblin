@@ -343,6 +343,8 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Rarity of Items", Weight = 0.75 },
                 new VoyageRule { Pattern = @"Flasks found.*chance to have (\d+)% Quality", Weight = 0.4,
                                  Comment = "a quality flask is a better item, so it belongs here" },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Golden Lanterns", Weight = 6,
+                                 Comment = "3.29.0b: these now grant increased Quantity too" },
                 new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -60,
                                  Comment = "a global roll that deletes most of the loot" },
                 // Board modifiers, off the figurines rather than the charts.
@@ -385,6 +387,9 @@ public sealed class VoyageRules : IDisposable
             Name = "strongbox",
             Description = "Arcanist's, Diviner's and Operative's boxes, and the quantity that fills them.",
             BoardModifierWeight = 1.5,
+            // 3.29.0b: the three good box types "appear by default above area level 67",
+            // so tier is a precondition for this objective rather than a preference.
+            AreaLevelWeight = 0.5,
             Rules =
             [
                 // The three named types are the ones worth planning around. Note the
@@ -415,7 +420,8 @@ public sealed class VoyageRules : IDisposable
             Rules =
             [
                 new VoyageRule { Pattern = @"(\d+)\s+additional Clusters of Barrels", Weight = 1.5 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Golden Lanterns", Weight = 6 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Golden Lanterns", Weight = 12,
+                                 Comment = "3.29.0b also made these grant increased Quantity" },
                 new VoyageRule { Pattern = @"(\d+)\s+additional cages of Tormented Spirits", Weight = 8 },
                 new VoyageRule { Pattern = @"an additional cage of Tormented Spirits", Weight = 8,
                                  Comment = "the game writes the singular when the roll is 1" },
