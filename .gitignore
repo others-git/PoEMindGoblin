@@ -6,3 +6,4 @@ publish/
 *.dat
 credentials.dat
 publish-next/
+publish-v3/
