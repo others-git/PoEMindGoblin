@@ -470,6 +470,16 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"Rare Monsters.*drop (\d+) additional", Weight = 8,
                                  Comment = "board modifier: extra currency per rare" },
                 new VoyageRule { Pattern = @"Rare Monsters.*drop an additional", Weight = 8 },
+
+                // Rares spawn out of packs, so more packs is more rares -- and every
+                // payout above is per rare. This profile ignored pack size entirely,
+                // which meant it would take a chart with a Pantheon modifier and few
+                // monsters over one with the same modifier and half again as many.
+                new VoyageRule { Pattern = @"Monster Pack Size:\s*\+?(\d+)", Weight = 0.3 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = 0.5 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional packs of", Weight = 1.5 },
+                new VoyageRule { Pattern = @"(\d+)\s+additional Imprisoned Monsters", Weight = 2.0,
+                                 Comment = "an imprisoned monster is a rare" },
             ],
         },
 
@@ -560,10 +570,10 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"Monster Pack Size:\s*\+?(\d+)", Weight = 0.5 },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = 0.75 },
                 new VoyageRule { Pattern = @"(\d+)\s+additional packs of", Weight = 1.5 },
-                // Rare monsters are not Magic, so a board full of rares is working
-                // against this objective rather than for it.
-                new VoyageRule { Pattern = @"(\d+)%\s+increased number of Rare [Mm]onsters", Weight = -0.25,
-                                 Comment = "a rare is a monster that is not Magic" },
+                // No penalty on extra rares. "increased number of Rare Monsters" ADDS
+                // rares; it does not convert magic ones into them, so it costs this
+                // objective nothing and pricing it as a loss would skew boards away from
+                // charts that are simply good.
                 new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 0.3 },
             ],
         },

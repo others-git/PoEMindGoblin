@@ -275,3 +275,71 @@ public class ProfileCoverageTests
                         $"{profile.Name} cannot tell a loaded chart from an empty one");
     }
 }
+
+/// <summary>
+/// Relationships between a profile's NAME and what it actually values.
+///
+/// The coverage tests check that every reward is scored by someone; they cannot see that
+/// a profile has ignored something central to its own objective. "rare monsters" valued
+/// every per-rare payout and not one thing that produces rares.
+/// </summary>
+[Collection("ChartRewards")]
+public class ProfileCoherenceTests
+{
+    private static VoyageProfile Profile(string name) =>
+        VoyageRules.Defaults().Single(p => p.Name == name);
+
+    [Theory]
+    // Every profile whose objective is "more monsters" -- rares and magic monsters both
+    // spawn out of packs, so pack size multiplies whatever the profile is really after.
+    [InlineData("pack size")]
+    [InlineData("rare monsters")]
+    [InlineData("magic monsters")]
+    public void MonsterProfilesValuePackSize(string name)
+    {
+        var profile = Profile(name);
+
+        Assert.True(profile.ScoreText(["Monster Pack Size: +42%"]) > 0,
+                    $"{name} ignores the chart's own pack size");
+        Assert.True(profile.ScoreText(["18% increased Pack Size in adjacent Areas"]) > 0,
+                    $"{name} ignores adjacent pack size");
+        Assert.True(profile.ScoreText(["Adjacent Areas contain 12 additional packs of Crabs"]) > 0,
+                    $"{name} ignores additional packs");
+    }
+
+    [Fact]
+    public void MorePacksBeatsFewerForEveryMonsterProfile()
+    {
+        foreach (var name in new[] { "pack size", "rare monsters", "magic monsters" })
+        {
+            var profile = Profile(name);
+            var small = new Chart("s", "s", ChartShape.Crossing, 80, []) { MonsterPackSize = 14 };
+            var large = small with { Id = "l", MonsterPackSize = 42 };
+            Assert.True(profile.ScoreChart(large) > profile.ScoreChart(small),
+                        $"{name} does not prefer the bigger packs");
+        }
+    }
+
+    [Fact]
+    public void ExtraRaresAreNotPenalisedByTheMagicProfile()
+    {
+        // "increased number of Rare Monsters" ADDS rares; it does not convert magic ones,
+        // so it costs a magic-focused board nothing.
+        Assert.True(Profile("magic monsters")
+                        .ScoreText(["60% increased number of Rare Monsters in adjacent Areas"]) >= 0);
+    }
+
+    [Fact]
+    public void EachMonsterProfileStillLeadsWithItsOwnObjective()
+    {
+        // Pack size is a multiplier on all three, not the point of any of them -- if it
+        // dominated, the three would return the same board.
+        var rare = Profile("rare monsters");
+        Assert.True(rare.ScoreText(["Rare monsters that are natural inhabitants of all Voyage Areas are imprisoned by Essences"])
+                    > rare.ScoreText(["Monster Pack Size: +42%"]));
+
+        var magic = Profile("magic monsters");
+        Assert.True(magic.ScoreText(["Monsters in all Voyage Areas are at least Magic"])
+                    > magic.ScoreText(["Monster Pack Size: +42%"]));
+    }
+}
