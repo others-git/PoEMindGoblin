@@ -254,6 +254,8 @@ public sealed class VoyageRules : IDisposable
                                  Comment = "the chart's own total, its largest source" },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Dead Man's Sulphur", Weight = 2.0,
                                  Comment = "the global and adjacent rolls" },
+                new VoyageRule { Pattern = @"drop Dead Man's Sulphur", Weight = 30,
+                                 Comment = "board modifier: rares drop it directly" },
             ],
         },
 
@@ -273,8 +275,12 @@ public sealed class VoyageRules : IDisposable
                 // Board modifiers, off the figurines rather than the charts.
                 new VoyageRule { Pattern = @"(\d+)%\s+increased explicit modifier magnitudes", Weight = 0.5,
                                  Comment = "rolls every other modifier higher" },
-                new VoyageRule { Pattern = @"(\d+)% Chance for Chart to not be consumed", Weight = 0.8,
+                new VoyageRule { Pattern = @"(\d+)% [Cc]hance (?:for Chart|to not be consumed)", Weight = 0.8,
                                  Comment = "a chart you keep is a voyage you did not pay for" },
+                new VoyageRule { Pattern = @"Charts have (\d+)% chance to not be consumed", Weight = 0.8 },
+                new VoyageRule { Pattern = @"(\d+)% more Rarity of Items found", Weight = 1.0 },
+                new VoyageRule { Pattern = @"(\d+)% reduced quantity of items found", Weight = -1.5 },
+                new VoyageRule { Pattern = @"gain (\d+)% increased Experience", Weight = 0.1 },
             ],
         },
 
@@ -288,7 +294,11 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"Monster Pack Size:\s*\+?(\d+)", Weight = 1.0 },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = 1.5 },
                 new VoyageRule { Pattern = @"(\d+)\s+additional packs of", Weight = 3.0,
-                                 Comment = "Crabs and Octopi" },
+                                 Comment = "Crabs, Octopi, Sea Beasts, the Drowned" },
+                new VoyageRule { Pattern = @"Magic Monsters.*have an additional modifier", Weight = 8,
+                                 Comment = "board modifier" },
+                new VoyageRule { Pattern = @"(\d+)% increased number of Rare monsters.*per connection",
+                                 Weight = 0.4, Comment = "board modifier: scales with connections" },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased number of (?:Rare|Magic) Monsters", Weight = 0.75 },
                 new VoyageRule { Pattern = @"(\d+)\s+additional Imprisoned Monsters", Weight = 4.0 },
                 new VoyageRule { Pattern = @"are at least Magic", Weight = 15 },
@@ -342,8 +352,8 @@ public sealed class VoyageRules : IDisposable
                                  Comment = "Treasure Anchors" },
                 new VoyageRule { Pattern = @"highly prized and exotic Fish", Weight = 8 },
                 new VoyageRule { Pattern = @"contain Friendly Jellyfish", Weight = 5 },
-                new VoyageRule { Pattern = @"contains Filthscrabble", Weight = 6,
-                                 Comment = "board modifier" },
+                new VoyageRule { Pattern = @"contains? Filthscrabble", Weight = 6,
+                                 Comment = "board modifier; the table says 'contain'" },
 
                 // TILESET. A chart states which area it opens, and the tilesets are not
                 // equal: Anchorfield is thick with Sunken Loot chests, which no chart
@@ -352,6 +362,12 @@ public sealed class VoyageRules : IDisposable
                 // -- so this is an OBSERVED preference, not a measured one, and it is the
                 // first thing to retune. The Voyage tab lists the tilesets you hold, so
                 // adding a rule for another is a copy and a number.
+                new VoyageRule { Pattern = @"contain a Brinerot raiding party", Weight = 12,
+                                 Comment = "board modifier" },
+                new VoyageRule { Pattern = @"contain Captainsbane", Weight = 10,
+                                 Comment = "board modifier" },
+                new VoyageRule { Pattern = @"Placing Lanterns does not reduce your Lantern count",
+                                 Weight = 15, Comment = "board modifier: free lanterns" },
                 new VoyageRule { Pattern = @"Area: Anchorfield", Weight = 25,
                                  Comment = "observed: dense Sunken Loot chests" },
                 new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 0.3 },
@@ -374,8 +390,13 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"Empowered by (\d+) Wildwood Wisps", Weight = 0.005,
                                  Comment = "the roll is in thousands" },
                 new VoyageRule { Pattern = @"Atziri's Influence", Weight = 20 },
-                new VoyageRule { Pattern = @"Rare Monsters in Area drop an additional", Weight = 25,
-                                 Comment = "board modifier: an extra currency drop per rare" },
+                // Two wordings for the same thing: the mod table has the template ("in
+                // adjacent Areas drop # additional Chaos Orbs") while the Area Modifiers
+                // panel shows it resolved for the square you hovered ("in Area drop an
+                // additional Chaos Orb").
+                new VoyageRule { Pattern = @"Rare Monsters.*drop (\d+) additional", Weight = 8,
+                                 Comment = "board modifier: extra currency per rare" },
+                new VoyageRule { Pattern = @"Rare Monsters.*drop an additional", Weight = 8 },
             ],
         },
 
@@ -393,6 +414,43 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Rarity of Items", Weight = 0.75 },
                 new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -60,
                                  Comment = "jewellery included, so this guts the profile" },
+            ],
+        },
+
+        new VoyageProfile
+        {
+            Name = "currency",
+            Description = "Orbs off rare monsters, Stacked Decks and scarabs. Board modifiers.",
+            BoardModifierWeight = 1.5,
+            Rules =
+            [
+                // These are figurine modifiers, so they decide which SQUARE is worth
+                // standing a chart on rather than which chart to pick. Weighted by rough
+                // trade value, which is the part most worth arguing with.
+                new VoyageRule { Pattern = @"drop (\d+) additional Divine Orbs", Weight = 120 },
+                new VoyageRule { Pattern = @"drop (\d+) additional Exalted Orbs", Weight = 60 },
+                new VoyageRule { Pattern = @"drop (\d+) additional Ancient Orbs", Weight = 12 },
+                new VoyageRule { Pattern = @"drop (\d+) additional Orbs of Annulment", Weight = 12 },
+                new VoyageRule { Pattern = @"drop (\d+) additional Vaal Orbs", Weight = 6 },
+                new VoyageRule { Pattern = @"drop (\d+) additional Regal Orbs", Weight = 5 },
+                new VoyageRule { Pattern = @"drop (\d+) additional Gemcutter's Prisms", Weight = 5 },
+                new VoyageRule { Pattern = @"drop (\d+) additional Blessed Orbs", Weight = 4 },
+                new VoyageRule { Pattern = @"drop (\d+) additional Chaos Orbs", Weight = 4 },
+                new VoyageRule { Pattern = @"drop (\d+) additional Orbs of Regret", Weight = 2 },
+                new VoyageRule { Pattern = @"drop (\d+) additional Chromatic Orbs", Weight = 1 },
+                new VoyageRule { Pattern = @"drop (\d+) additional Scarabs", Weight = 15 },
+                new VoyageRule { Pattern = @"(\d+)% more Currency found", Weight = 2.0 },
+                new VoyageRule { Pattern = @"(\d+)% more Scarabs found", Weight = 1.5 },
+                new VoyageRule { Pattern = @"instead drop as Stacked Decks", Weight = 40 },
+                new VoyageRule { Pattern = @"chance to drop a Support Gem", Weight = 0.2 },
+                new VoyageRule { Pattern = @"a lost Pirate's Locker", Weight = 25 },
+                new VoyageRule { Pattern = @"(\d+) Altars to the Goddess", Weight = 12 },
+                // Rares are what carry all of the above, so more of them is more of it.
+                new VoyageRule { Pattern = @"(\d+)%\s+increased number of Rare [Mm]onsters", Weight = 0.5 },
+                // The one that pushes the other way, and unusually it scales with how
+                // connected the board is -- the only modifier seen so far that does.
+                new VoyageRule { Pattern = @"(\d+)% reduced quantity of items found.*per connection",
+                                 Weight = -2.0 },
             ],
         },
 

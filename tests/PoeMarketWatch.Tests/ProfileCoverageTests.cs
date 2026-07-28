@@ -46,52 +46,39 @@ public class ProfileCoverageTests
     }
 
     /// <summary>
-    /// Board modifiers, read verbatim off the in-game Area Modifiers panel.
+    /// The figurine modifiers, straight from the generated table.
     ///
-    /// These come from the FIGURINES around the board, not from a chart, so they are not
-    /// in poedb's chart mod table and there is no published list of them. Captured ones
-    /// are recorded here so a rule aimed at them does not look dead.
+    /// These are what the carvings around the board grant, read per square off the Area
+    /// Modifiers panel rather than copied from an item. They were a hand-kept list of
+    /// eight until poedb's Deep Water Border Mods table turned up; there are forty.
     /// </summary>
-    private static readonly string[] ObservedBoardModifiers =
-    [
-        "Area contains 4 additional Treasure Anchors",
-        "Rare Monsters in Area drop an additional Chaos Orb",
-        "30% Chance for Chart to not be consumed when beginning a Voyage",
-        "Area contains Filthscrabble",
-        "32% increased Pack size",
-        "40% increased explicit modifier magnitudes",
-        "Area contains 12 additional packs of Crabs",
-        "Area contains 16 additional packs of Sea Beasts",
-    ];
+    private static IReadOnlyList<string> BoardModifiers() =>
+        ChartRewards.Current.BoardLines.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList();
 
     /// <summary>
-    /// Wordings the game uses that poedb's table does not contain.
+    /// Wordings the game uses that no table contains, from real captures.
     ///
-    /// poedb renders every roll as its tiered form with a number, but the game writes the
-    /// SINGULAR when a roll comes out at one -- "an additional cage of Tormented Spirits"
-    /// where the table says "# additional cages". A corpus lookup misses these, so the
-    /// pattern fallback has to cover them, and they are listed here so a rule that exists
-    /// only for them is not reported as dead.
+    /// Two ways they diverge. The game writes the SINGULAR when a roll comes out at one,
+    /// where the table only ever shows the numbered plural. And the Area Modifiers panel
+    /// shows a board modifier RESOLVED for the square hovered -- "Rare Monsters in Area
+    /// drop an additional Chaos Orb" -- where the table has the template it came from,
+    /// "Rare Monsters in adjacent Areas drop # additional Chaos Orbs".
     /// </summary>
     private static readonly string[] ObservedChartWordings =
     [
         "Adjacent Areas contain an additional cage of Tormented Spirits",
+        "Rare Monsters in Area drop an additional Chaos Orb",
+        "Area contains 4 additional Treasure Anchors",
+        "Area contains Filthscrabble",
+        "32% increased Pack size",
     ];
 
     /// <summary>
-    /// Tilesets, as they appear on a chart.
-    ///
-    /// These are the AREA a chart opens, not a modifier, so they are in no mod table --
-    /// poedb documents the four chart bases and nothing about the areas. Observed ones
-    /// are listed so a rule that prefers a tileset is not reported as dead.
+    /// The tilesets, as a chart states them. Generated now: the room list came from
+    /// poedb's Maiden Voyage page, so these are no longer hand-kept.
     /// </summary>
-    private static readonly string[] ObservedTilesets =
-    [
-        "Area: Anchorfield",
-        "Area: Seafloor Ridges",
-        "Area: Abyssal Plain",
-        "Area: Undersea Groves",
-    ];
+    private static IReadOnlyList<string> Tilesets() =>
+        ChartRewards.Current.Rooms.Keys.Select(r => "Area: " + r).ToList();
 
     [Fact]
     public void EveryRuleMatchesSomethingTheGameCanRoll()
@@ -108,9 +95,9 @@ public class ProfileCoverageTests
             GoldFound = 12, Sulphur = 12,
         }.StatLines().ToList();
         all.AddRange(statLines);
-        all.AddRange(ObservedBoardModifiers);
+        all.AddRange(BoardModifiers().SelectMany(Fillings));
         all.AddRange(ObservedChartWordings);
-        all.AddRange(ObservedTilesets);
+        all.AddRange(Tilesets());
 
         var dead = new List<string>();
         foreach (var profile in VoyageRules.Defaults())
@@ -123,17 +110,36 @@ public class ProfileCoverageTests
     }
 
     [Fact]
-    public void EveryObservedBoardModifierIsScored()
+    public void EveryFigurineModifierIsScored()
     {
         // Board modifiers decide which SQUARE is worth what, so one no profile values
         // makes that square invisible to the solver.
         var profiles = VoyageRules.Defaults();
-        var unscored = ObservedBoardModifiers
-            .Where(line => profiles.All(p => p.ScoreText([line]) == 0))
+        var unscored = BoardModifiers()
+            .Where(line => profiles.All(p => Fillings(line).All(f => p.ScoreText([f]) == 0)))
             .ToList();
 
         Assert.True(unscored.Count == 0,
-            "board modifiers no profile scores:\n  " + string.Join("\n  ", unscored));
+            "figurine modifiers no profile scores:\n  " + string.Join("\n  ", unscored));
+    }
+
+    [Fact]
+    public void TheFigurineTableIsLoaded()
+    {
+        Assert.True(BoardModifiers().Count >= 35,
+                    $"only {BoardModifiers().Count} figurine modifiers loaded");
+    }
+
+    [Fact]
+    public void EveryRoomIsKnownWithItsBase()
+    {
+        // The tilesets, and which chart base opens each. Nineteen in the data, one of
+        // which is a [DNT] placeholder the generator drops.
+        var rooms = ChartRewards.Current.Rooms;
+        Assert.True(rooms.Count >= 15, $"only {rooms.Count} rooms loaded");
+        Assert.Equal("Sandy Seabed", rooms["Anchorfield"]);
+        Assert.Equal("Coral Reef", rooms["Seafloor Ridges"]);
+        Assert.DoesNotContain(rooms.Keys, r => r.StartsWith("[DNT]"));
     }
 
     [Fact]

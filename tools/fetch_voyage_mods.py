@@ -46,6 +46,11 @@ BASES = [
     "Thermal_Vents_Chart",
 ]
 
+# The league page carries two things the chart pages do not: the BORDER mods, which are
+# what the figurines around the board grant, and the room list -- the tilesets a chart can
+# open. Neither is documented anywhere else.
+LEAGUE_PAGE = "Maiden_Voyage"
+
 URL = "https://poedb.tw/us/{}"
 
 # poedb 403s an unidentified client.
@@ -54,7 +59,14 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 
 # --- extraction ---------------------------------------------------------------------
 
-MODS_TAB = re.compile(r'id="MapDeepWaterChartMods".*?</table>', re.S)
+CHART_MODS_TAB = 'MapDeepWaterChartMods'
+BORDER_MODS_TAB = 'DeepWaterBorderMods'
+# The tab id really is spelled "Roomss" on the page.
+ROOMS_TAB = 'Roomss'
+
+ROOM = re.compile(
+    r'<div class="flex-grow-1 ms-2">([^<]+)<div><a[^>]*class="WorldAreas[^"]*"[^>]*>([^<]+)</a>',
+    re.S)
 ROW = re.compile(r"<tr>(.*?)</tr>", re.S)
 CELL = re.compile(r"<td[^>]*>(.*?)</td>", re.S)
 # Badges carry the affix's crafting tags; drop them with their text, or "Elemental Fire
@@ -117,14 +129,38 @@ def normalise(line: str) -> str:
     return " ".join(line.split()).strip(" .")
 
 
-def extract(page: str) -> list[tuple[str, str]]:
-    """Every (affix_kind, normalised_line) in the chart mod table."""
-    section = MODS_TAB.search(page)
+def tab(page: str, tab_id: str) -> str | None:
+    """
+    The markup of one tab.
+
+    A mod tab ends at its </table>; the room tab is a grid of divs with no table at all,
+    so it runs to wherever the NEXT tab begins. Stopping at the first closing triple
+    caught exactly one room.
+    """
+    start = page.find(f'id="{tab_id}"')
+    if start < 0:
+        return None
+
+    next_tab = re.search(r'id="[A-Za-z0-9_]+" class="tab-pane', page[start + 1:])
+    end = start + 1 + next_tab.start() if next_tab else len(page)
+
+    table_end = page.find("</table>", start)
+    if 0 < table_end < end:
+        end = table_end
+    return page[start:end]
+
+
+def extract(page: str, tab_id: str = CHART_MODS_TAB) -> list[tuple[str, str]]:
+    """Every (affix_kind, normalised_line) in a mod table."""
+    section_text = tab(page, tab_id)
+    if not section_text:
+        return []
+    section = re.match(r"(?s).*", section_text)
     if not section:
         return []
 
     found: list[tuple[str, str]] = []
-    for row in ROW.findall(section.group(0)):
+    for row in ROW.findall(section_text):
         cells = CELL.findall(row)
         if len(cells) < 3:
             continue
@@ -177,6 +213,26 @@ REWARD = [
     r"increased Pack Size",
     r"increased Gold found",
     r"increased Dead Man's Sulphur",
+    # currency and drops off rare monsters -- the figurine modifiers, which are where
+    # the real money on this board is
+    r"drop #? ?additional (?:Divine|Exalted|Chaos|Ancient|Blessed|Chromatic|Regal|Vaal) Orbs",
+    r"drop #? ?additional Orbs of (?:Annulment|Regret)",
+    r"drop #? ?additional Gemcutter's Prisms",
+    r"drop #? ?additional Scarabs",
+    r"drop Dead Man's Sulphur",
+    r"chance to drop a Support Gem",
+    r"more (?:Currency|Scarabs|Rarity of Items) found",
+    r"instead drop as Stacked Decks",
+    r"Altars to the Goddess",
+    r"a lost Pirate's Locker",
+    r"contain Captainsbane",
+    r"a Brinerot raiding party",
+    r"Charts have #% chance to not be consumed",
+    r"gain #% increased Experience",
+    r"have an additional modifier",
+    r"Placing Lanterns does not reduce your Lantern count",
+    # A payout PENALTY, and an unusual one: it scales with how connected the board is.
+    r"reduced quantity of items found in adjacent Areas per connection",
     # league set pieces
     r"have Soul Eater",
     r"Empowered by #+ Wildwood Wisps",
@@ -241,6 +297,23 @@ EXCLUDE = [
 ]
 
 
+def extract_rooms(page: str) -> dict[str, str]:
+    """Each room (the tileset a chart opens) mapped to the base area it belongs to."""
+    section_text = tab(page, ROOMS_TAB)
+    if not section_text:
+        return {}
+    rooms = {}
+    for name, area in ROOM.findall(section_text):
+        name, area = normalise(name), normalise(area)
+        # "[DNT]" marks a Do Not Translate placeholder -- content that exists in the data
+        # but not in the game. Thermal Vents is entirely placeholders, which is the same
+        # story its missing mod table tells.
+        if name.startswith("[DNT]"):
+            continue
+        rooms[name] = area
+    return rooms
+
+
 def classify(line: str, reward: re.Pattern, difficulty: re.Pattern,
              exclude: re.Pattern) -> str:
     if exclude.search(line):
@@ -271,6 +344,8 @@ def main() -> int:
     lines: dict[str, str] = {}
     kinds: dict[str, set[str]] = {}
     per_base: dict[str, int] = {}
+    board_lines: dict[str, str] = {}
+    rooms: dict[str, str] = {}
 
     for base in BASES:
         try:
@@ -310,6 +385,27 @@ def main() -> int:
     for line in excluded:
         del lines[line]
 
+    # The league page: border mods (what the figurines grant) and the room list.
+    try:
+        league = fetch(LEAGUE_PAGE)
+    except (urllib.error.URLError, urllib.error.HTTPError) as error:
+        print(f"warning: could not fetch {LEAGUE_PAGE}: {error}", file=sys.stderr)
+    else:
+        rooms = extract_rooms(league)
+        border = extract(league, BORDER_MODS_TAB)
+        per_base[LEAGUE_PAGE + " (border)"] = len(border)
+        for kind, line in border:
+            category = classify(line, reward, difficulty, exclude)
+            if category == "excluded":
+                continue
+            board_lines.setdefault(line, category)
+            lines.setdefault(line, category)
+            kinds.setdefault(line, set()).add(kind)
+        if not border:
+            print(f"warning: no border mod table on {LEAGUE_PAGE}", file=sys.stderr)
+        if not rooms:
+            print(f"warning: no room list on {LEAGUE_PAGE}", file=sys.stderr)
+
     if not lines:
         print("error: no mod table found on any base -- has poedb changed?", file=sys.stderr)
         return 2
@@ -333,9 +429,17 @@ def main() -> int:
         "difficulty": sum(1 for c in lines.values() if c == "difficulty"),
         "unclassified": len(unclassified),
         "excluded": len(excluded),
+        "board_lines": len(board_lines),
+        "rooms": len(rooms),
         "rows_per_base": per_base,
     }
     ordered["lines"] = OrderedDict(sorted(lines.items()))
+    # Which of those come from the FIGURINES rather than a chart. They arrive by a
+    # different route -- read off the Area Modifiers panel per square, not copied from an
+    # item -- so it is worth knowing which is which.
+    ordered["boardLines"] = OrderedDict(sorted(board_lines.items()))
+    # The tilesets a chart can open, and the base area each belongs to.
+    ordered["rooms"] = OrderedDict(sorted(rooms.items()))
     ordered["reward"] = REWARD
     ordered["difficulty"] = DIFFICULTY
     ordered["excluded"] = excluded
@@ -347,7 +451,8 @@ def main() -> int:
     counts = ordered["counts"]
     print(f"{args.out}: {counts['lines']} distinct lines "
           f"({counts['reward']} reward, {counts['difficulty']} difficulty, "
-          f"{counts['excluded']} excluded)")
+          f"{counts['excluded']} excluded), {counts['board_lines']} from figurines, "
+          f"{counts['rooms']} rooms")
     for base, count in per_base.items():
         print(f"  {base}: {count} lines")
 

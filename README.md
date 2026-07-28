@@ -55,7 +55,7 @@ level. Detail improves the plan; its absence does not block one.
 There is deliberately no single "best" board — it depends on what you are farming — so the
 objective is a **rule profile** you pick, hot-reloaded from JSON with no restart:
 `sulphur`, `quantity`, `pack size`, `strongbox`, `containers`, `rare monsters`, `uniques`,
-`gold`, `flasks`, `safe`. Every rule is checked against the generated mod table by the
+`currency`, `gold`, `flasks`, `safe`. Every rule is checked against the generated mod table by the
 test suite — a rule that matches nothing the game can roll fails the build, and so does a
 payout no profile scores. The solver is anytime and says whether the answer was *proved
 optimal* or merely the best found in the budget.
@@ -80,19 +80,24 @@ the set is closed:
 python3 tools/fetch_voyage_mods.py          # -> assets/voyage-mods.json
 ```
 
-That pulls all three tables, splits each affix into its stat lines (the league pairs
+That pulls the chart tables for all four bases, the **Deep Water Border Mods** table (the
+40 modifiers the figurines grant), and the **room list** (19 tilesets and which base opens
+each), splits each affix into its stat lines (the league pairs
 danger with payout in a single affix, so this has to be per line), reduces every number to
 `#`, and classifies each line. The app normalises a chart's text the same way and looks it
 up, so matching is exact rather than pattern-guessed. Anything the rules do not cover is
 printed as UNCLASSIFIED and the file records it — a patch that adds a modifier shows up as
-a warning instead of being silently mis-filed. Current: 86 lines, 42 reward, 44 difficulty.
+a warning instead of being silently mis-filed. Current: 120 lines (76 reward, 44 difficulty), 40 of them from figurines, plus 19 rooms.
+Thermal Vents Chart exists as an item but has no mod table and only `[DNT]` placeholder
+rooms, so it is not implemented — a missing table is a warning, not a failure.
 
 ### Tilesets
 
 Every chart states the area it opens — Anchorfield, Seafloor Ridges, Abyssal Plain,
 Undersea Groves — and they are **not equal**: Anchorfield is thick with Sunken Loot chests,
-which no chart modifier accounts for. There is no published list of them; poedb documents
-the four chart bases and nothing about the areas. So the app captures the tileset, exposes
+which no chart modifier accounts for. The list is generated too — poedb's Maiden Voyage
+page carries it under a `Roomss` tab — but which tilesets are *worth more* is not published
+anywhere. So the app captures the tileset, exposes
 it as a scorable line (`Area: Anchorfield`), and the Voyage tab lists which tilesets you
 hold and whether the current profile values them. Adding a preference is a rule and a
 number. The one shipped weight is an **observation, not a measurement**, and is the first

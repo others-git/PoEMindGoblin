@@ -36,6 +36,19 @@ public static class ChartRewards
         /// </summary>
         public Dictionary<string, string> Lines { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// The subset of <see cref="Lines"/> that comes from the FIGURINES rather than a
+        /// chart. They arrive by a different route -- read off the Area Modifiers panel
+        /// per square, not copied from an item -- so it is worth knowing which is which.
+        /// </summary>
+        public Dictionary<string, string> BoardLines { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Every tileset a chart can open, mapped to the chart base it belongs to.
+        /// "Anchorfield" -> "Sandy Seabed".
+        /// </summary>
+        public Dictionary<string, string> Rooms { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
         /// <summary>Fallback for a line not in the table -- one added by a patch.</summary>
         public List<string> Reward { get; set; } = [];
         public List<string> Difficulty { get; set; } = [];
