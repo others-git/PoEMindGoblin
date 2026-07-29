@@ -161,8 +161,8 @@ public class BorderSynergyTests
         off.MonsterPayoutSynergy = 0;
         var without = session.Solve(off, TimeSpan.FromSeconds(3));
 
-        // 1000 (a Divine = 100 chaos, per rare x ~10 rares) x 1.5 (BoardModifierWeight)
-        // x 0.5 (pack size fraction) -- the per-rare pricing scales the delta with it.
-        Assert.Equal(750, with.Value - without.Value, 3);
+        // 1620 (a Divine = 162 chaos on poe.watch, per rare x ~10 rares) x 1.5
+        // (BoardModifierWeight) x 0.5 (pack size fraction).
+        Assert.Equal(1215, with.Value - without.Value, 3);
     }
 }

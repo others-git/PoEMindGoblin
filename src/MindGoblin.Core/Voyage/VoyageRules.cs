@@ -719,24 +719,28 @@ public sealed class VoyageRules : IDisposable
             [
                 // These are figurine modifiers, so they decide which SQUARE is worth
                 // standing a chart on rather than which chart to pick. Weights are IN
-                // CHAOS ORBS per drop -- a divine is ~100 chaos and ~20x an ancient
-                // (observed ratios) -- times the tileset's rares, because the wording
-                // family is the same as the sulphur drop and that one is observed to
-                // pay PER RARE. Keeping the unit honest keeps the ratios honest: the
-                // first draft had divine at 30x chaos, and the board treated a
-                // Chromatic square as a quarter of a Divine one.
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Divine Orbs?", Weight = 100 * AreaPopulation.RaresPerArea },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Exalted Orbs?", Weight = 15 * AreaPopulation.RaresPerArea },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Ancient Orbs?", Weight = 5 * AreaPopulation.RaresPerArea },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Orbs? of Annulment", Weight = 8 * AreaPopulation.RaresPerArea },
+                // CHAOS ORBS per drop, from poe.watch means (Allflame league,
+                // 2026-07-30; tools/fetch_orb_prices.py reprints them) -- times the
+                // tileset's rares, because the wording family is the same as the
+                // sulphur drop and that one is observed to pay PER RARE. The market
+                // humbles estimation: a divine is ~160 chaos, and an exalt is ~1.
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Divine Orbs?", Weight = 162 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Exalted Orbs?", Weight = 1.2 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Ancient Orbs?", Weight = 4.8 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Orbs? of Annulment", Weight = 8.7 * AreaPopulation.RaresPerArea },
                 new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Vaal Orbs?", Weight = 1 * AreaPopulation.RaresPerArea },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Regal Orbs?", Weight = 0.5 * AreaPopulation.RaresPerArea },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Gemcutter's Prisms?", Weight = 1 * AreaPopulation.RaresPerArea },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Blessed Orbs?", Weight = 0.5 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Regal Orbs?", Weight = 0.4 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Gemcutter's Prisms?", Weight = 2 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Blessed Orbs?", Weight = 0.9 * AreaPopulation.RaresPerArea },
                 new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Chaos Orbs?", Weight = 1 * AreaPopulation.RaresPerArea },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Orbs? of Regret", Weight = 1 * AreaPopulation.RaresPerArea },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Chromatic Orbs?", Weight = 0.1 * AreaPopulation.RaresPerArea },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Scarabs?", Weight = 4 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Orbs? of Regret", Weight = 1.1 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Chromatic Orbs?", Weight = 0.2 * AreaPopulation.RaresPerArea,
+                                 Comment = "the feed mean says 1.96, which is bulk-listing noise -- "
+                                           + "nobody pays two chaos for a chromatic; floored by "
+                                           + "judgment and worth rechecking" },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Scarabs?", Weight = 3 * AreaPopulation.RaresPerArea,
+                                 Comment = "the pool's median is 2c and its mean 11c (a few gold-tier "
+                                           + "scarabs skew it); a random drop is worth about 3" },
                 new VoyageRule { Pattern = @"(\d+)% more Currency found", Weight = 2.0 },
                 new VoyageRule { Pattern = @"(\d+)% more Scarabs found", Weight = 1.5 },
                 new VoyageRule { Pattern = @"instead drop as Stacked Decks", Weight = 40 },
