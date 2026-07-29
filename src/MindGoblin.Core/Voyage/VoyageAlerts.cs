@@ -94,6 +94,11 @@ public static class VoyageAlerts
             "Voyage-wide, so it pays the same from any square. Take it for the implicit "
             + "alone \u2014 it does not need a good one."),
 
+        new(AlertKind.Jackpot, @"drop Dead Man's Sulphur", "Sulphur off rares",
+            "Every rare drops sulphur -- the currency that pays for board rerolls and "
+            + "Allflame crafts. Pair it with anything adding rares; under a sulphur "
+            + "profile this square is the whole plan."),
+
         new(AlertKind.Jackpot, @"Atziri's Influence", "Atziri's Influence",
             "A named modifier rather than a rolled one \u2014 the only one of its kind in "
             + "the tables."),

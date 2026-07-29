@@ -87,6 +87,22 @@ public class VoyageAlertsTests
         Assert.Empty(VoyageAlerts.Scan(session));
     }
 
+    /// <summary>Per-rare sulphur is the jackpot of the sulphur economy, in both the
+    /// figurine template wording and the Area panel's resolved one.</summary>
+    [Theory]
+    [InlineData("Rare Monsters in adjacent Areas drop Dead Man's Sulphur")]
+    [InlineData("Rare Monsters in Area drop Dead Man's Sulphur")]
+    public void RaresDroppingSulphurRaiseAJackpot(string line)
+    {
+        var session = SessionWith();
+        session.ApplySquareModifiers(3, [line]);
+
+        var alert = Assert.Single(VoyageAlerts.Scan(session));
+        Assert.Equal(AlertKind.Jackpot, alert.Kind);
+        Assert.Equal("Sulphur off rares", alert.Headline);
+        Assert.Equal(3, alert.Square);
+    }
+
     [Fact]
     public void SoulEaterIsFoundAndNamesItsChart()
     {
