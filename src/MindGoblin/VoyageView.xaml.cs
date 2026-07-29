@@ -1277,11 +1277,42 @@ public partial class VoyageView : UserControl, IDisposable
         var first = true;
         foreach (var line in lines)
         {
+            // The section break arrives as a sentinel and leaves as an actual LINE:
+            // a rule across 70% of the tip's inner width, left-aligned, separating
+            // what the tile is (stats) from what it does (modifiers).
+            if (line == ChartRewards.SectionBreak)
+            {
+                var rule = new Border
+                {
+                    Height = 1,
+                    Background = Brush(0x6B, 0x5F, 0x4E),
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Margin = new Thickness(0, 8, 0, 3),
+                };
+                rule.SetBinding(FrameworkElement.WidthProperty, new System.Windows.Data.Binding
+                {
+                    Source = stack,
+                    Path = new PropertyPath(nameof(StackPanel.ActualWidth)),
+                    Converter = new SeventyPercent(),
+                });
+                stack.Children.Add(rule);
+                first = false;
+                continue;
+            }
             stack.Children.Add(ModifierLine(line, haveDetail,
                                             new Thickness(0, first ? 9 : 4, 0, 0)));
             first = false;
         }
         return stack;
+    }
+
+    /// <summary>70% of whatever width the tip settles at, so the rule never dictates it.</summary>
+    private sealed class SeventyPercent : System.Windows.Data.IValueConverter
+    {
+        public object Convert(object value, Type t, object p, System.Globalization.CultureInfo c) =>
+            value is double w && w > 0 ? w * 0.7 : 0.0;
+        public object ConvertBack(object v, Type t, object p, System.Globalization.CultureInfo c) =>
+            throw new NotSupportedException();
     }
 
     /// <summary>The values inside a modifier line, for colouring them apart.</summary>
@@ -1613,7 +1644,9 @@ public partial class VoyageView : UserControl, IDisposable
                 ModifierRow.Sort.Chart, index,
                 string.IsNullOrWhiteSpace(chart.Name) ? $"Chart {index}" : $"Chart {index} · {chart.Name}",
                 $"sq {square}",
-                string.Join("\n", rewards),
+                // The section-break sentinel is for the tooltip's drawn rule; in this
+                // flat list it would print as literal dashes.
+                string.Join("\n", rewards.Where(r => r != ChartRewards.SectionBreak)),
                 captured: true,
                 selected: _target == Target.Chart && _targetIndex == index));
         }

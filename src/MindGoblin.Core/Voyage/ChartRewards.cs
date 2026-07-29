@@ -193,10 +193,19 @@ public static class ChartRewards
     /// one applies wherever the chart sits and the other only to its neighbours, and a
     /// flat list would make them look interchangeable.
     /// </summary>
+    /// <summary>Marks the boundary between the headline stats and the modifiers in
+    /// <see cref="Describe"/>; the UI draws it as a rule rather than printing it.</summary>
+    public const string SectionBreak = "\u2500\u2500\u2500";
+
     public static IReadOnlyList<string> Describe(Chart chart)
     {
         var lines = new List<string>();
         lines.AddRange(chart.StatLines());
+
+        // The stats above are what the tile IS; everything below is what it DOES. A
+        // break between the two is only emitted when both sides exist -- a rule over
+        // nothing is furniture.
+        var stats = lines.Count;
 
         if (!string.IsNullOrWhiteSpace(chart.VoyageModifier))
             lines.Add("Voyage-wide: " + chart.VoyageModifier);
@@ -204,6 +213,8 @@ public static class ChartRewards
             lines.Add("Adjacent: " + chart.AdjacentModifier);
 
         lines.AddRange(Filter(chart.Modifiers));
+
+        if (stats > 0 && lines.Count > stats) lines.Insert(stats, SectionBreak);
         return lines;
     }
 
