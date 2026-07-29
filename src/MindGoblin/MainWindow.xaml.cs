@@ -18,7 +18,7 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         // Before anything reads a settings file: storage moved from %LOCALAPPDATA% to
-        // data/ beside the exe, and the Voyage session under the old convention is a
+        // MindGoblin_data/ beside the exe, and the Voyage session under the old convention is a
         // screenshot plus dozens of hovers that must not be silently abandoned.
         var carried = SettingsFolder.MigrateFromLegacyLocations();
 

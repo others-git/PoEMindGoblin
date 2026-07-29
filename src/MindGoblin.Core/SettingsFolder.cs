@@ -1,7 +1,7 @@
 namespace MindGoblin.Core;
 
 /// <summary>
-/// Where the app keeps its files: a <c>data</c> directory NEXT TO THE EXE.
+/// Where the app keeps its files: a <c>MindGoblin_data</c> directory NEXT TO THE EXE.
 ///
 /// Deliberately not %LOCALAPPDATA%. This is a portable tool -- one exe you put
 /// somewhere -- and its state belongs beside it, where it can be found, backed up,
@@ -27,10 +27,11 @@ public static class SettingsFolder
     /// deleted trade client; nothing reads it, so copying it would only spread it.</summary>
     private static readonly string[] Obsolete = ["credentials.dat"];
 
-    /// <summary>data/ beside the exe. AppContext.BaseDirectory resolves to the exe's
-    /// directory even for the single-file publish -- the assets/ load relies on the
+    /// <summary>MindGoblin_data/ beside the exe -- named after the app, so a folder of
+    /// mixed tools stays legible. AppContext.BaseDirectory resolves to the exe's
+    /// directory even for the single-file publish; the assets/ load relies on the
     /// same fact.</summary>
-    public static string Path_ => System.IO.Path.Combine(AppContext.BaseDirectory, "data");
+    public static string Path_ => System.IO.Path.Combine(AppContext.BaseDirectory, Name + "_data");
 
     /// <summary>A file inside the data directory. Every store composes through this,
     /// so the storage location is one fact instead of nine copies of it.</summary>
@@ -51,7 +52,10 @@ public static class SettingsFolder
         try { Directory.CreateDirectory(Path_); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
 
-        return [.. MigrateFromPreviousName(LegacyPath(Name))
+        // Newest convention first; copy-never-overwrite makes order priority. The bare
+        // data/ sibling existed for exactly one build before gaining the app prefix.
+        return [.. MigrateFromPreviousName(System.IO.Path.Combine(AppContext.BaseDirectory, "data"))
+            .Concat(MigrateFromPreviousName(LegacyPath(Name)))
             .Concat(MigrateFromPreviousName(LegacyPath(PreviousName)))];
     }
 
