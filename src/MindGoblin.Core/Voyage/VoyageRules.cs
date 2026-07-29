@@ -734,13 +734,14 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Blessed Orbs?", Weight = 0.9 * AreaPopulation.RaresPerArea },
                 new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Chaos Orbs?", Weight = 1 * AreaPopulation.RaresPerArea },
                 new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Orbs? of Regret", Weight = 1.1 * AreaPopulation.RaresPerArea },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Chromatic Orbs?", Weight = 0.2 * AreaPopulation.RaresPerArea,
-                                 Comment = "the feed mean says 1.96, which is bulk-listing noise -- "
-                                           + "nobody pays two chaos for a chromatic; floored by "
-                                           + "judgment and worth rechecking" },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Scarabs?", Weight = 3 * AreaPopulation.RaresPerArea,
-                                 Comment = "the pool's median is 2c and its mean 11c (a few gold-tier "
-                                           + "scarabs skew it); a random drop is worth about 3" },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Chromatic Orbs?", Weight = 3 * AreaPopulation.RaresPerArea,
+                                 Comment = "reworked this league and genuinely worth chaos now -- "
+                                           + "the feed's ~2c mean was real, and the instinct to "
+                                           + "discount it as listing noise was stale knowledge" },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Scarabs?", Weight = 6 * AreaPopulation.RaresPerArea,
+                                 Comment = "pool median 2c, mean 11c with gold-tier outliers; 6 splits "
+                                           + "the difference in the outliers' favour, since a drop "
+                                           + "CAN be the hundred-chaos one" },
                 new VoyageRule { Pattern = @"(\d+)% more Currency found", Weight = 2.0 },
                 new VoyageRule { Pattern = @"(\d+)% more Scarabs found", Weight = 1.5 },
                 new VoyageRule { Pattern = @"instead drop as Stacked Decks", Weight = 40 },
