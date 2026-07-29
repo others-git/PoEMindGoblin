@@ -94,10 +94,13 @@ public static class AreaPopulation
             // Area rule.
             ["Clam-infested Shelf"] = 0.0,
 
-            // SIGHTED, not settled -- zeros with open questions, kept so the next run
-            // through them knows what to look for. Hazardous Depths: a Rotmother-themed
-            // loot box, possibly unique-item related. Kishara's Rest: possibly a boss
-            // fight. Neither showed extra rares; promote them the moment a run says so.
+            // SIGHTED, not settled -- zeros for RARES with open questions attached.
+            // Hazardous Depths: a Rotmother-themed loot box, possibly unique-item
+            // related. Kishara's Rest: possibly a boss fight. Neither showed extra
+            // rares, BUT both charts trade expensive on the player market -- aggregated
+            // community knowledge that there is real value here even if one run could
+            // not name it. The market signal lives in Area rules (quantity, and uniques
+            // for Depths), not in this map; promote here the moment a run shows rares.
             ["Hazardous Depths"] = 0.0,
             ["Kishara's Rest"] = 0.0,
         };
@@ -614,6 +617,10 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"Area: Anchorfield", Weight = 20,
                                  Comment = "observed dense with Sunken Loot chests: more lootables "
                                            + "for every quantity boost to multiply" },
+                new VoyageRule { Pattern = @"Area: (?:Hazardous Depths|Kishara's Rest)", Weight = 15,
+                                 Comment = "market-backed: both charts trade expensive between "
+                                           + "players; mechanism unconfirmed (Rotmother loot box / "
+                                           + "a boss), so priced modestly on the community's word" },
             ],
         },
 
@@ -792,6 +799,9 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(\d+)% more Rarity of Items found", Weight = 1.5,
                                  Comment = "MORE, not increased: the stronger multiplier, and this profile "
                                            + "somehow scored it zero while quantity scored it" },
+                new VoyageRule { Pattern = @"Area: Hazardous Depths", Weight = 15,
+                                 Comment = "market-backed with a unique-shaped rumour: the Rotmother "
+                                           + "loot box may drop uniques" },
                 new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -60,
                                  Comment = "jewellery included, so this guts the profile" },
             ],
