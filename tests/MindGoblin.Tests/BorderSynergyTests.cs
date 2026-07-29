@@ -54,6 +54,20 @@ public class BorderSynergyTests
     /// opening it carries +0.5 rare density -- more than a +42% pack headline -- and
     /// the Divine square picks it over the packed chart.
     /// </summary>
+    /// <summary>Field observations, one line each: rooms measured dense, and rooms
+    /// measured neutral so they are not re-tested.</summary>
+    [Theory]
+    [InlineData("Brine King's Domain", 1.0)]
+    [InlineData("Sea Pillars", 0.5)]
+    [InlineData("Diving Shoals", 0.0)]
+    [InlineData("Sunken Totems", 0.0)]
+    [InlineData("Kishara's Rest", 0.0)]   // unmeasured: absent defaults to zero
+    public void RoomObservationsAreOnRecord(string room, double expected)
+    {
+        var chart = new Chart("c", "c", ChartShape.Crossing, 80, [room]);
+        Assert.Equal(expected, AreaPopulation.RoomRareBonus(chart), 3);
+    }
+
     [Fact]
     public void ARareDenseRoomWinsThePayoutSquare()
     {

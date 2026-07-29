@@ -69,6 +69,17 @@ public static class AreaPopulation
             // sulphur square. Double the base rares says what was seen, and makes the
             // payout tile unambiguously its seat.
             ["Brine King's Domain"] = 1.0,
+
+            // Always-rare starfish packs observed throughout. Good value, judged below
+            // Brine ("hard to say" was the field note, so half is the honest middle).
+            ["Sea Pillars"] = 0.5,
+
+            // MEASURED NEUTRAL, kept at zero so nobody re-tests them: Diving Shoals ran
+            // unremarkable, and Sunken Totems adds unique mini-bosses (Utula, Ahuana --
+            // Trial of the Ancestors names) which are uniques, not rares, so they feed
+            // no per-rare payout; nothing notable dropped either.
+            ["Diving Shoals"] = 0.0,
+            ["Sunken Totems"] = 0.0,
         };
 
     /// <summary>The room bonus for a chart, wherever the room name landed in the parse
