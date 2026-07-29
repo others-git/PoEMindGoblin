@@ -80,6 +80,11 @@ public static class AreaPopulation
             // no per-rare payout; nothing notable dropped either.
             ["Diving Shoals"] = 0.0,
             ["Sunken Totems"] = 0.0,
+
+            // Measured: no extra rares -- Anchorfield's wealth is CHESTS. Tons of
+            // Sunken Loot observed, which is why the containers and quantity profiles
+            // carry an "Area: Anchorfield" rule instead of this map.
+            ["Anchorfield"] = 0.0,
         };
 
     /// <summary>The room bonus for a chart, wherever the room name landed in the parse
@@ -591,6 +596,9 @@ public sealed class VoyageRules : IDisposable
                                  Comment = "a refunded adjacent chart is ~its own value x the chance" },
                 new VoyageRule { Pattern = @"(\d+)% reduced quantity of items found", Weight = -1.5 },
                 new VoyageRule { Pattern = @"gain (\d+)% increased Experience", Weight = 0.1 },
+                new VoyageRule { Pattern = @"Area: Anchorfield", Weight = 20,
+                                 Comment = "observed dense with Sunken Loot chests: more lootables "
+                                           + "for every quantity boost to multiply" },
             ],
         },
 
