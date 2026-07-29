@@ -234,24 +234,50 @@ public sealed class VoyageProfile
     /// rather than pay per monster and stay additive.
     /// </summary>
     public static bool IsPerMonsterPayout(string description) =>
-        PerMonster.IsMatch(description);
+        PayoutChannelOf(description) != PayoutChannel.None;
 
-    private static readonly Regex PerMonster =
-        new(@"^\s*(?:Rare\s+|Magic\s+)?Monsters\b",
+    /// <summary>
+    /// Which population a per-monster payout scales with. One channel was wrong in both
+    /// directions: rare-dense rooms (Brine, Pelagic) were multiplied into at-least-Magic
+    /// tiles where rares gain nothing -- they are already above magic -- while pack
+    /// gifts, which the upgrade converts wholesale, counted at a token rate.
+    /// </summary>
+    public enum PayoutChannel
+    {
+        /// <summary>Not a per-monster payout at all.</summary>
+        None,
+
+        /// <summary>Pays per RARE -- the sulphur and orb drops. Scales with rare density.</summary>
+        Rares,
+
+        /// <summary>Pays across the general population -- "at least Magic" upgrades,
+        /// magic-modifier buffs. Scales with pack density.</summary>
+        Population,
+    }
+
+    public static PayoutChannel PayoutChannelOf(string description) =>
+        PerRare.IsMatch(description) ? PayoutChannel.Rares
+        : PerPopulation.IsMatch(description) ? PayoutChannel.Population
+        : PayoutChannel.None;
+
+    private static readonly Regex PerRare =
+        new(@"^\s*Rare\s+Monsters\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex PerPopulation =
+        new(@"^\s*(?:Magic\s+)?Monsters\b",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>
-    /// How much monster DENSITY a modifier line adds, as a fraction of a tile's
-    /// monsters. This is what per-monster payouts multiply with. Percent rolls convert
-    /// directly; "additional packs" converts through <see cref="AreaPopulation"/> --
-    /// added packs x rare chance per pack, over the tileset's base rares.
+    /// How much RARE density a modifier line adds, as a fraction of a tile's rares.
+    /// Per-rare payouts multiply with this: increased-rare percent rolls convert
+    /// directly, imprisoned (essence) monsters are whole rares, and added packs convert
+    /// through their rare chance. Pack-size and magic-count lines belong to
+    /// <see cref="PackDensityOf"/>, the population channel.
     /// </summary>
     public static double MonsterDensityOf(string line)
     {
         var density = 0.0;
-        var pack = PackSizePct.Match(line);
-        if (pack.Success) density += double.Parse(pack.Groups[1].Value) / 100;
-        var count = MonsterCountPct.Match(line);
+        var count = RareCountPct.Match(line);
         if (count.Success) density += double.Parse(count.Groups[1].Value) / 100;
         var packs = AdditionalPacks.Match(line);
         if (packs.Success)
@@ -276,10 +302,30 @@ public sealed class VoyageProfile
         return density;
     }
 
+    /// <summary>
+    /// How much POPULATION density a line adds, as a fraction of a tile's packs. This
+    /// is what "at least Magic" and the other whole-population payouts multiply with:
+    /// pack size directly, and every added pack as one of the tileset's packs -- added
+    /// packs get upgraded wholesale, which is what made ignoring them wrong.
+    /// </summary>
+    public static double PackDensityOf(string line)
+    {
+        var density = 0.0;
+        var pack = PackSizePct.Match(line);
+        if (pack.Success) density += double.Parse(pack.Groups[1].Value) / 100;
+        var packs = AdditionalPacks.Match(line);
+        if (packs.Success)
+        {
+            var n = packs.Groups[1].Success ? double.Parse(packs.Groups[1].Value) : 1;
+            density += n / AreaPopulation.PacksPerArea;
+        }
+        return density;
+    }
+
     private static readonly Regex PackSizePct =
         new(@"(\d+)%\s+increased Pack Size", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-    private static readonly Regex MonsterCountPct =
-        new(@"(\d+)%\s+increased number of (?:Rare|Magic) Monsters",
+    private static readonly Regex RareCountPct =
+        new(@"(\d+)%\s+increased number of Rare Monsters",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex AdditionalPacks =
         new(@"(?:(\d+)|an)\s+additional packs? of",

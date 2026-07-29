@@ -45,8 +45,56 @@ public class BorderSynergyTests
     [InlineData("Adjacent Areas contain an additional Imprisoned Monster", 0.1)]
     [InlineData("30% increased number of Rare Monsters in adjacent Areas", 0.3)]
     [InlineData("12 additional packs of Crabs", 0.12)]
+    [InlineData("50% increased Pack Size", 0.0)]   // population channel, not rares
     public void RareDensityCountsEveryRareSource(string line, double expected) =>
         Assert.Equal(expected, VoyageProfile.MonsterDensityOf(line), 3);
+
+    /// <summary>The population channel: pack size and added packs, at full weight --
+    /// an at-least-Magic upgrade converts added packs wholesale.</summary>
+    [Theory]
+    [InlineData("50% increased Pack Size", 0.5)]
+    [InlineData("12 additional packs of Crabs", 0.4)]
+    [InlineData("30% increased number of Rare Monsters in adjacent Areas", 0.0)]
+    public void PackDensityCountsThePopulation(string line, double expected) =>
+        Assert.Equal(expected, VoyageProfile.PackDensityOf(line), 3);
+
+    /// <summary>
+    /// The channel split, end to end: a rare-dense room (Brine) gains NOTHING from an
+    /// at-least-Magic tile -- its rares are already above magic -- so the +50% pack
+    /// chart wins that seat even against the best rare room in the game.
+    /// </summary>
+    [Fact]
+    public void ARareRoomDoesNotWinTheUpgradedTile()
+    {
+        var session = Session(out var packChart, out _);
+        session.ApplyChartText(7, "Deep Plunge\nCoral Reef Chart\nBrine King's Domain");
+        session.ApplySquareModifiers(1, ["Monsters in Area are at least Magic"]);
+
+        var magic = VoyageRules.Defaults().Single(p => p.Name == "magic monsters");
+        var plan = session.Plan(session.Solve(magic, TimeSpan.FromSeconds(3)));
+
+        Assert.Equal(packChart, Assert.Single(plan, s => s.Square == 1).ChartNumber);
+    }
+
+    /// <summary>A packs-gift chart belongs BESIDE the upgrade tile: its packs are
+    /// converted wholesale, which the rare channel priced at a token.</summary>
+    [Fact]
+    public void APackGiftChartSitsBesideTheUpgradedTile()
+    {
+        var session = Session(out _, out _);
+        var gift = 11;
+        session.ApplyChartText(gift,
+            "Kelp Forest\nAnchorfield\nAdjacent Modifier: "
+            + "Adjacent Areas contain 12 additional packs of Crabs");
+        session.ApplySquareModifiers(1, ["Monsters in Area are at least Magic"]);
+
+        var magic = VoyageRules.Defaults().Single(p => p.Name == "magic monsters");
+        var plan = session.Plan(session.Solve(magic, TimeSpan.FromSeconds(3)));
+
+        // Square 1 is the top-left corner; its neighbours are squares 2 and 4.
+        Assert.Contains(Assert.Single(plan, s => s.ChartNumber == gift).Square,
+                        new[] { 2, 4 });
+    }
 
     /// <summary>
     /// A rare-dense ROOM makes its chart the right tenant for a payout square. Brine

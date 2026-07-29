@@ -301,16 +301,22 @@ public sealed class VoyageSession
         var scored = eligible.Select(c =>
         {
             var adjacent = profile.ScoreAdjacent(c);
-            var payoutAdj = c.AdjacentModifier is { } adj && VoyageProfile.IsPerMonsterPayout(adj);
+            var channel = c.AdjacentModifier is { } adj
+                ? VoyageProfile.PayoutChannelOf(adj) : VoyageProfile.PayoutChannel.None;
+            var payoutAdj = channel != VoyageProfile.PayoutChannel.None;
             return c with
             {
                 Value = profile.ScoreChart(c, boardEstimate),
                 AdjacentValue = payoutAdj ? 0 : adjacent,
                 AdjacentPerMonsterValue = payoutAdj ? adjacent : 0,
+                AdjacentPayoutOnPopulation = channel == VoyageProfile.PayoutChannel.Population,
                 MonsterDensity = syn * (c.MonsterPackSize / 100
                                         + AreaPopulation.RoomRareBonus(c)),
+                PackDensity = syn * c.MonsterPackSize / 100,
                 AdjacentMonsterDensity = c.AdjacentModifier is { } line
                     ? syn * VoyageProfile.MonsterDensityOf(line) : 0,
+                AdjacentPackDensity = c.AdjacentModifier is { } packLine
+                    ? syn * VoyageProfile.PackDensityOf(packLine) : 0,
             };
         }).ToList();
 
@@ -326,35 +332,44 @@ public sealed class VoyageSession
         // constant over every layout and steers nothing. Per-monster payouts multiply
         // with the tile's pack size instead, which is what lets a Divine Orb square pull
         // the monster-dense chart onto itself. See VoyageProfile.MonsterPayoutSynergy.
-        var (flat, perMonster) = BoardValueByCell(profile);
+        var (flat, perRare, perPack) = BoardValueByCell(profile);
 
-        // Two more per-cell constants, precomputed so scoring stays arithmetic:
-        // the density the BORDER itself grants a square (a figurine adding packs sits
-        // under the same payout it multiplies), and the payout mass on the NEIGHBOURING
-        // squares -- which is what a chart's own density gift is worth from this cell.
-        var borderDensity = new Dictionary<Cell, double>();
+        // Per-cell constants for BOTH channels, precomputed so scoring stays
+        // arithmetic: the density the border itself grants a square, and the payout
+        // mass on the neighbouring squares -- which is what a chart's density gifts
+        // are worth from this cell, channel by channel.
+        var borderRare = new Dictionary<Cell, double>();
+        var borderPack = new Dictionary<Cell, double>();
         foreach (var modifier in BoardModifiers())
         {
-            var d = syn * VoyageProfile.MonsterDensityOf(modifier.Description);
-            if (d == 0) continue;
+            var r = syn * VoyageProfile.MonsterDensityOf(modifier.Description);
+            var k = syn * VoyageProfile.PackDensityOf(modifier.Description);
             foreach (var cell in modifier.AffectedCells)
-                borderDensity[cell] = borderDensity.GetValueOrDefault(cell) + d;
-        }
-        var neighbourPayout = new Dictionary<Cell, double>();
-        foreach (var (cell, worth) in perMonster)
-            foreach (var side in Enum.GetValues<Side>())
             {
-                var n = VoyageBoard.Neighbour(cell, side);
-                if (n.Row >= 0 && n.Row < Layout.Rows && n.Col >= 0 && n.Col < Layout.Cols)
-                    neighbourPayout[n] = neighbourPayout.GetValueOrDefault(n) + worth;
+                if (r != 0) borderRare[cell] = borderRare.GetValueOrDefault(cell) + r;
+                if (k != 0) borderPack[cell] = borderPack.GetValueOrDefault(cell) + k;
             }
+        }
+        var nbrRare = new Dictionary<Cell, double>();
+        var nbrPack = new Dictionary<Cell, double>();
+        foreach (var (dict, into) in new[] { (perRare, nbrRare), (perPack, nbrPack) })
+            foreach (var (cell, worth) in dict)
+                foreach (var side in Enum.GetValues<Side>())
+                {
+                    var n = VoyageBoard.Neighbour(cell, side);
+                    if (n.Row >= 0 && n.Row < Layout.Rows && n.Col >= 0 && n.Col < Layout.Cols)
+                        into[n] = into.GetValueOrDefault(n) + worth;
+                }
 
         double score(Chart chart, Cell cell) =>
             chart.Value
             + flat.GetValueOrDefault(cell)
-            + perMonster.GetValueOrDefault(cell)
-              * (1 + chart.MonsterDensity + borderDensity.GetValueOrDefault(cell))
-            + chart.AdjacentMonsterDensity * neighbourPayout.GetValueOrDefault(cell);
+            + perRare.GetValueOrDefault(cell)
+              * (1 + chart.MonsterDensity + borderRare.GetValueOrDefault(cell))
+            + perPack.GetValueOrDefault(cell)
+              * (1 + chart.PackDensity + borderPack.GetValueOrDefault(cell))
+            + chart.AdjacentMonsterDensity * nbrRare.GetValueOrDefault(cell)
+            + chart.AdjacentPackDensity * nbrPack.GetValueOrDefault(cell);
 
         (string, Cell)? pin = null;
         if (pinChart is { } index && _charts.TryGetValue(index, out var pinned)
@@ -387,31 +402,41 @@ public sealed class VoyageSession
     /// per-monster half multiplies with the pack size of whatever chart stands there;
     /// the flat half is position money regardless of the tile.
     /// </summary>
-    private (Dictionary<Cell, double> Flat, Dictionary<Cell, double> PerMonster)
+    private (Dictionary<Cell, double> Flat, Dictionary<Cell, double> PerRare,
+             Dictionary<Cell, double> PerPack)
         BoardValueByCell(VoyageProfile profile)
     {
         var flat = new Dictionary<Cell, double>();
-        var perMonster = new Dictionary<Cell, double>();
+        var perRare = new Dictionary<Cell, double>();
+        var perPack = new Dictionary<Cell, double>();
         foreach (var modifier in BoardModifiers())
         {
             var worth = profile.ScoreText([modifier.Description]) * profile.BoardModifierWeight;
             if (worth == 0) continue;
-            var into = VoyageProfile.IsPerMonsterPayout(modifier.Description) ? perMonster : flat;
+            var into = VoyageProfile.PayoutChannelOf(modifier.Description) switch
+            {
+                VoyageProfile.PayoutChannel.Rares => perRare,
+                VoyageProfile.PayoutChannel.Population => perPack,
+                _ => flat,
+            };
             foreach (var cell in modifier.AffectedCells)
                 into[cell] = into.GetValueOrDefault(cell) + worth;
         }
-        return (flat, perMonster);
+        return (flat, perRare, perPack);
     }
 
-    /// <summary>The two halves combined for ONE known chart, for the pin's cell choice.</summary>
+    /// <summary>The channels combined for ONE known chart, for the pin's cell choice.</summary>
     private Dictionary<Cell, double> CombinedBoardValue(VoyageProfile profile, Chart chart)
     {
-        var (flat, perMonster) = BoardValueByCell(profile);
-        var factor = 1 + profile.MonsterPayoutSynergy
-                         * (chart.MonsterPackSize / 100 + AreaPopulation.RoomRareBonus(chart));
+        var (flat, perRare, perPack) = BoardValueByCell(profile);
+        var rareFactor = 1 + profile.MonsterPayoutSynergy
+                             * (chart.MonsterPackSize / 100 + AreaPopulation.RoomRareBonus(chart));
+        var packFactor = 1 + profile.MonsterPayoutSynergy * chart.MonsterPackSize / 100;
         var combined = new Dictionary<Cell, double>(flat);
-        foreach (var (cell, worth) in perMonster)
-            combined[cell] = combined.GetValueOrDefault(cell) + worth * factor;
+        foreach (var (cell, worth) in perRare)
+            combined[cell] = combined.GetValueOrDefault(cell) + worth * rareFactor;
+        foreach (var (cell, worth) in perPack)
+            combined[cell] = combined.GetValueOrDefault(cell) + worth * packFactor;
         return combined;
     }
 
@@ -461,7 +486,7 @@ public sealed class VoyageSession
         var board = new VoyageBoard(Layout.Rows, Layout.Cols);
         foreach (var placement in solution.Placements) board.Place(placement);
 
-        var (flat, perMonster) = BoardValueByCell(profile);
+        var (flat, perRare, perPack) = BoardValueByCell(profile);
         var syn = profile.MonsterPayoutSynergy;
 
         // Golden Lanterns granted TO each square, from the board and from neighbours'
@@ -488,22 +513,28 @@ public sealed class VoyageSession
 
         return VoyageRoute.Plan(board, placement =>
         {
-            var density = syn * (placement.Chart.MonsterPackSize / 100
-                                 + AreaPopulation.RoomRareBonus(placement.Chart));
+            var rareDensity = syn * (placement.Chart.MonsterPackSize / 100
+                                     + AreaPopulation.RoomRareBonus(placement.Chart));
+            var packDensity = syn * placement.Chart.MonsterPackSize / 100;
             var worth = profile.ScoreChart(placement.Chart)
                         + flat.GetValueOrDefault(placement.Cell)
-                        + perMonster.GetValueOrDefault(placement.Cell) * (1 + density);
+                        + perRare.GetValueOrDefault(placement.Cell) * (1 + rareDensity)
+                        + perPack.GetValueOrDefault(placement.Cell) * (1 + packDensity);
 
-            // What the neighbours push in. Received only -- what this chart gives THEM is
-            // counted when they are visited, not here. A neighbour's per-monster payout
-            // is received scaled by THIS tile's density, same as the solver priced it.
+            // What the neighbours push in. Received only -- what this chart gives THEM
+            // is counted when they are visited, not here. A neighbour's per-monster
+            // payout is received scaled by THIS tile's density on the payout's channel.
             foreach (var side in Enum.GetValues<Side>())
                 if (board.At(VoyageBoard.Neighbour(placement.Cell, side)) is { } neighbour)
                 {
                     var received = profile.ScoreAdjacent(neighbour.Chart);
-                    if (neighbour.Chart.AdjacentModifier is { } adj
-                        && VoyageProfile.IsPerMonsterPayout(adj))
-                        received *= 1 + density;
+                    if (neighbour.Chart.AdjacentModifier is { } adj)
+                        received *= VoyageProfile.PayoutChannelOf(adj) switch
+                        {
+                            VoyageProfile.PayoutChannel.Rares => 1 + rareDensity,
+                            VoyageProfile.PayoutChannel.Population => 1 + packDensity,
+                            _ => 1,
+                        };
                     worth += received;
                 }
 

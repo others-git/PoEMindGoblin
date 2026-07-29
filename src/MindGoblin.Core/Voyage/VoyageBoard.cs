@@ -59,11 +59,28 @@ public sealed record Chart(
     public double MonsterDensity { get; init; }
 
     /// <summary>
-    /// How much monster density this chart's Adjacent Modifier GIVES each neighbour
+    /// How much RARE density this chart's Adjacent Modifier GIVES each neighbour
     /// ("Adjacent Areas contain 2 additional packs..."), pre-scaled by the synergy knob.
-    /// Realised wherever a neighbouring square carries a per-monster border payout.
+    /// Realised wherever a neighbouring square carries a per-rare border payout.
     /// </summary>
     public double AdjacentMonsterDensity { get; init; }
+
+    /// <summary>
+    /// The POPULATION channel: how pack-dense this tile is (pack size), pre-scaled.
+    /// Whole-population payouts like "at least Magic" multiply with this, NOT with
+    /// <see cref="MonsterDensity"/> -- a rare-dense room gains nothing from an upgrade
+    /// its rares already exceed.
+    /// </summary>
+    public double PackDensity { get; init; }
+
+    /// <summary>Population density this chart's Adjacent Modifier gives each neighbour
+    /// (added packs, pack size), pre-scaled. Pays beside population-payout squares.</summary>
+    public double AdjacentPackDensity { get; init; }
+
+    /// <summary>Which channel this chart's per-monster ADJACENT payout scales with:
+    /// true for population payouts (x the neighbour's pack density), false for
+    /// per-rare payouts (x the neighbour's rare density).</summary>
+    public bool AdjacentPayoutOnPopulation { get; init; }
 
     public bool HasAdjacentModifier => AdjacentValue != 0 || !string.IsNullOrEmpty(AdjacentModifier);
 

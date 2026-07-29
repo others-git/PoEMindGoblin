@@ -614,7 +614,9 @@ public sealed class VoyageSolver
             foreach (var side in Sides)
                 if (board.At(VoyageBoard.Neighbour(p.Cell, side)) is { } n)
                     total += n.Chart.AdjacentValue       // each ordered pair counted once
-                             + n.Chart.AdjacentPerMonsterValue * (1 + p.Chart.MonsterDensity);
+                             + n.Chart.AdjacentPerMonsterValue
+                               * (1 + (n.Chart.AdjacentPayoutOnPopulation
+                                           ? p.Chart.PackDensity : p.Chart.MonsterDensity));
 
         return new Solution(placements, total);
     }
@@ -641,9 +643,14 @@ public sealed class VoyageSolver
             // denser the tile it lands on, which is the chart-x-chart interaction that
             // makes a Chaos-per-rare chart seek out the packed neighbour.
             gain += neighbour.Chart.AdjacentValue
-                    + neighbour.Chart.AdjacentPerMonsterValue * (1 + chart.MonsterDensity);
+                    + neighbour.Chart.AdjacentPerMonsterValue
+                      * (1 + (neighbour.Chart.AdjacentPayoutOnPopulation
+                                  ? chart.PackDensity : chart.MonsterDensity));
             gain += chart.AdjacentValue
-                    + chart.AdjacentPerMonsterValue * (1 + neighbour.Chart.MonsterDensity);
+                    + chart.AdjacentPerMonsterValue
+                      * (1 + (chart.AdjacentPayoutOnPopulation
+                                  ? neighbour.Chart.PackDensity
+                                  : neighbour.Chart.MonsterDensity));
         }
         return gain;
     }
@@ -703,7 +710,8 @@ public sealed class VoyageSolver
             .ToList();
         // The adjacency ceiling has to allow for the per-monster pairing at its best:
         // the richest payout landing beside the densest tile in the panel.
-        var maxDensity = _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c => c.MonsterDensity));
+        var maxDensity = _charts.Count == 0 ? 0
+            : Math.Max(0, _charts.Max(c => Math.Max(c.MonsterDensity, c.PackDensity)));
         var bestAdjacent = _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c =>
             c.AdjacentValue + c.AdjacentPerMonsterValue * (1 + maxDensity)));
         var pairsRemaining = AdjacentPairsFrom();
