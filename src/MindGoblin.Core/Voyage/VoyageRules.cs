@@ -33,9 +33,16 @@ public static class AreaPopulation
     /// <summary>Rare monsters in one tileset, before any modifiers.</summary>
     public const double RaresPerArea = 10;
 
-    /// <summary>Chance an ADDED pack ("Adjacent Areas contain 4 additional packs of
-    /// Starfish") arrives rare-led -- one or two rares per four packs.</summary>
-    public const double RareChancePerAddedPack = 0.3;
+    /// <summary>
+    /// Chance an ADDED pack ("Adjacent Areas contain 12 additional packs of Crabs")
+    /// arrives rare-led. LOW on observation: the thematic packs are predominantly
+    /// normal-and-magic filler, and a rare leader is the exception. The first guess
+    /// (0.3) made twelve crab packs outbid "+30% increased Rare Monsters" for a seat
+    /// beside a per-rare payout square -- 3.6 implied rares against 3.0 -- which the
+    /// game plainly contradicts; at 0.1 the percent roll outranks any pack gift in
+    /// the tables, as it should.
+    /// </summary>
+    public const double RareChancePerAddedPack = 0.1;
 
     /// <summary>Raw sulphur one rare drops under the drop-sulphur figurine.
     /// OBSERVED in game at 250-350 per rare across several sightings -- the
@@ -656,11 +663,13 @@ public sealed class VoyageRules : IDisposable
                 // adjacent Areas drop # additional Chaos Orbs") while the Area Modifiers
                 // panel shows it resolved for the square you hovered ("in Area drop an
                 // additional Chaos Orb").
-                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional (?:Divine|Exalted) Orbs?", Weight = 30,
+                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional (?:Divine|Exalted) Orbs?",
+                                 Weight = 30 * AreaPopulation.RaresPerArea,
                                  Comment = "the jackpot payouts: a Divine square must outrank a Chromatic one "
                                            + "here too, not only under the currency profile" },
-                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional Scarabs?", Weight = 15 },
-                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional (?!Divine|Exalted|Scarab)", Weight = 6,
+                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional Scarabs?", Weight = 15 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional (?!Divine|Exalted|Scarab)",
+                                 Weight = 6 * AreaPopulation.RaresPerArea,
                                  Comment = "the rest of the per-rare currency; the lookahead keeps the "
                                            + "jackpots on their own rules" },
 
@@ -710,19 +719,22 @@ public sealed class VoyageRules : IDisposable
             [
                 // These are figurine modifiers, so they decide which SQUARE is worth
                 // standing a chart on rather than which chart to pick. Weighted by rough
-                // trade value, which is the part most worth arguing with.
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Divine Orbs?", Weight = 120 },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Exalted Orbs?", Weight = 60 },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Ancient Orbs?", Weight = 12 },
+                // trade value PER ORB x the tileset's rares: the wording family is the
+                // same as the sulphur drop ("Rare Monsters ... drop"), and that one is
+                // observed to pay PER RARE -- so a Divine square is n x ~10 rares x a
+                // divine's worth, not a token, and the gift-ring machinery multiplies it.
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Divine Orbs?", Weight = 120 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Exalted Orbs?", Weight = 60 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Ancient Orbs?", Weight = 12 * AreaPopulation.RaresPerArea },
                 new VoyageRule { Pattern = @"drop (\d+) additional Orbs of Annulment", Weight = 12 },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Vaal Orbs?", Weight = 6 },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Regal Orbs?", Weight = 5 },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Gemcutter's Prisms?", Weight = 5 },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Blessed Orbs?", Weight = 4 },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Chaos Orbs?", Weight = 4 },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Vaal Orbs?", Weight = 6 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Regal Orbs?", Weight = 5 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Gemcutter's Prisms?", Weight = 5 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Blessed Orbs?", Weight = 4 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Chaos Orbs?", Weight = 4 * AreaPopulation.RaresPerArea },
                 new VoyageRule { Pattern = @"drop (\d+) additional Orbs of Regret", Weight = 2 },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Chromatic Orbs?", Weight = 1 },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Scarabs?", Weight = 15 },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Chromatic Orbs?", Weight = 1 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Scarabs?", Weight = 15 * AreaPopulation.RaresPerArea },
                 new VoyageRule { Pattern = @"(\d+)% more Currency found", Weight = 2.0 },
                 new VoyageRule { Pattern = @"(\d+)% more Scarabs found", Weight = 1.5 },
                 new VoyageRule { Pattern = @"instead drop as Stacked Decks", Weight = 40 },
@@ -872,7 +884,7 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Messages? in (?:a )?Bottles?", Weight = -3 },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Giant Starfish", Weight = -2 },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Treasure", Weight = -4 },
-                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional", Weight = -8 },
+                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional", Weight = -8 * AreaPopulation.RaresPerArea },
                 new VoyageRule { Pattern = @"Rare Monsters.*drop Dead Man's Sulphur",
                                  Weight = -(AreaPopulation.RaresPerArea
                                             * AreaPopulation.SulphurPerRareDrop * 5.0) / 2,
