@@ -283,14 +283,15 @@
                             ToolTip="Replace every profile with the shipped ones, discarding your edits."/>
                     <Button Content="Solve" Click="OnSolve" Margin="18,0,0,0"
                             Style="{StaticResource Primary}"/>
+                    <Button Content="Next" Click="OnNextVoyage" Margin="8,0,0,0"
+                            ToolTip="Voyage complete: spend the placed charts, clear the board, and re-read the rerolled border"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <Button Content="Calibrate" Click="OnCalibrate" Margin="0,0,8,0"
                             ToolTip="Panel coordinates. Edit if the read misses charts at your resolution."/>
-                    <Button Content="Clear" Click="OnReset" Margin="0,0,8,0"/>
-                    <Button x:Name="PopOutBtn" Content="Pop out" Click="OnPopOut"
-                            ToolTip="Move to its own window for a second monitor"/>
+                    <Button Content="Clear" Click="OnReset"
+                            ToolTip="Forget everything: charts, modifiers, the saved session"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -440,8 +441,11 @@
             <DockPanel Grid.Column="2" Margin="10,16,18,16">
                 <TextBlock DockPanel.Dock="Top" x:Name="PanelHeader" Text="C H A R T S"
                            Style="{StaticResource Eyebrow}"/>
+                <!-- Top-aligned on purpose: the cells are fixed-size, and a stretched
+                     UniformGrid spreads its rows over whatever height the window gains,
+                     growing the gaps between charts with it. -->
                 <Border Background="{StaticResource Slate}" BorderBrush="{StaticResource Silt}"
-                        BorderThickness="1" Padding="4">
+                        BorderThickness="1" Padding="4" VerticalAlignment="Top">
                     <UniformGrid x:Name="PanelGrid" Rows="10" Columns="6"/>
                 </Border>
             </DockPanel>

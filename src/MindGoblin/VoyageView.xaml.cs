@@ -67,8 +67,6 @@ public partial class VoyageView : UserControl, IDisposable
     private bool _capturing;
     private VoyageSolver.Solution? _solution;
     private IReadOnlyList<VoyagePlan.Step> _steps = [];
-    private Window? _popped;
-
     /// <summary>What the next capture is taken to describe.</summary>
     private enum Target { Chart, Figurine, Square }
 
@@ -662,6 +660,40 @@ public partial class VoyageView : UserControl, IDisposable
         SetStatus($"Placed {_solution.Placements.Count} charts for \"{profile.Name}\".");
     }
 
+    /// <summary>
+    /// The voyage was run. Spend the placed charts, clear the board, and point the user
+    /// at the one thing that must happen before the next plan: re-reading the border,
+    /// which rerolls every voyage. Unplaced charts keep their panel numbers -- those
+    /// point at physical panel positions.
+    /// </summary>
+    private void OnNextVoyage(object sender, RoutedEventArgs e)
+    {
+        if (_steps.Count == 0)
+        {
+            SetStatus("Nothing to complete \u2014 solve a board first.", bad: true);
+            return;
+        }
+
+        var spent = _session.CompleteVoyage(_steps.Select(st => st.ChartNumber));
+        _solution = null;
+        _steps = [];
+        _summary.Clear();
+        SolveInfo.Text = "";
+        _skipped.Clear();
+        _alertsOpen = false;
+
+        // The squares are the read target again: the border is new.
+        SetTarget(Target.Square, 0);
+        RefreshPanel();
+        RefreshBoard();
+        RebuildModifiers();
+        RefreshProgress();
+        Persist();
+
+        SetStatus($"Voyage complete \u2014 {spent} charts spent. "
+                  + "The border has rerolled: hover each square and press Ctrl+Alt+C.");
+    }
+
     private void OnReset(object sender, RoutedEventArgs e)
     {
         _session = new VoyageSession();
@@ -677,38 +709,6 @@ public partial class VoyageView : UserControl, IDisposable
         RebuildModifiers();
         RefreshProgress();
         SetStatus("Cleared.");
-    }
-
-    // ---- second monitor ----------------------------------------------------------
-
-    private void OnPopOut(object sender, RoutedEventArgs e)
-    {
-        // Already out: the button says "Dock", so dock it. Closing the window is what
-        // returns the view to its tab, so this is the same path.
-        if (_popped is not null) { _popped.Close(); return; }
-
-        if (Parent is not ContentControl host) return;
-        host.Content = null;
-
-        _popped = new Window
-        {
-            Title = "Voyage planner",
-            Content = this,
-            Width = 1500,
-            Height = 1040,
-            Background = Brushes.Black,
-        };
-        // Returning the view to its tab on close keeps a single instance and a single
-        // session -- a second copy would silently read into different state.
-        _popped.Closed += (_, _) =>
-        {
-            _popped!.Content = null;
-            host.Content = this;
-            _popped = null;
-            PopOutBtn.Content = "Pop out";
-        };
-        PopOutBtn.Content = "Dock";
-        _popped.Show();
     }
 
     /// <summary>

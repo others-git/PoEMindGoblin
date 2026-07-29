@@ -414,6 +414,27 @@ public sealed class VoyageSession
 
     // ---- persistence -------------------------------------------------------------
 
+    /// <summary>
+    /// The voyage was run: spend its charts and clear the board.
+    ///
+    /// The placed charts are consumed by the game, so they leave the inventory; every
+    /// other chart keeps its panel index, because those numbers point at physical panel
+    /// positions and renumbering would break the pointing. The square modifiers and
+    /// figurines go too -- the border rerolls each voyage, so yesterday's reads are not
+    /// stale data but data about a board that no longer exists.
+    /// </summary>
+    /// <returns>How many charts were spent.</returns>
+    public int CompleteVoyage(IEnumerable<int> placedCharts)
+    {
+        var spent = 0;
+        foreach (var index in placedCharts)
+            if (_charts.Remove(index)) spent++;
+
+        _squareModifiers.Clear();
+        _figurines.Clear();
+        return spent;
+    }
+
     /// <summary>Capture everything read so far, for writing to disk.</summary>
     public VoyageSessionState ToState(string? profile = null, bool useSoulEater = false) => new()
     {
