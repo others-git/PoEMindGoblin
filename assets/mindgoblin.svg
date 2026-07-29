@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!--
+    MindGoblin's icon: a classic goblin wearing Goldrim.
+
+    Drawn for the 16px case first. At tab size the only things that survive are the
+    silhouette and two colours, so the shape is built from three bold masses - the ears
+    out to the sides, the head, and the gold band across the brow - and everything finer
+    (teeth, brow, stud) is detail that may vanish without the icon becoming unreadable.
+
+    Palette is the app's own: brass #C9A227 on slate #131110, so the icon and the window
+    are recognisably the same object. Goblin green is warmed towards olive to keep it off
+    the app's verdigris, which reads as UI rather than skin.
+  -->
+  <defs>
+    <linearGradient id="skin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7E9B3F"/>
+      <stop offset="1" stop-color="#4F6626"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F0D264"/>
+      <stop offset="0.45" stop-color="#C9A227"/>
+      <stop offset="1" stop-color="#8A6F22"/>
+    </linearGradient>
+    <linearGradient id="leather" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6B5A33"/>
+      <stop offset="1" stop-color="#3A301A"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="56" fill="#131110"/>
+  <rect x="3" y="3" width="250" height="250" rx="53" fill="none"
+        stroke="#2A2018" stroke-width="6"/>
+
+  <!-- Ears, behind the head and swept back. The widest thing in the icon, so they carry
+       the silhouette at sizes where the face is three pixels. -->
+  <g fill="url(#skin)" stroke="#2C3A16" stroke-width="4" stroke-linejoin="round">
+    <path d="M78 140 L14 96 C22 140 40 172 82 180 Z"/>
+    <path d="M178 140 L242 96 C234 140 216 172 174 180 Z"/>
+  </g>
+
+  <!-- Head -->
+  <path d="M128 84 C170 84 190 116 190 152 C190 194 162 220 128 220
+           C94 220 66 194 66 152 C66 116 86 84 128 84 Z"
+        fill="url(#skin)" stroke="#2C3A16" stroke-width="4"/>
+
+  <!-- Brow, eyes, nose, grin -->
+  <g fill="#26310F">
+    <path d="M88 136 L120 146 L118 156 L86 148 Z"/>
+    <path d="M168 136 L136 146 L138 156 L170 148 Z"/>
+  </g>
+  <g fill="#F2E4A8">
+    <ellipse cx="105" cy="160" rx="11" ry="9"/>
+    <ellipse cx="151" cy="160" rx="11" ry="9"/>
+  </g>
+  <g fill="#1A1509">
+    <ellipse cx="107" cy="161" rx="5" ry="6"/>
+    <ellipse cx="149" cy="161" rx="5" ry="6"/>
+  </g>
+
+  <!-- The nose: long, hooked, and the reason a goblin reads as a goblin. Given its own
+       shadow, because drawn flat it sat in the middle of the cheek as a snout. -->
+  <path d="M127 146 C138 160 158 184 153 198 C149 208 129 210 122 201
+           C114 191 117 165 127 146 Z"
+        fill="#7A9740" stroke="#2C3A16" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M127 146 C138 160 158 184 153 198 C150 204 143 207 137 207
+           C143 196 140 172 127 146 Z" fill="#4F6626" opacity="0.55"/>
+
+  <!-- Grin -->
+  <path d="M96 196 C112 214 146 214 164 195 C152 210 108 210 96 196 Z" fill="#1A1509"/>
+  <g fill="#F2E4A8">
+    <path d="M107 202 L114 201 L110 209 Z"/>
+    <path d="M152 201 L159 202 L149 209 Z"/>
+  </g>
+
+  <!-- Goldrim. A leather cap whose whole identity is the band around it, so the band is
+       drawn heavy and the leather is only what shows above it. -->
+  <path d="M62 116 C58 68 88 38 126 38 C170 38 200 66 196 104
+           C192 88 186 112 194 118 Z"
+        fill="url(#leather)" stroke="#2A2018" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M72 64 C90 48 114 42 130 46 C110 51 90 60 78 76 Z" fill="#7C6A3E" opacity="0.7"/>
+  <path d="M150 48 C168 58 180 76 182 98" fill="none" stroke="#2A2018"
+        stroke-width="4" stroke-linecap="round" opacity="0.5"/>
+
+  <rect x="52" y="108" width="152" height="30" rx="15"
+        fill="url(#gold)" stroke="#6B5518" stroke-width="4"/>
+  <path d="M62 116 C90 128 166 128 194 116" fill="none" stroke="#F0D264"
+        stroke-width="4" stroke-linecap="round" opacity="0.65"/>
+  <circle cx="128" cy="123" r="9" fill="#3A301A" stroke="#F0D264" stroke-width="4"/>
+</svg>

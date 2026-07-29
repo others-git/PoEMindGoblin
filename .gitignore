@@ -1,10 +1,19 @@
 bin/
 obj/
 publish/
-*.user
-.vs/
-*.dat
-credentials.dat
-publish/
+TestResults/
+
+# Scratch renders. `--render` writes to whatever path it is given, and that is usually
+# the repo root while checking a UI change.
+/*.png
+
+# Screen captures of a real game session, and research notes. Neither belongs in a
+# public repo: the captures are somebody's account, the notes are working scratch.
 .capture/
 research/
+
+*.user
+*.swp
+.vs/
+.idea/
+.DS_Store

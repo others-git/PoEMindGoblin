@@ -1,0 +1,96 @@
+name: build
+
+# Every push and PR builds and tests. A v* tag additionally publishes the portable exe
+# and attaches it to a GitHub Release.
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+# Two pushes to the same branch: the older run has nothing to tell us. Tags are exempt --
+# a cancelled tag run is a missing release.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # Windows is not a preference here. The app is WPF, Core targets net10.0-windows for
+    # the screen readers, and the OCR is the Windows SDK's own -- none of it builds
+    # anywhere else.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          # global.json pins the floor; this installs a matching SDK.
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore MindGoblin.slnx
+
+      - name: Build
+        run: dotnet build MindGoblin.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test MindGoblin.slnx -c Release --no-build --verbosity normal
+
+  release:
+    # Only for tags, and only once the tests have passed. A release built from a red
+    # commit is worse than a late one.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Version from tag
+        id: version
+        shell: pwsh
+        run: |
+          # refs/tags/v1.2.3 -> 1.2.3, so the assembly reports what the tag says.
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Publish
+        run: >
+          dotnet publish src/MindGoblin/MindGoblin.csproj
+          -c Release
+          -o publish
+          -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Package
+        shell: pwsh
+        run: |
+          # The exe is self-contained but NOT self-sufficient: the mod tables and the gem
+          # catalogue are read from assets/ beside it at runtime. Shipping the bare exe
+          # would lose the Voyage rules and the RoI vendor filter, so the release is a zip
+          # of the whole publish folder.
+          $name = "MindGoblin-${{ steps.version.outputs.version }}-win-x64"
+          Compress-Archive -Path publish\* -DestinationPath "$name.zip"
+          "asset=$name.zip" >> $env:GITHUB_OUTPUT
+        id: package
+
+      - name: Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          gh release create "${{ github.ref_name }}"
+          "${{ steps.package.outputs.asset }}"
+          --title "${{ github.ref_name }}"
+          --generate-notes

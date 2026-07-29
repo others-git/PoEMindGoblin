@@ -14,7 +14,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <AssemblyName>MindGoblin</AssemblyName>
-    <ApplicationIcon></ApplicationIcon>
+    <ApplicationIcon>..\..\assets\mindgoblin.ico</ApplicationIcon>
     <!-- Portable: one file, no installer, no .NET prerequisite on the target machine.
          WPF cannot use NativeAOT, so this is IL + a bundled runtime (~150 MB). -->
     <PublishSingleFile>true</PublishSingleFile>
@@ -24,18 +24,22 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <DebugType>embedded</DebugType>
+    <!-- NU1510 claims System.Drawing.Common is redundant on net*-windows. It is not:
+         removing it fails the build with CS1069, System.Drawing.Bitmap having been
+         forwarded to exactly that assembly. Checked, not assumed. -->
+    <NoWarn>$(NoWarn);NU1510</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="10.0.10" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Generated from Path of Building data; see README. -->
     <None Include="..\..\assets\gem-index.json" Link="assets\gem-index.json"
-          CopyToOutputDirectory="PreserveNewest" />
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="..\..\assets\voyage-mods.json" Link="assets\voyage-mods.json"
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="System.Drawing.Common" Version="10.0.10" />
   </ItemGroup>
 
 </Project>
