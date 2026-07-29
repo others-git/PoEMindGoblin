@@ -408,7 +408,10 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel>
-                                            <StackPanel Orientation="Horizontal">
+                                            <!-- Wraps: one modifier can name nine charts,
+                                                 and a horizontal stack would run it off
+                                                 the edge rather than onto a second line. -->
+                                            <WrapPanel Orientation="Horizontal">
                                                 <TextBlock Text="{Binding Headline}"
                                                            FontFamily="Georgia" FontSize="14"
                                                            Foreground="{Binding Accent}"/>
@@ -416,7 +419,7 @@
                                                            Foreground="{StaticResource Shade}"
                                                            Margin="8,0,0,0"
                                                            VerticalAlignment="Center"/>
-                                            </StackPanel>
+                                            </WrapPanel>
                                             <TextBlock Text="{Binding Detail}" FontSize="12"
                                                        Foreground="{StaticResource Ash}"
                                                        TextWrapping="Wrap" Margin="0,3,0,0"/>

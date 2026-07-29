@@ -24,13 +24,41 @@ public enum AlertKind
 /// So this is deliberately NOT scoring. It is a short list of modifiers that change what
 /// you would do, checked by name.
 /// </summary>
-public sealed record VoyageAlert(AlertKind Kind, string Headline, string Detail, string Where)
+public sealed record VoyageAlert(AlertKind Kind, string Headline, string Detail)
 {
-    /// <summary>Panel index of the chart it came from, or null when it is a board square.</summary>
-    public int? ChartIndex { get; init; }
+    /// <summary>Panel indices of every chart carrying it, ascending.</summary>
+    public IReadOnlyList<int> Charts { get; init; } = [];
 
-    /// <summary>Square number when it came from the board, else null.</summary>
-    public int? Square { get; init; }
+    /// <summary>Board squares carrying it, ascending.</summary>
+    public IReadOnlyList<int> Squares { get; init; } = [];
+
+    /// <summary>First chart, for callers that act on one. Null when it is board-only.</summary>
+    public int? ChartIndex => Charts.Count == 0 ? null : Charts[0];
+
+    /// <summary>First square, or null when it came from charts.</summary>
+    public int? Square => Squares.Count == 0 ? null : Squares[0];
+
+    /// <summary>
+    /// Where it came from, as one phrase.
+    ///
+    /// One row per SOURCE was the obvious build and the wrong one: a difficulty modifier
+    /// like lowered maximum resistances sits on a quarter of the panel, so the banner
+    /// filled with nine identical paragraphs and buried the two that were rare. Grouping
+    /// turns that into the more useful statement anyway -- not "this exists" nine times
+    /// over, but exactly which charts carry it.
+    /// </summary>
+    public string Where
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (Charts.Count == 1) parts.Add($"chart {Charts[0]}");
+            else if (Charts.Count > 1) parts.Add($"charts {string.Join(", ", Charts)}");
+            if (Squares.Count == 1) parts.Add($"square {Squares[0]}");
+            else if (Squares.Count > 1) parts.Add($"squares {string.Join(", ", Squares)}");
+            return string.Join(" · ", parts);
+        }
+    }
 }
 
 public static class VoyageAlerts
@@ -107,22 +135,44 @@ public static class VoyageAlerts
 
     private static readonly Regex[] Compiled = [.. Rules.Select(r => Compile(r.Pattern))];
 
-    /// <summary>Everything notable in a session, jackpots first.</summary>
+    /// <summary>
+    /// Everything notable in a session: one row per MODIFIER, naming every source.
+    ///
+    /// Jackpots first. A trap is worth knowing and a jackpot is worth acting on, and the
+    /// one you act on belongs at the top.
+    /// </summary>
     public static IReadOnlyList<VoyageAlert> Scan(VoyageSession session)
     {
-        var found = new List<VoyageAlert>();
+        // Keyed by rule, so the same modifier found on nine charts is one row that names
+        // nine charts. HashSets because a chart lists its implicit among its modifiers in
+        // some captures, and one modifier read twice is still one modifier.
+        var charts = new Dictionary<int, SortedSet<int>>();
+        var squares = new Dictionary<int, SortedSet<int>>();
 
         foreach (var (index, chart) in session.ByPanelIndex.OrderBy(kv => kv.Key))
-            foreach (var line in ChartLines(chart))
-                Add(found, line, $"chart {index}", chartIndex: index);
+            foreach (var rule in ChartLines(chart).SelectMany(Matching))
+                (charts.TryGetValue(rule, out var s) ? s : charts[rule] = []).Add(index);
 
         foreach (var (square, lines) in session.SquareModifiers.OrderBy(kv => kv.Key))
-            foreach (var line in lines)
-                Add(found, line, $"square {square}", square: square);
+            foreach (var rule in lines.SelectMany(Matching))
+                (squares.TryGetValue(rule, out var s) ? s : squares[rule] = []).Add(square);
 
-        // Jackpots first, then in the order they were found. A trap is worth knowing and a
-        // jackpot is worth acting on, and the one you act on belongs at the top.
-        return [.. found.OrderBy(a => a.Kind == AlertKind.Trap ? 1 : 0)];
+        return [.. Enumerable.Range(0, Rules.Length)
+            .Where(i => charts.ContainsKey(i) || squares.ContainsKey(i))
+            .OrderBy(i => Rules[i].Kind == AlertKind.Trap ? 1 : 0)
+            .ThenBy(i => i)
+            .Select(i => new VoyageAlert(Rules[i].Kind, Rules[i].Headline, Rules[i].Detail)
+            {
+                Charts = [.. charts.GetValueOrDefault(i) ?? []],
+                Squares = [.. squares.GetValueOrDefault(i) ?? []],
+            })];
+    }
+
+    /// <summary>Indices of every rule this line trips.</summary>
+    private static IEnumerable<int> Matching(string line)
+    {
+        for (var i = 0; i < Rules.Length; i++)
+            if (Compiled[i].IsMatch(line)) yield return i;
     }
 
     private static IEnumerable<string> ChartLines(Chart chart)
@@ -130,27 +180,6 @@ public static class VoyageAlerts
         if (!string.IsNullOrWhiteSpace(chart.VoyageModifier)) yield return chart.VoyageModifier!;
         if (!string.IsNullOrWhiteSpace(chart.AdjacentModifier)) yield return chart.AdjacentModifier!;
         foreach (var line in chart.Modifiers) yield return line;
-    }
-
-    private static void Add(
-        List<VoyageAlert> found, string line, string where, int? chartIndex = null, int? square = null)
-    {
-        for (var i = 0; i < Rules.Length; i++)
-        {
-            if (!Compiled[i].IsMatch(line)) continue;
-
-            // One alert per headline per source. A chart's implicit is also listed among
-            // its modifiers in some captures, and saying "Divine Orbs" twice about the
-            // same chart reads as two of them.
-            if (found.Any(a => a.Headline == Rules[i].Headline
-                               && a.ChartIndex == chartIndex && a.Square == square)) continue;
-
-            found.Add(new VoyageAlert(Rules[i].Kind, Rules[i].Headline, Rules[i].Detail, where)
-            {
-                ChartIndex = chartIndex,
-                Square = square,
-            });
-        }
     }
 
     /// <summary>

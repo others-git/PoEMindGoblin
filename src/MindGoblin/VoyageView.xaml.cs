@@ -797,7 +797,12 @@ public partial class VoyageView : UserControl, IDisposable
         if (_alerts.Count == 0) _alertsOpen = false;
         else
         {
-            AlertToggle.Content = string.Join(" · ", _alerts.Select(a => a.Headline))
+            // Named, but bounded. Three is where a label stops reading as a phrase and
+            // starts reading as a list that has outgrown its button.
+            var names = _alerts.Take(3).Select(a => a.Headline).ToList();
+            if (_alerts.Count > names.Count) names.Add($"+{_alerts.Count - names.Count} more");
+
+            AlertToggle.Content = string.Join(" · ", names)
                                   + (_alertsOpen ? "  \u25B4" : "  \u25BE");
             AlertToggle.Foreground = _alerts[0].Accent;
         }

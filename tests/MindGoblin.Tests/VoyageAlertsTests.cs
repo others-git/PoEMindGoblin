@@ -156,6 +156,47 @@ public class VoyageAlertsTests
         Assert.Empty(VoyageAlerts.Scan(session));
     }
 
+    /// <summary>
+    /// One row per MODIFIER, not per source.
+    ///
+    /// A difficulty modifier like lowered maximum resistances sits on a quarter of a real
+    /// panel. Listed one row per chart, nine identical paragraphs filled the banner and
+    /// buried the two rare modifiers it existed to surface.
+    /// </summary>
+    [Fact]
+    public void OneModifierOnManyChartsIsOneRowNamingThemAll()
+    {
+        var session = SessionWith(
+            [.. new[] { 1, 3, 8 }.Select(i => (i,
+                $"Salt Barrens\nAbyssal Plain\nPlayers have -{i}% to all maximum Resistances"))]);
+
+        var alert = Assert.Single(VoyageAlerts.Scan(session));
+        Assert.Equal([1, 3, 8], alert.Charts);
+        Assert.Equal("charts 1, 3, 8", alert.Where);
+    }
+
+    [Fact]
+    public void ASingleSourceStillReadsAsOne()
+    {
+        var session = SessionWith((6,
+            "Salt Barrens\nAbyssal Plain\nPlayers have -8% to all maximum Resistances"));
+
+        Assert.Equal("chart 6", Assert.Single(VoyageAlerts.Scan(session)).Where);
+    }
+
+    /// <summary>Charts and squares can carry the same modifier; both get named.</summary>
+    [Fact]
+    public void ChartsAndSquaresAreNamedSeparately()
+    {
+        var session = SessionWith((2,
+            "Salt Barrens\nAbyssal Plain\nAdjacent Modifier: Rare Monsters adjacent in "
+            + "Areas drop 2 additional Divine Orbs"));
+        session.ApplySquareModifiers(5, ["Rare Monsters in Area drop an additional Divine Orb"]);
+
+        var alert = Assert.Single(VoyageAlerts.Scan(session));
+        Assert.Equal("chart 2 · square 5", alert.Where);
+    }
+
     /// <summary>The same chart listing its implicit twice is one modifier, not two.</summary>
     [Fact]
     public void OneChartRaisesOneAlertPerHeadline()
