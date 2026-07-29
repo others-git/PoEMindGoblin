@@ -1257,19 +1257,19 @@ public partial class VoyageView : UserControl, IDisposable
     private static UIElement Tip(string title, string? subtitle,
                                  IEnumerable<string> lines, bool haveDetail)
     {
-        var stack = new StackPanel { MaxWidth = 360 };
+        var stack = new StackPanel { MaxWidth = 420 };
         stack.Children.Add(new TextBlock
         {
             Text = title,
             FontFamily = new FontFamily("Georgia"),
-            FontSize = 13,
+            FontSize = 16,
             Foreground = Brush(0xC9, 0xA2, 0x27),
         });
         if (!string.IsNullOrEmpty(subtitle))
             stack.Children.Add(new TextBlock
             {
                 Text = subtitle,
-                FontSize = 11,
+                FontSize = 12,
                 Foreground = Brush(0x6B, 0x5F, 0x4E),
                 Margin = new Thickness(0, 1, 0, 0),
             });
@@ -1277,18 +1277,49 @@ public partial class VoyageView : UserControl, IDisposable
         var first = true;
         foreach (var line in lines)
         {
-            stack.Children.Add(new TextBlock
-            {
-                Text = line,
-                FontSize = 12,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = haveDetail ? Brush(0xE6, 0xDB, 0xC2) : Brush(0x94, 0x86, 0x6F),
-                FontStyle = haveDetail ? FontStyles.Normal : FontStyles.Italic,
-                Margin = new Thickness(0, first ? 8 : 3, 0, 0),
-            });
+            stack.Children.Add(ModifierLine(line, haveDetail,
+                                            new Thickness(0, first ? 9 : 4, 0, 0)));
             first = false;
         }
         return stack;
+    }
+
+    /// <summary>The values inside a modifier line, for colouring them apart.</summary>
+    private static readonly System.Text.RegularExpressions.Regex NumberToken =
+        new(@"[+\-]?\d+(?:\.\d+)?%?",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// A modifier line set for READING AT A GLANCE: 13.5pt, and the numbers pulled out
+    /// of the prose in bright brass. A tooltip full of same-colour 12px text made every
+    /// value a hunt; the number is the part being compared, so it is the part that
+    /// carries the colour.
+    /// </summary>
+    private static TextBlock ModifierLine(string line, bool haveDetail, Thickness margin)
+    {
+        var block = new TextBlock
+        {
+            FontSize = 13.5,
+            TextWrapping = TextWrapping.Wrap,
+            FontStyle = haveDetail ? FontStyles.Normal : FontStyles.Italic,
+            Margin = margin,
+        };
+        var prose = haveDetail ? Brush(0xC8, 0xBC, 0xA4) : Brush(0x94, 0x86, 0x6F);
+        var number = haveDetail ? Brush(0xF0, 0xD2, 0x64) : Brush(0xB0, 0x9E, 0x7A);
+
+        var at = 0;
+        foreach (System.Text.RegularExpressions.Match m in NumberToken.Matches(line))
+        {
+            if (m.Index > at)
+                block.Inlines.Add(new System.Windows.Documents.Run(line[at..m.Index])
+                    { Foreground = prose });
+            block.Inlines.Add(new System.Windows.Documents.Run(m.Value)
+                { Foreground = number, FontWeight = FontWeights.SemiBold });
+            at = m.Index + m.Length;
+        }
+        if (at < line.Length)
+            block.Inlines.Add(new System.Windows.Documents.Run(line[at..]) { Foreground = prose });
+        return block;
     }
 
     private static SolidColorBrush Brush(byte r, byte g, byte b) =>

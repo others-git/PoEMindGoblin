@@ -197,8 +197,11 @@ public sealed class VoyageSolver
         _requireConnected = false;
         if (SeedConnected(sw, deadline * SeedShare) is { } seed)
         {
-            best = seed;
-            _bestRank = seed.Value + seed.Placements.Count * FullnessEpsilon;
+            // Polish the seed BEFORE the search: same-shape swaps turn "a connected
+            // board" into "a connected board of the best charts these shapes allow",
+            // and a strong incumbent is what makes the bound prune at all.
+            best = Polish(seed);
+            _bestRank = best.Value + best.Placements.Count * FullnessEpsilon;
             _requireConnected = true;
         }
 
@@ -253,6 +256,22 @@ public sealed class VoyageSolver
         }
         _searchRule = BorderRule.None;
 
+        // One more polish on the way out. On a plateaued panel -- many charts of
+        // similar value over 60 candidates -- the branch and bound can fail to improve
+        // the incumbent at all: connected boards are too rare for blind descent to hit
+        // and the bound too flat to steer, measured at 28 MILLION nodes without a
+        // single improvement while a plainly better board existed. Swapping never
+        // breaks a layout, so it harvests exactly the value the search could not.
+        if (best.Value != double.NegativeInfinity)
+        {
+            var polished = Polish(best);
+            if (polished.Value > best.Value)
+            {
+                best = polished;
+                exhausted = false;    // the search demonstrably had not seen everything
+            }
+        }
+
         sw.Stop();
 
         var result = best.Value == double.NegativeInfinity
@@ -278,6 +297,109 @@ public sealed class VoyageSolver
 
     /// <summary>Unwinds the recursion when the time budget is spent.</summary>
     private sealed class DeadlineReached : Exception { }
+
+    /// <summary>
+    /// Improve a solution by swaps that cannot break it.
+    ///
+    /// Two charts of the SAME SHAPE are interchangeable anywhere: keep the rotation and
+    /// every edge stays exactly as it was, so validity and connectivity are preserved by
+    /// construction -- no re-check, no re-search. Greedy best-swap until nothing
+    /// improves, over unused-for-placed substitutions and placed-placed exchanges; the
+    /// space is 9 cells x 60 charts, so this costs microseconds against a search
+    /// measured in millions of nodes.
+    ///
+    /// This exists because branch and bound dies on plateaus. With many near-equal
+    /// charts, the bound stops pruning and the search wanders a space where connected
+    /// boards are one in millions -- 28M nodes without one improvement, while the seed
+    /// held junk that ANY same-shape swap would better. The search finds the layout;
+    /// the polish makes the layout spend the best charts it can hold.
+    /// </summary>
+    private Solution Polish(Solution solution)
+    {
+        if (solution.IsEmpty) return solution;
+
+        var board = new VoyageBoard(_rows, _cols);
+        foreach (var p in solution.Placements) board.Place(p);
+        var used = new bool[_charts.Count];
+        var indexOf = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var i = 0; i < _charts.Count; i++) indexOf[_charts[i].Id] = i;
+        foreach (var p in solution.Placements)
+            if (indexOf.TryGetValue(p.Chart.Id, out var i)) used[i] = true;
+
+        var pinCell = _pin is { } pin
+            ? new Cell(pin.CellIndex / _cols, pin.CellIndex % _cols) : (Cell?)null;
+
+        var improved = true;
+        while (improved)
+        {
+            improved = false;
+            var placements = board.Placements.ToList();
+
+            foreach (var placement in placements)
+            {
+                if (placement.Cell == pinCell) continue;
+                var baseline = Evaluate(board);
+
+                // An unused chart of the same shape, in the same rotation.
+                for (var i = 0; i < _charts.Count; i++)
+                {
+                    if (used[i] || _charts[i].Shape != placement.Chart.Shape) continue;
+                    board.Clear(placement.Cell);
+                    board.Place(placement with { Chart = _charts[i] });
+                    if (Evaluate(board) > baseline + 1e-9)
+                    {
+                        used[i] = true;
+                        if (indexOf.TryGetValue(placement.Chart.Id, out var old)) used[old] = false;
+                        improved = true;
+                        break;
+                    }
+                    board.Clear(placement.Cell);
+                    board.Place(placement);
+                }
+                if (improved) break;
+
+                // Two placed charts trading cells (same shape, rotations kept per cell).
+                foreach (var other in placements)
+                {
+                    if (other.Cell == placement.Cell || other.Cell == pinCell) continue;
+                    if (other.Chart.Shape != placement.Chart.Shape) continue;
+                    board.Clear(placement.Cell);
+                    board.Clear(other.Cell);
+                    board.Place(placement with { Chart = other.Chart });
+                    board.Place(other with { Chart = placement.Chart });
+                    if (Evaluate(board) > baseline + 1e-9) { improved = true; break; }
+                    board.Clear(placement.Cell);
+                    board.Clear(other.Cell);
+                    board.Place(placement);
+                    board.Place(other);
+                }
+                if (improved) break;
+            }
+        }
+
+        var value = Evaluate(board);
+        var stranded = board.StrandedCells();
+        var forfeited = stranded.Sum(cell =>
+            board.At(cell) is { } lost ? Math.Max(0, _score(lost.Chart, lost.Cell)) : 0);
+        return new Solution(board.Placements.ToList(),
+                            value - forfeited - stranded.Count * _strandedPenalty)
+            { StrandedCells = stranded };
+    }
+
+    /// <summary>A whole board's raw value, scored exactly as the search accumulates it.</summary>
+    private double Evaluate(VoyageBoard board)
+    {
+        var total = 0.0;
+        foreach (var p in board.Placements)
+        {
+            total += _score(p.Chart, p.Cell);
+            foreach (var side in Sides)
+                if (board.At(VoyageBoard.Neighbour(p.Cell, side)) is { } n)
+                    total += n.Chart.AdjacentValue
+                             + n.Chart.AdjacentPerMonsterValue * (1 + p.Chart.MonsterDensity);
+        }
+        return total;
+    }
 
     /// <summary>
     /// How much of the budget the seed may spend.
