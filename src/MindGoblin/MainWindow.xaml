@@ -98,7 +98,7 @@
         <!-- Voyage first: it is the tool being used. Live search is tabled. -->
         <TabControl Grid.Row="1" Background="#12100E" BorderThickness="0" Padding="0"
                     x:Name="Tabs" SelectedIndex="1">
-        <TabItem Header="GEM RoI">
+        <TabItem Header="GEM RoI" x:Name="GemTab">
             <ContentControl x:Name="GemTabHost"/>
         </TabItem>
 

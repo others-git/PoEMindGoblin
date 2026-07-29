@@ -26,7 +26,13 @@ public partial class MainWindow : Window
 
         // Both tools are self-contained. The gem calculator wants public price data; the
         // Voyage planner reads the screen and the clipboard. Neither needs the other.
-        GemTabHost.Content = new GemRoiView(settings);
+        //
+        // Gated OFF for now (Features.GemRoi): the tab is collapsed and the view is never
+        // constructed, so a disabled tool costs no startup work and shows no dead UI.
+        if (Features.GemRoi)
+            GemTabHost.Content = new GemRoiView(settings);
+        else
+            GemTab.Visibility = Visibility.Collapsed;
 
         var voyage = new VoyageView();
         VoyageTabHost.Content = voyage;
