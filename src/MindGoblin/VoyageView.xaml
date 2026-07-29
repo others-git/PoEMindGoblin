@@ -285,6 +285,12 @@
                             Style="{StaticResource Primary}"/>
                     <Button Content="Dive again" Click="OnNextVoyage" Margin="8,0,0,0"
                             ToolTip="Voyage complete: spend the placed charts, clear the board, and re-read the rerolled border"/>
+                    <!-- The solve runs on a worker for up to 3 s; this is the sign that
+                         the silence is work, not a hang. -->
+                    <ProgressBar x:Name="SolveBusy" Width="88" Height="5" IsIndeterminate="True"
+                                 Visibility="Collapsed" VerticalAlignment="Center" Margin="12,0,0,0"
+                                 Foreground="{StaticResource Brass}" Background="{StaticResource Slate}"
+                                 BorderThickness="0"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal">

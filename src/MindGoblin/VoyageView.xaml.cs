@@ -140,6 +140,7 @@ public partial class VoyageView : UserControl, IDisposable
         _clipboardPoll.Stop();
         if (_captureHotkey is { } id) _hotkeys?.Unregister(id);
         _hotkeys?.Dispose();
+        _solving?.Cancel();
         _rules.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -612,20 +613,75 @@ public partial class VoyageView : UserControl, IDisposable
 
     // ---- solving -----------------------------------------------------------------
 
-    private void OnSolve(object sender, RoutedEventArgs e)
+    /// <summary>In flight, so a second Solve cancels and restarts instead of stacking.</summary>
+    private CancellationTokenSource? _solving;
+
+    private void OnSolve(object sender, RoutedEventArgs e) => _ = SolveAsync();
+
+    /// <summary>
+    /// Solve OFF the UI thread.
+    ///
+    /// The search deliberately burns one core for up to three seconds -- that is its
+    /// budget, not a bug -- but doing it on the dispatcher froze the whole window with
+    /// no sign anything was happening. It now runs on a worker against a SNAPSHOT of
+    /// the session (ToState/FromState), so a clipboard capture landing mid-solve
+    /// mutates the live session, never the one being searched. One solve at a time:
+    /// clicking again cancels the running one, and the solver's token check unwinds it
+    /// within a few thousand nodes.
+    /// </summary>
+    private async Task<bool> SolveAsync()
     {
-        if (Profile is not { } profile) { SetStatus("No rule profile loaded.", bad: true); return; }
+        if (Profile is not { } profile) { SetStatus("No rule profile loaded.", bad: true); return false; }
         if (_session.Charts.Count == 0)
         {
             // The figurine ring reflects what has been READ, not what has been planned,
             // so it still has to be redrawn on the path where there is nothing to solve.
             RefreshBoard();
             SetStatus("Read the panel first.", bad: true);
-            return;
+            return false;
         }
 
+        _solving?.Cancel();
+        var cts = _solving = new CancellationTokenSource();
+        SolveBusy.Visibility = Visibility.Visible;
+        SetStatus("Solving \u2014 up to 3 s\u2026");
+
         var pin = _useSoulEater ? VoyageAlerts.SoulEaterChart(_session) : null;
-        _solution = _session.Solve(profile, TimeSpan.FromSeconds(3), pinChart: pin);
+        var snapshot = VoyageSession.FromState(_session.ToState());
+        VoyageSolver.Solution solution;
+        try
+        {
+            solution = await Task.Run(
+                () => snapshot.Solve(profile, TimeSpan.FromSeconds(3), cts.Token, pin),
+                CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+        {
+            return false;   // superseded by a newer solve, which owns the indicator now
+        }
+        finally
+        {
+            if (_solving == cts) { SolveBusy.Visibility = Visibility.Collapsed; _solving = null; }
+        }
+        if (cts.IsCancellationRequested) return false;
+
+        ApplySolution(solution, profile);
+        return true;
+    }
+
+    /// <summary>The synchronous path, for the offscreen --render harness only: an async
+    /// solve would return at the first await and the render would capture an unsolved
+    /// board.</summary>
+    private void SolveNow()
+    {
+        if (Profile is not { } profile) return;
+        var pin = _useSoulEater ? VoyageAlerts.SoulEaterChart(_session) : null;
+        ApplySolution(_session.Solve(profile, TimeSpan.FromSeconds(3), pinChart: pin), profile);
+    }
+
+    private void ApplySolution(VoyageSolver.Solution solution, VoyageProfile profile)
+    {
+        _solution = solution;
         _steps = _session.Plan(_solution);
 
         RefreshSummary();
@@ -668,6 +724,7 @@ public partial class VoyageView : UserControl, IDisposable
     /// </summary>
     private void OnNextVoyage(object sender, RoutedEventArgs e)
     {
+        _solving?.Cancel();   // the board it is solving is about to stop existing
         if (_steps.Count == 0)
         {
             SetStatus("Nothing to complete \u2014 solve a board first.", bad: true);
@@ -766,7 +823,7 @@ public partial class VoyageView : UserControl, IDisposable
         RefreshBoard();
         RebuildModifiers();
         RefreshProgress();
-        OnSolve(this, new RoutedEventArgs());
+        SolveNow();
     }
 
     /// <summary>
@@ -832,7 +889,7 @@ public partial class VoyageView : UserControl, IDisposable
     /// am willing to spend a square on", and having changed that, the old board answers a
     /// question no longer being asked.
     /// </summary>
-    private void OnToggleSoulEater(object sender, RoutedEventArgs e)
+    private async void OnToggleSoulEater(object sender, RoutedEventArgs e)
     {
         _useSoulEater = !_useSoulEater;
         RefreshAlerts();
@@ -845,9 +902,9 @@ public partial class VoyageView : UserControl, IDisposable
             return;
         }
 
-        OnSolve(this, new RoutedEventArgs());
-
-        if (!_useSoulEater) return;
+        // Awaited: the answer about WHERE it landed reads the new plan, which does not
+        // exist until the background solve finishes.
+        if (!await SolveAsync() || !_useSoulEater) return;
         var square = _steps.FirstOrDefault(st => st.ChartNumber == VoyageAlerts.SoulEaterChart(_session));
         if (square is not null) SetStatus($"Soul Eater forced onto square {square.Square}.");
         else SetStatus("Soul Eater could not be placed on this board.", bad: true);
