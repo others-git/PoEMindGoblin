@@ -1130,10 +1130,11 @@ public partial class VoyageView : UserControl, IDisposable
 
         return Tip(
             step is null ? $"Square {square}" : $"Square {square} · chart {step.ChartNumber}",
+            // No shape and no rotation: the square is DRAWN, so its lines already say
+            // which way round it goes and naming them is a caption on a picture.
             step is null
                 ? "No chart yet — click to select, then hover it in game"
-                : $"{step.Chart.Shape}, {step.RotationText}"
-                  + (stranded ? " · cut off from the route" : ""),
+                : stranded ? "cut off from the route" : null,
             lines,
             haveDetail: true);
     }
@@ -1293,8 +1294,8 @@ public partial class VoyageView : UserControl, IDisposable
         stack.Children.Add(new TextBlock
         {
             Text = square == _session.StartSquare
-                ? $"START · chart {step.ChartNumber} · {step.RotationText}"
-                : $"chart {step.ChartNumber} · {step.RotationText}",
+                ? $"START · chart {step.ChartNumber}"
+                : $"chart {step.ChartNumber}",
             FontFamily = new FontFamily("Consolas"),
             FontSize = 10,
             Foreground = stranded ? Brush(0xB8, 0x50, 0x3E) : Brush(0x94, 0x86, 0x6F),
