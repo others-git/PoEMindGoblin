@@ -37,8 +37,18 @@ public sealed record VoyageRoute(
     /// it can, but when it cannot, an unreachable square is exactly the thing worth
     /// saying out loud.
     /// </summary>
+    /// <param name="buff">
+    /// A square's LASTING multiplier, as a fraction: what collecting it adds to the
+    /// worth of everything visited after it. Golden Lanterns are the case in point --
+    /// 3.29.0b made each grant increased quantity on monster drops for the rest of the
+    /// run, so a lantern square's true order-value is buff x whatever still lies ahead,
+    /// which is exactly backwards from the worth-early rule and has to be modelled, not
+    /// weighted. The DP stays exact: the accumulated buff depends only on the visited
+    /// SET, never the order within it.
+    /// </param>
     public static VoyageRoute Plan(
-        VoyageBoard board, Func<Placement, double> value, Cell? start = null)
+        VoyageBoard board, Func<Placement, double> value, Cell? start = null,
+        Func<Placement, double>? buff = null)
     {
         var origin = start ?? VoyageSolver.StartCell(board.Rows);
         var cells = AllCells(board).ToList();
@@ -63,6 +73,16 @@ public sealed record VoyageRoute(
         }
 
         var worth = cells.Select(c => Math.Max(0, value(board.At(c)!))).ToArray();
+        var boost = cells.Select(c => Math.Max(0, buff?.Invoke(board.At(c)!) ?? 0)).ToArray();
+
+        // The buff a subset has already collected -- order-independent, so one value per
+        // mask, built by peeling the lowest bit.
+        var collected = new double[1 << n];
+        for (var mask = 1; mask < 1 << n; mask++)
+        {
+            var low = System.Numerics.BitOperations.TrailingZeroCount(mask);
+            collected[mask] = collected[mask & (mask - 1)] + boost[low];
+        }
 
         // best[S] = the most that can be scored by visiting exactly S, in some legal
         // order starting at the origin. from[S] records which square was taken last, so
@@ -96,8 +116,9 @@ public sealed record VoyageRoute(
                 if ((reachable & (1 << i)) == 0) continue;
                 var next = visited | (1 << i);
 
-                // Earlier is worth more: the multiplier falls by one per square visited.
-                var score = best[visited] + worth[i] * (n - position);
+                // Earlier is worth more (the multiplier falls per square visited), and
+                // everything already collected buffs what is taken now.
+                var score = best[visited] + worth[i] * (n - position) * (1 + collected[visited]);
                 if (score <= best[next]) continue;
                 best[next] = score;
                 from[next] = i;

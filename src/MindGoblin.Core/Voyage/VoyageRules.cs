@@ -44,6 +44,15 @@ public static class AreaPopulation
     /// </summary>
     public const double RareChancePerAddedPack = 0.1;
 
+    /// <summary>
+    /// Quantity granted for the REST OF THE VOYAGE by collecting one Golden Lantern,
+    /// as a fraction. Estimate: 3.29.0b says they "grant increased Quantity of items
+    /// dropped by slain monsters" and publishes no number. This is what makes route
+    /// ORDER care about lanterns -- a lantern square multiplies every square visited
+    /// after it, so the router grabs them first when the maths says so.
+    /// </summary>
+    public const double QuantityPerGoldenLantern = 0.05;
+
     /// <summary>Raw sulphur one rare drops under the drop-sulphur figurine.
     /// OBSERVED in game at 250-350 per rare across several sightings -- the
     /// best-sourced constant in this model, where the rest are still estimates.</summary>

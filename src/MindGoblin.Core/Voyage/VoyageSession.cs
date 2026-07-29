@@ -456,6 +456,28 @@ public sealed class VoyageSession
         var (flat, perMonster) = BoardValueByCell(profile);
         var syn = profile.MonsterPayoutSynergy;
 
+        // Golden Lanterns granted TO each square, from the board and from neighbours'
+        // gifts. Collecting them buffs everything killed afterwards, so the router
+        // wants them early -- see VoyageRoute.Plan's buff parameter.
+        var lanterns = new Dictionary<Cell, double>();
+        foreach (var modifier in BoardModifiers())
+        {
+            var count = GoldenLanternCount(modifier.Description);
+            if (count == 0) continue;
+            foreach (var cell in modifier.AffectedCells)
+                lanterns[cell] = lanterns.GetValueOrDefault(cell) + count;
+        }
+
+        double LanternBuff(Placement placement)
+        {
+            var count = lanterns.GetValueOrDefault(placement.Cell);
+            foreach (var side in Enum.GetValues<Side>())
+                if (board.At(VoyageBoard.Neighbour(placement.Cell, side)) is { } n
+                    && n.Chart.AdjacentModifier is { } gift)
+                    count += GoldenLanternCount(gift);
+            return count * AreaPopulation.QuantityPerGoldenLantern;
+        }
+
         return VoyageRoute.Plan(board, placement =>
         {
             var density = syn * placement.Chart.MonsterPackSize / 100;
@@ -477,8 +499,21 @@ public sealed class VoyageSession
                 }
 
             return worth;
-        });
+        }, buff: LanternBuff);
     }
+
+    /// <summary>Golden Lanterns a modifier line grants, in any of the game's wordings.</summary>
+    public static double GoldenLanternCount(string line)
+    {
+        var m = GoldenLanterns.Match(line);
+        if (!m.Success) return 0;
+        return m.Groups[1].Success ? double.Parse(m.Groups[1].Value) : 1;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex GoldenLanterns =
+        new(@"(?:(\d+)|an)\s+additional Golden Lanterns?",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>
     /// The plan, as "square N &lt;- chart M" steps.

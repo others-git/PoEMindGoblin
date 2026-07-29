@@ -144,3 +144,59 @@ public class VoyageRouteTests
         Assert.Equal("7 → 8 → 9", new VoyageRoute([7, 8, 9], [], 0).ToString());
     }
 }
+
+/// <summary>
+/// Golden Lanterns invert the worth-early rule: collecting one buffs everything killed
+/// afterwards, so a lantern square's order-value is its buff times whatever still lies
+/// ahead -- and the router must weigh that, not just the square's own worth.
+/// </summary>
+public class LanternRouteTests
+{
+    [Fact]
+    public void ALanternSquareIsGrabbedBeforeARicherPayout()
+    {
+        // 2x2 of crossings, start bottom-left (worth 0). The lantern square is worth
+        // less than either payout, but its 50% buff on two 100-point squares beats
+        // taking a payout first: 60x3 + 100x2x1.5 + 100x1x1.5 = 630 over
+        // 100x3 + 60x2 + 100x1x1.5 = 570.
+        var board = new VoyageBoard(2, 2);
+        var lantern = new Chart("lantern", "lantern", ChartShape.Crossing, 80, []);
+        var payout1 = new Chart("p1", "p1", ChartShape.Crossing, 80, []);
+        var payout2 = new Chart("p2", "p2", ChartShape.Crossing, 80, []);
+        var start = new Chart("start", "start", ChartShape.Crossing, 80, []);
+        board.Place(new Placement(lantern, new Cell(0, 0), 0));
+        board.Place(new Placement(payout1, new Cell(0, 1), 0));
+        board.Place(new Placement(payout2, new Cell(1, 1), 0));
+        board.Place(new Placement(start, new Cell(1, 0), 0));
+
+        var route = VoyageRoute.Plan(board,
+            p => p.Chart.Id switch { "lantern" => 60, "start" => 0, _ => 100 },
+            buff: p => p.Chart.Id == "lantern" ? 0.5 : 0);
+
+        // Squares number 1,2 / 3,4 row-major: start=3, lantern=1.
+        Assert.Equal(3, route.Squares[0]);
+        Assert.Equal(1, route.Squares[1]);
+    }
+
+    [Fact]
+    public void WithoutABuffTheRicherSquareStillGoesFirst()
+    {
+        var board = new VoyageBoard(2, 2);
+        foreach (var (id, cell) in new[] { ("a", new Cell(0, 0)), ("b", new Cell(0, 1)),
+                                           ("c", new Cell(1, 1)), ("s", new Cell(1, 0)) })
+            board.Place(new Placement(new Chart(id, id, ChartShape.Crossing, 80, []), cell, 0));
+
+        var route = VoyageRoute.Plan(board,
+            p => p.Chart.Id switch { "a" => 60, "s" => 0, _ => 100 });
+
+        Assert.Equal(3, route.Squares[0]);
+        Assert.NotEqual(1, route.Squares[1]);   // the 60-point square can wait
+    }
+
+    [Theory]
+    [InlineData("Area contains 4 additional Golden Lanterns", 4)]
+    [InlineData("Adjacent Areas contain an additional Golden Lantern", 1)]
+    [InlineData("Area contains 4 additional Clusters of Barrels", 0)]
+    public void LanternCountsReadEveryWording(string line, double expected) =>
+        Assert.Equal(expected, VoyageSession.GoldenLanternCount(line));
+}
