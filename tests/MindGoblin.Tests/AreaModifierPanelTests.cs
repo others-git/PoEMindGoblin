@@ -10,6 +10,38 @@ namespace MindGoblin.Tests;
 /// </summary>
 public class AreaModifierPanelTests
 {
+    /// <summary>
+    /// The wrap that broke a real session: "Rare Monsters in Area drop Dead" wraps onto
+    /// "Man's Sulphur", the continuation starts UPPERCASE, and "Dead" was not a
+    /// recognised dangling word -- so square 6 stored a fragment no rule could score,
+    /// the payout square was worth zero, and the solver "failed to connect the dots"
+    /// with a rare-adding neighbour when there were no dots to connect.
+    /// </summary>
+    [Theory]
+    [InlineData("Rare Monsters in Area drop Dead", "Man's Sulphur",
+                "Rare Monsters in Area drop Dead Man's Sulphur")]
+    [InlineData("Adjacent Areas contain 4 additional Golden", "Lanterns",
+                "Adjacent Areas contain 4 additional Golden Lanterns")]
+    [InlineData("Adjacent Areas contain 2 additional cages of Tormented", "Spirits",
+                "Adjacent Areas contain 2 additional cages of Tormented Spirits")]
+    public void UppercaseContinuationsAreStitched(string first, string second, string joined)
+    {
+        var reading = AreaModifierPanel.Read(["Area Modifiers", first, second]);
+        Assert.Equal([joined], reading.Lines);
+    }
+
+    /// <summary>Two complete modifiers must never be glued into one.</summary>
+    [Fact]
+    public void CompleteModifiersStaySeparate()
+    {
+        var reading = AreaModifierPanel.Read([
+            "Area Modifiers",
+            "32% increased Pack Size",
+            "Area contains 4 additional Golden Lanterns",
+        ]);
+        Assert.Equal(2, reading.Lines.Count);
+    }
+
     [Fact]
     public void DropsThePanelHeading()
     {

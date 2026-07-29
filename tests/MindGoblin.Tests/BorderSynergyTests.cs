@@ -122,6 +122,30 @@ public class BorderSynergyTests
     }
 
     /// <summary>
+    /// The reported miss, end to end: a "rares drop sulphur" square and a chart whose
+    /// adjacent modifier ADDS rares. The rares the chart grants each pay sulphur on the
+    /// square next door, so the solver must put them side by side -- under sulphur rules
+    /// the gift chart is otherwise worthless, and only the interaction places it.
+    /// </summary>
+    [Fact]
+    public void ARareGiftChartSitsBesideTheSulphurSquare()
+    {
+        var session = Session(out _, out _);
+        var gift = 11;
+        session.ApplyChartText(gift,
+            "Kelp Forest\nAnchorfield\nAdjacent Modifier: "
+            + "30% increased number of Rare Monsters in adjacent Areas");
+        session.ApplySquareModifiers(1, ["Rare Monsters in Area drop Dead Man's Sulphur"]);
+
+        var sulphur = VoyageRules.Defaults().Single(p => p.Name == "sulphur");
+        var plan = session.Plan(session.Solve(sulphur, TimeSpan.FromSeconds(3)));
+
+        // Square 1 is the top-left corner; its neighbours are squares 2 and 4.
+        Assert.Contains(Assert.Single(plan, s => s.ChartNumber == gift).Square,
+                        new[] { 2, 4 });
+    }
+
+    /// <summary>
     /// Zero switches the interaction off: the solve still works, and the score drops by
     /// exactly the synergy's contribution -- payout x weight x packsize/100.
     /// </summary>

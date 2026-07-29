@@ -440,8 +440,10 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Dead Man's Sulphur found in all Voyage Areas",
                                  Weight = 1.0, ScalesWithBoard = true,
                                  Comment = "multiplies the WHOLE board's sulphur: scored as that fraction" },
-                new VoyageRule { Pattern = @"drop Dead Man's Sulphur", Weight = 30,
-                                 Comment = "board modifier: rares drop it directly" },
+                new VoyageRule { Pattern = @"drop Dead Man's Sulphur", Weight = 300,
+                                 Comment = "a tile's worth of rares EACH paying sulphur is a "
+                                           + "headline-sized total, not a token -- and pricing it "
+                                           + "like one is what lets rare-adding neighbours multiply it" },
             ],
         },
 
@@ -832,7 +834,8 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Giant Starfish", Weight = -2 },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Treasure", Weight = -4 },
                 new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional", Weight = -8 },
-                new VoyageRule { Pattern = @"Rare Monsters.*drop Dead Man's Sulphur", Weight = -25 },
+                new VoyageRule { Pattern = @"Rare Monsters.*drop Dead Man's Sulphur", Weight = -150,
+                                 Comment = "headline-sized payout: a keeper, priced like one" },
                 new VoyageRule { Pattern = @"chance to drop a Support Gem", Weight = -0.2 },
                 new VoyageRule { Pattern = @"are at least Magic", Weight = -12 },
                 new VoyageRule { Pattern = @"Magic Monsters.*have an additional modifier", Weight = -8 },

@@ -218,8 +218,18 @@ public sealed class AreaModifierPanel
 
     private static bool EndsMidPhrase(string line)
     {
-        var last = line.Split(' ')[^1];
+        // Function words, plus the words the REAL modifiers dangle when the panel wraps
+        // them: "Rare Monsters in Area drop Dead" / "Man's Sulphur" defeated a list of
+        // function words alone, because the continuation starts uppercase and "Dead"
+        // ends nothing. Everything here is a word no modifier in the corpus ends with,
+        // so joining on it cannot glue two complete modifiers together.
+        var last = line.Split(' ')[^1].ToLowerInvariant();
         return last is "additional" or "of" or "to" or "the" or "and" or "increased"
-                    or "more" or "with" or "have" or "contain" or "a" or "an";
+                    or "more" or "with" or "have" or "contain" or "contains" or "a" or "an"
+                    or "in" or "per" or "as" or "by" or "not" or "be" or "will"
+                    or "drop" or "drops" or "dead" or "man's" or "golden" or "tormented"
+                    or "sea" or "giant" or "treasure" or "stacked" or "wildwood"
+                    or "diviner's" or "arcanist's" or "operative's" or "pirate's"
+                    or "chance" or "instead" or "least" or "voyage" or "all" or "adjacent";
     }
 }
