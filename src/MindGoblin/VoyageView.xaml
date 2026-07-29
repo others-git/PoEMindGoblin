@@ -339,77 +339,99 @@
             </DockPanel>
 
             <!-- board: the answer -->
-            <DockPanel Grid.Column="1" Margin="10,16,10,16">
-                <TextBlock DockPanel.Dock="Top" Text="B O A R D" Style="{StaticResource Eyebrow}"/>
+            <Grid Grid.Column="1" Margin="10,16,10,16">
+                <DockPanel>
+                    <!-- The eyebrow row carries the alert toggle, so having something to
+                         warn about costs the board no height at all. -->
+                    <Grid DockPanel.Dock="Top">
+                        <TextBlock Text="B O A R D" Style="{StaticResource Eyebrow}"/>
+                        <Button x:Name="AlertToggle" Visibility="Collapsed" Click="OnToggleAlerts"
+                                HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Padding="10,2" FontSize="12" Margin="0,-5,0,0"/>
+                    </Grid>
 
-                <!-- Modifiers worth stopping for. Above the board because they change what
-                     you would place BEFORE you read a layout, and because this list is
-                     usually empty, which is what makes it worth looking at when it is
-                     not. The accent bar carries the meaning: brass for a jackpot, rust
-                     for something that reads like a reward and costs you. -->
-                <ItemsControl DockPanel.Dock="Top" x:Name="AlertList" Visibility="Collapsed"
-                              Margin="0,0,0,10">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Background="{StaticResource Slate}"
-                                    BorderBrush="{Binding Accent}" BorderThickness="3,0,0,0"
-                                    Padding="12,7" Margin="0,0,0,5">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel>
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="{Binding Headline}" FontFamily="Georgia"
-                                                       FontSize="14" Foreground="{Binding Accent}"/>
-                                            <TextBlock Text="{Binding Where}" FontSize="11"
-                                                       Foreground="{StaticResource Shade}"
-                                                       Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    <Grid x:Name="BoardHost" DockPanel.Dock="Top" HorizontalAlignment="Center"/>
+
+                    <TextBlock DockPanel.Dock="Top" x:Name="SummaryHeader" Text="V O Y A G E"
+                               Style="{StaticResource Eyebrow}" Margin="0,20,0,8"/>
+                    <TextBlock DockPanel.Dock="Bottom" x:Name="SolveInfo" FontSize="12"
+                               Foreground="{StaticResource Shade}" TextWrapping="Wrap"
+                               Margin="0,8,0,0"/>
+                    <!-- Bounded, and left-aligned: the board column is wide, and a label at
+                         one end with its number at the other is two columns, not a row. -->
+                    <ListBox x:Name="SummaryList" Style="{StaticResource Plain}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <!-- The number leads. A right-aligned value column reflows
+                                     the moment a scrollbar appears, which walked the figures
+                                     sideways as the list grew. -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                    <TextBlock Text="{Binding Value}" FontFamily="Consolas"
+                                               FontSize="{Binding Size}"
+                                               Foreground="{Binding ValueBrush}"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0"/>
+                                    <TextBlock Text="{Binding Label}" FontFamily="{Binding Font}"
+                                               FontSize="{Binding Size}" Foreground="{Binding Brush}"
+                                               TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+
+                <!-- Modifiers worth stopping for.
+                     OVER the board rather than above it. This list is usually empty, and a
+                     strip that reserves height for the times it is not would push the board
+                     down permanently to serve the exceptional case. Laid on top it costs
+                     nothing when there is nothing to say, and covers the board only while it
+                     is being read. The accent bar carries the meaning: brass for a jackpot,
+                     rust for something that reads like a reward and costs you. -->
+                <Border x:Name="AlertPanel" Visibility="Collapsed" Panel.ZIndex="10"
+                        VerticalAlignment="Top" Margin="0,24,0,0" Padding="6"
+                        Background="{StaticResource Abyss}" BorderBrush="{StaticResource Silt}"
+                        BorderThickness="1">
+                    <Border.Effect>
+                        <DropShadowEffect Color="#000000" BlurRadius="20" ShadowDepth="5"
+                                          Opacity="0.8"/>
+                    </Border.Effect>
+                    <ItemsControl x:Name="AlertList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource Slate}"
+                                        BorderBrush="{Binding Accent}" BorderThickness="3,0,0,0"
+                                        Padding="12,7" Margin="0,0,0,4">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Headline}"
+                                                           FontFamily="Georgia" FontSize="14"
+                                                           Foreground="{Binding Accent}"/>
+                                                <TextBlock Text="{Binding Where}" FontSize="11"
+                                                           Foreground="{StaticResource Shade}"
+                                                           Margin="8,0,0,0"
+                                                           VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Detail}" FontSize="12"
+                                                       Foreground="{StaticResource Ash}"
+                                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
                                         </StackPanel>
-                                        <TextBlock Text="{Binding Detail}" FontSize="12"
-                                                   Foreground="{StaticResource Ash}"
-                                                   TextWrapping="Wrap" Margin="0,3,0,0"/>
-                                    </StackPanel>
-                                    <Button Grid.Column="1" Content="{Binding ActionLabel}"
-                                            Visibility="{Binding ActionVisibility}"
-                                            Click="OnToggleSoulEater" Margin="12,0,0,0"
-                                            VerticalAlignment="Center"/>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
-                <Grid x:Name="BoardHost" DockPanel.Dock="Top" HorizontalAlignment="Center"/>
-
-                <TextBlock DockPanel.Dock="Top" x:Name="SummaryHeader" Text="V O Y A G E"
-                           Style="{StaticResource Eyebrow}" Margin="0,20,0,8"/>
-                <TextBlock DockPanel.Dock="Bottom" x:Name="SolveInfo" FontSize="12"
-                           Foreground="{StaticResource Shade}" TextWrapping="Wrap" Margin="0,8,0,0"/>
-                <!-- Bounded, and left-aligned: the board column is wide, and a label at
-                     one end with its number at the other is two columns, not a row. -->
-                <ListBox x:Name="SummaryList" Style="{StaticResource Plain}"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <!-- The number leads. A right-aligned value column reflows
-                                 the moment a scrollbar appears, which walked the figures
-                                 sideways as the list grew. -->
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
-                                <TextBlock Text="{Binding Value}" FontFamily="Consolas"
-                                           FontSize="{Binding Size}"
-                                           Foreground="{Binding ValueBrush}"
-                                           VerticalAlignment="Center"
-                                           Margin="0,0,8,0"/>
-                                <TextBlock Text="{Binding Label}" FontFamily="{Binding Font}"
-                                           FontSize="{Binding Size}" Foreground="{Binding Brush}"
-                                           TextWrapping="Wrap" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-            </DockPanel>
+                                        <Button Grid.Column="1" Content="{Binding ActionLabel}"
+                                                Visibility="{Binding ActionVisibility}"
+                                                Click="OnToggleSoulEater" Margin="12,0,0,0"
+                                                VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+            </Grid>
 
             <!-- charts: the panel, mirrored -->
             <DockPanel Grid.Column="2" Margin="10,16,18,16">

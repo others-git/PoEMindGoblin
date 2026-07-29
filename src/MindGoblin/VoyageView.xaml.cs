@@ -46,6 +46,9 @@ public partial class VoyageView : UserControl, IDisposable
     /// player power is worth to you, which is not a thing the planner can weigh.
     /// </summary>
     private bool _useSoulEater;
+
+    /// <summary>Whether the alert banner is dropped down over the board.</summary>
+    private bool _alertsOpen;
     private readonly DispatcherTimer _clipboardPoll =
         new() { Interval = TimeSpan.FromMilliseconds(250) };
 
@@ -787,7 +790,34 @@ public partial class VoyageView : UserControl, IDisposable
             _alerts.Add(new AlertRow(alert, offersButton, _useSoulEater));
         }
 
-        AlertList.Visibility = _alerts.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        // The toggle NAMES what it is hiding. A chevron reading "2 modifiers" would make
+        // finding out whether they matter cost a click every time; "Divine Orbs · Soul
+        // Eater" answers the question that would have prompted the click.
+        AlertToggle.Visibility = _alerts.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        if (_alerts.Count == 0) _alertsOpen = false;
+        else
+        {
+            AlertToggle.Content = string.Join(" · ", _alerts.Select(a => a.Headline))
+                                  + (_alertsOpen ? "  \u25B4" : "  \u25BE");
+            AlertToggle.Foreground = _alerts[0].Accent;
+        }
+
+        AlertPanel.Visibility = _alertsOpen && _alerts.Count > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Open or close the banner.
+    ///
+    /// It lies OVER the board rather than above it, so opening one does not move the other
+    /// -- the square numbers stay where they were while the modifier that concerns them is
+    /// being read.
+    /// </summary>
+    private void OnToggleAlerts(object sender, RoutedEventArgs e)
+    {
+        _alertsOpen = !_alertsOpen;
+        RefreshAlerts();
     }
 
     /// <summary>
