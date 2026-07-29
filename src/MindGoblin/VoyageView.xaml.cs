@@ -329,11 +329,7 @@ public partial class VoyageView : UserControl, IDisposable
             HotkeyService.Mod.Control | HotkeyService.Mod.Alt,
             () => Dispatcher.Invoke(async () => await CaptureAreaModifiersAsync()));
 
-        CaptureHint.Text = _captureHotkey is null
-            ? "Ctrl+Alt+C is taken by another app"
-            : ScreenOcr.IsAvailable
-                ? "Hover a square in game, press Ctrl+Alt+C"
-                : "No OCR language pack — type modifiers below instead";
+        UpdateCaptureHint();
     }
 
     /// <summary>
@@ -417,9 +413,10 @@ public partial class VoyageView : UserControl, IDisposable
         }
         else
         {
-            _clipboardPoll.Stop();
-            SetStatus("Read mode off.");
+            if (_targetIndex == 0) _clipboardPoll.Stop();
+            SetStatus("Guided pass off. Click any chart or square to re-read just it.");
         }
+        UpdateCaptureHint();
         RefreshPanel();
         RebuildModifiers();
     }
@@ -480,7 +477,8 @@ public partial class VoyageView : UserControl, IDisposable
         _solution = null;
         Persist();
         DetailBox.Clear();
-        AdvanceTarget();
+        if (ReadModeBtn.IsChecked == true) AdvanceTarget();
+        else SetTarget(_target, 0);          // one-off done: disarm, back to idle
         RefreshBoard();
         RefreshPanel();
         RebuildModifiers();
@@ -586,8 +584,53 @@ public partial class VoyageView : UserControl, IDisposable
                     _session.SquareModifiers.GetValueOrDefault(index) ?? []),
                 _ => "",
             };
+
+            // ARM the capture for this target, whether or not the guided pass is on.
+            // Re-reading one chart used to require Load Details mode -- clicking the
+            // chart selected it but nothing listened for the copy, which read as "Ctrl+C
+            // is unreliable" when it was actually "Ctrl+C is ignored". The baseline
+            // reset matters: without it, whatever was already on the clipboard would be
+            // ingested as if it were the new copy.
+            _lastClipboard = SafeClipboardText();
+            _clipboardPoll.Start();
         }
+        else if (ReadModeBtn.IsChecked != true)
+        {
+            _clipboardPoll.Stop();
+        }
+        UpdateCaptureHint();
         if (status is not null) SetStatus(status);
+    }
+
+    /// <summary>
+    /// The hint says what a copy would do RIGHT NOW, or nothing at all.
+    ///
+    /// It used to read "Hover a square in game, press Ctrl+Alt+C" permanently, which
+    /// implied the hotkey always did something. It is tied to the selection now: no
+    /// target, no hint.
+    /// </summary>
+    private void UpdateCaptureHint()
+    {
+        if (_targetIndex == 0)
+        {
+            CaptureHint.Text = ReadModeBtn.IsChecked == true
+                ? "Everything is read \u2014 toggle off, or click anything to re-read it"
+                : "";
+            return;
+        }
+
+        CaptureHint.Text = _target switch
+        {
+            Target.Square when _captureHotkey is null =>
+                "Ctrl+Alt+C is taken by another app \u2014 type the modifiers below",
+            Target.Square when !ScreenOcr.IsAvailable =>
+                "No OCR language pack \u2014 type the modifiers below",
+            Target.Square =>
+                $"Hover square {_targetIndex} in game, press Ctrl+Alt+C",
+            Target.Figurine =>
+                $"Figurine {_targetIndex}: usually not copyable \u2014 type it below",
+            _ => $"Hover chart {_targetIndex} in game, press Ctrl+C",
+        };
     }
 
     private void OnModifierSelected(object sender, SelectionChangedEventArgs e)
