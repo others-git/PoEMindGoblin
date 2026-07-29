@@ -423,8 +423,7 @@ public sealed class VoyageSolver
             total += _score(p.Chart, p.Cell);
             foreach (var side in Sides)
                 if (board.At(VoyageBoard.Neighbour(p.Cell, side)) is { } n)
-                    total += n.Chart.AdjacentValue
-                             + n.Chart.AdjacentPerMonsterValue * (1 + p.Chart.MonsterDensity);
+                    total += PairAdjacency(n.Chart, p.Chart);
         }
         return total;
     }
@@ -613,10 +612,7 @@ public sealed class VoyageSolver
         foreach (var p in placements)
             foreach (var side in Sides)
                 if (board.At(VoyageBoard.Neighbour(p.Cell, side)) is { } n)
-                    total += n.Chart.AdjacentValue       // each ordered pair counted once
-                             + n.Chart.AdjacentPerMonsterValue
-                               * (1 + (n.Chart.AdjacentPayoutOnPopulation
-                                           ? p.Chart.PackDensity : p.Chart.MonsterDensity));
+                    total += PairAdjacency(n.Chart, p.Chart);   // each ordered pair once
 
         return new Solution(placements, total);
     }
@@ -642,18 +638,24 @@ public sealed class VoyageSolver
             // They buff us, we buff them -- and a per-monster payout is worth more the
             // denser the tile it lands on, which is the chart-x-chart interaction that
             // makes a Chaos-per-rare chart seek out the packed neighbour.
-            gain += neighbour.Chart.AdjacentValue
-                    + neighbour.Chart.AdjacentPerMonsterValue
-                      * (1 + (neighbour.Chart.AdjacentPayoutOnPopulation
-                                  ? chart.PackDensity : chart.MonsterDensity));
-            gain += chart.AdjacentValue
-                    + chart.AdjacentPerMonsterValue
-                      * (1 + (chart.AdjacentPayoutOnPopulation
-                                  ? neighbour.Chart.PackDensity
-                                  : neighbour.Chart.MonsterDensity));
+            gain += PairAdjacency(giver: neighbour.Chart, receiver: chart);
+            gain += PairAdjacency(giver: chart, receiver: neighbour.Chart);
         }
         return gain;
     }
+
+    /// <summary>
+    /// What ONE chart's adjacent modifier pays when it lands beside another -- flat part
+    /// plus the per-monster part scaled by the RECEIVER's density on the payout's
+    /// channel. The single source of truth: search gain, seed scoring and the polish
+    /// all call this, because the first time they each had their own copy the polish
+    /// kept pricing population payouts by rare density after the channel split.
+    /// </summary>
+    private static double PairAdjacency(Chart giver, Chart receiver) =>
+        giver.AdjacentValue
+        + giver.AdjacentPerMonsterValue
+          * (1 + (giver.AdjacentPayoutOnPopulation
+                      ? receiver.PackDensity : receiver.MonsterDensity));
 
     /// <summary>Per-chart score ceiling: the best this chart scores on ANY cell, floored
     /// at zero. Indexed like <see cref="_charts"/>; maintained as a running sum down the

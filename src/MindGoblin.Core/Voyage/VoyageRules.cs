@@ -263,8 +263,11 @@ public sealed class VoyageProfile
     private static readonly Regex PerRare =
         new(@"^\s*Rare\s+Monsters\b",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    // Anchored to the two payout WORDINGS, not just the "Monsters" prefix: half the
+    // difficulty table starts with "Monsters" too ("Monsters cannot be Stunned"), and a
+    // classifier whose word three scoring paths trust must not call a curse a payout.
     private static readonly Regex PerPopulation =
-        new(@"^\s*(?:Magic\s+)?Monsters\b",
+        new(@"^\s*(?:Magic\s+)?Monsters\b.*(?:at least Magic|additional modifier)",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>

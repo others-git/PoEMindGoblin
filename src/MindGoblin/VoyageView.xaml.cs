@@ -769,6 +769,7 @@ public partial class VoyageView : UserControl, IDisposable
     private void OnNextVoyage(object sender, RoutedEventArgs e)
     {
         _solving?.Cancel();   // the board it is solving is about to stop existing
+        _badges = new Dictionary<int, VoyageSession.SquareBadges>();
         if (_steps.Count == 0)
         {
             SetStatus("Nothing to complete \u2014 solve a board first.", bad: true);
@@ -801,6 +802,7 @@ public partial class VoyageView : UserControl, IDisposable
         VoyageSessionState.Delete();
         _solution = null;
         _steps = [];
+        _badges = new Dictionary<int, VoyageSession.SquareBadges>();
         _summary.Clear();
         SolveInfo.Text = "";
         _skipped.Clear();

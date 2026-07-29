@@ -154,6 +154,22 @@ public class BorderSynergyTests
         Assert.Equal(brine, Assert.Single(plan, s => s.Square == 1).ChartNumber);
     }
 
+    /// <summary>
+    /// The classifier's word is load-bearing in three scoring paths, so it must not
+    /// call a curse a payout: every DIFFICULTY line the game can roll classifies as
+    /// None, even though half of them start with "Monsters".
+    /// </summary>
+    [Fact]
+    public void NoDifficultyLineClassifiesAsAPayout()
+    {
+        var offenders = ChartRewards.Current.Lines
+            .Where(kv => kv.Value.Equals("difficulty", StringComparison.OrdinalIgnoreCase))
+            .Select(kv => kv.Key.Replace("#", "12"))
+            .Where(l => VoyageProfile.PayoutChannelOf(l) != VoyageProfile.PayoutChannel.None)
+            .ToList();
+        Assert.True(offenders.Count == 0, string.Join(" | ", offenders));
+    }
+
     private static VoyageSession Session(out int packChart, out int plainChart)
     {
         var session = new VoyageSession();

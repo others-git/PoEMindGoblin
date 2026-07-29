@@ -33,6 +33,20 @@ public class ExclusionTests
         Assert.DoesNotContain(plan, s => s.ChartNumber == 5);
     }
 
+    /// <summary>The veto beats the pin: an X'd Soul Eater chart stays off the board
+    /// even with the pin asked for, rather than the pin quietly resurrecting it.</summary>
+    [Fact]
+    public void AnExcludedChartCannotBePinned()
+    {
+        var session = Session();
+        session.ApplyChartText(4,
+            "Reach\nAnchorfield\nVoyage Modifier: Players in all Voyage Areas have Soul Eater");
+        session.ToggleExcluded(4);
+
+        var solution = session.Solve(Quantity, TimeSpan.FromSeconds(3), pinChart: 4);
+        Assert.DoesNotContain(session.Plan(solution), s => s.ChartNumber == 4);
+    }
+
     [Fact]
     public void TheSecondToggleLiftsTheVeto()
     {

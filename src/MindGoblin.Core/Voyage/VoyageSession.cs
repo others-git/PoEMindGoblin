@@ -372,7 +372,8 @@ public sealed class VoyageSession
             + chart.AdjacentPackDensity * nbrPack.GetValueOrDefault(cell);
 
         (string, Cell)? pin = null;
-        if (pinChart is { } index && _charts.TryGetValue(index, out var pinned)
+        if (pinChart is { } index && !_excluded.Contains(index)
+            && _charts.TryGetValue(index, out var pinned)
             && CheapestCellFor(pinned, CombinedBoardValue(profile, pinned)) is { } where)
             pin = (pinned.Id, where);
 
