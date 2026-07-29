@@ -463,7 +463,8 @@ public sealed class VoyageSolver
         foreach (var p in placements)
             foreach (var side in Sides)
                 if (board.At(VoyageBoard.Neighbour(p.Cell, side)) is { } n)
-                    total += n.Chart.AdjacentValue;      // each ordered pair counted once
+                    total += n.Chart.AdjacentValue       // each ordered pair counted once
+                             + n.Chart.AdjacentPerMonsterValue * (1 + p.Chart.MonsterDensity);
 
         return new Solution(placements, total);
     }
@@ -486,8 +487,13 @@ public sealed class VoyageSolver
         foreach (var side in Sides)
         {
             if (board.At(VoyageBoard.Neighbour(cell, side)) is not { } neighbour) continue;
-            gain += neighbour.Chart.AdjacentValue;   // they buff us
-            gain += chart.AdjacentValue;             // we buff them
+            // They buff us, we buff them -- and a per-monster payout is worth more the
+            // denser the tile it lands on, which is the chart-x-chart interaction that
+            // makes a Chaos-per-rare chart seek out the packed neighbour.
+            gain += neighbour.Chart.AdjacentValue
+                    + neighbour.Chart.AdjacentPerMonsterValue * (1 + chart.MonsterDensity);
+            gain += chart.AdjacentValue
+                    + chart.AdjacentPerMonsterValue * (1 + neighbour.Chart.MonsterDensity);
         }
         return gain;
     }
@@ -545,7 +551,11 @@ public sealed class VoyageSolver
         var cellBest = cells
             .Select(cell => _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c => _score(c, cell))))
             .ToList();
-        var bestAdjacent = _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c => c.AdjacentValue));
+        // The adjacency ceiling has to allow for the per-monster pairing at its best:
+        // the richest payout landing beside the densest tile in the panel.
+        var maxDensity = _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c => c.MonsterDensity));
+        var bestAdjacent = _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c =>
+            c.AdjacentValue + c.AdjacentPerMonsterValue * (1 + maxDensity)));
         var pairsRemaining = AdjacentPairsFrom();
 
         _cellSuffix = new double[n + 1];
@@ -610,7 +620,8 @@ public sealed class VoyageSolver
             // what they give the squares around them.
             result[i] = Enumerable.Range(0, _charts.Count)
                 .OrderByDescending(idx => _score(_charts[idx], cell)
-                                          + Math.Max(0, _charts[idx].AdjacentValue) * 8)
+                                          + Math.Max(0, _charts[idx].AdjacentValue
+                                                        + _charts[idx].AdjacentPerMonsterValue * 2) * 8)
                 .ToArray();
         }
         return result;

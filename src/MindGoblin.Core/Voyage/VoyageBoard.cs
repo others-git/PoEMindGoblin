@@ -39,8 +39,31 @@ public sealed record Chart(
     /// <summary>Own value at a cell, before any neighbour effects.</summary>
     public double Value { get; init; }
 
-    /// <summary>What this chart's Adjacent Modifier is worth to ONE neighbour.</summary>
+    /// <summary>The FLAT part of what this chart's Adjacent Modifier is worth to ONE
+    /// neighbour. Per-monster payouts live in <see cref="AdjacentPerMonsterValue"/>.</summary>
     public double AdjacentValue { get; init; }
+
+    /// <summary>
+    /// The per-monster part of the Adjacent Modifier's worth to one neighbour: "Rare
+    /// Monsters in adjacent Areas drop # additional Chaos Orbs" pays per rare, so what
+    /// it is worth depends on how monster-dense the NEIGHBOUR is. The solver multiplies
+    /// this by (1 + the neighbour's <see cref="MonsterDensity"/>) when the pair meets.
+    /// </summary>
+    public double AdjacentPerMonsterValue { get; init; }
+
+    /// <summary>
+    /// How monster-dense this tile is, as a fraction (0.5 = half again the monsters),
+    /// pre-scaled by the profile's synergy knob. Derived from the tile's own stats;
+    /// multiplies every per-monster payout that lands on it.
+    /// </summary>
+    public double MonsterDensity { get; init; }
+
+    /// <summary>
+    /// How much monster density this chart's Adjacent Modifier GIVES each neighbour
+    /// ("Adjacent Areas contain 2 additional packs..."), pre-scaled by the synergy knob.
+    /// Realised wherever a neighbouring square carries a per-monster border payout.
+    /// </summary>
+    public double AdjacentMonsterDensity { get; init; }
 
     public bool HasAdjacentModifier => AdjacentValue != 0 || !string.IsNullOrEmpty(AdjacentModifier);
 

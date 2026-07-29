@@ -270,10 +270,28 @@ public sealed class VoyageSession
     {
         // ScoreChart already folds in area level; adding it again here would weight it
         // twice as heavily as the profile asked for.
-        var scored = Charts.Select(c => c with
+        //
+        // The Adjacent Modifier splits by KIND. A per-monster payout ("Rare Monsters in
+        // adjacent Areas drop # additional Chaos Orbs") is worth more beside a dense
+        // neighbour, so its value rides in AdjacentPerMonsterValue and the solver
+        // multiplies it by the neighbour it actually meets. A density gift ("Adjacent
+        // Areas contain 2 additional packs...") keeps its flat rule value AND carries
+        // AdjacentMonsterDensity, realised wherever a neighbouring square holds a
+        // per-monster border payout.
+        var syn = profile.MonsterPayoutSynergy;
+        var scored = Charts.Select(c =>
         {
-            Value = profile.ScoreChart(c),
-            AdjacentValue = profile.ScoreAdjacent(c),
+            var adjacent = profile.ScoreAdjacent(c);
+            var payoutAdj = c.AdjacentModifier is { } adj && VoyageProfile.IsPerMonsterPayout(adj);
+            return c with
+            {
+                Value = profile.ScoreChart(c),
+                AdjacentValue = payoutAdj ? 0 : adjacent,
+                AdjacentPerMonsterValue = payoutAdj ? adjacent : 0,
+                MonsterDensity = syn * c.MonsterPackSize / 100,
+                AdjacentMonsterDensity = c.AdjacentModifier is { } line
+                    ? syn * VoyageProfile.MonsterDensityOf(line) : 0,
+            };
         }).ToList();
 
         // Precompute what the BOARD gives each square, once.
@@ -290,11 +308,33 @@ public sealed class VoyageSession
         // the monster-dense chart onto itself. See VoyageProfile.MonsterPayoutSynergy.
         var (flat, perMonster) = BoardValueByCell(profile);
 
+        // Two more per-cell constants, precomputed so scoring stays arithmetic:
+        // the density the BORDER itself grants a square (a figurine adding packs sits
+        // under the same payout it multiplies), and the payout mass on the NEIGHBOURING
+        // squares -- which is what a chart's own density gift is worth from this cell.
+        var borderDensity = new Dictionary<Cell, double>();
+        foreach (var modifier in BoardModifiers())
+        {
+            var d = syn * VoyageProfile.MonsterDensityOf(modifier.Description);
+            if (d == 0) continue;
+            foreach (var cell in modifier.AffectedCells)
+                borderDensity[cell] = borderDensity.GetValueOrDefault(cell) + d;
+        }
+        var neighbourPayout = new Dictionary<Cell, double>();
+        foreach (var (cell, worth) in perMonster)
+            foreach (var side in Enum.GetValues<Side>())
+            {
+                var n = VoyageBoard.Neighbour(cell, side);
+                if (n.Row >= 0 && n.Row < Layout.Rows && n.Col >= 0 && n.Col < Layout.Cols)
+                    neighbourPayout[n] = neighbourPayout.GetValueOrDefault(n) + worth;
+            }
+
         double score(Chart chart, Cell cell) =>
             chart.Value
             + flat.GetValueOrDefault(cell)
             + perMonster.GetValueOrDefault(cell)
-              * (1 + profile.MonsterPayoutSynergy * chart.MonsterPackSize / 100);
+              * (1 + chart.MonsterDensity + borderDensity.GetValueOrDefault(cell))
+            + chart.AdjacentMonsterDensity * neighbourPayout.GetValueOrDefault(cell);
 
         (string, Cell)? pin = null;
         if (pinChart is { } index && _charts.TryGetValue(index, out var pinned)
@@ -401,20 +441,27 @@ public sealed class VoyageSession
         foreach (var placement in solution.Placements) board.Place(placement);
 
         var (flat, perMonster) = BoardValueByCell(profile);
+        var syn = profile.MonsterPayoutSynergy;
 
         return VoyageRoute.Plan(board, placement =>
         {
+            var density = syn * placement.Chart.MonsterPackSize / 100;
             var worth = profile.ScoreChart(placement.Chart)
                         + flat.GetValueOrDefault(placement.Cell)
-                        + perMonster.GetValueOrDefault(placement.Cell)
-                          * (1 + profile.MonsterPayoutSynergy
-                                 * placement.Chart.MonsterPackSize / 100);
+                        + perMonster.GetValueOrDefault(placement.Cell) * (1 + density);
 
             // What the neighbours push in. Received only -- what this chart gives THEM is
-            // counted when they are visited, not here.
+            // counted when they are visited, not here. A neighbour's per-monster payout
+            // is received scaled by THIS tile's density, same as the solver priced it.
             foreach (var side in Enum.GetValues<Side>())
                 if (board.At(VoyageBoard.Neighbour(placement.Cell, side)) is { } neighbour)
-                    worth += profile.ScoreAdjacent(neighbour.Chart);
+                {
+                    var received = profile.ScoreAdjacent(neighbour.Chart);
+                    if (neighbour.Chart.AdjacentModifier is { } adj
+                        && VoyageProfile.IsPerMonsterPayout(adj))
+                        received *= 1 + density;
+                    worth += received;
+                }
 
             return worth;
         });

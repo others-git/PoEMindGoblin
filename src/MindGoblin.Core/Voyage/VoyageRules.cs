@@ -106,6 +106,35 @@ public sealed class VoyageProfile
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>
+    /// How much monster DENSITY a modifier line adds, as a fraction of a tile's
+    /// monsters. This is what per-monster payouts multiply with. Percent rolls convert
+    /// directly; "additional packs" uses a documented estimate -- a pack as roughly 3%
+    /// of a tile's monsters -- which is the one invented constant in the interaction,
+    /// scaled like everything else by the profile's synergy knob.
+    /// </summary>
+    public static double MonsterDensityOf(string line)
+    {
+        var density = 0.0;
+        var pack = PackSizePct.Match(line);
+        if (pack.Success) density += double.Parse(pack.Groups[1].Value) / 100;
+        var count = MonsterCountPct.Match(line);
+        if (count.Success) density += double.Parse(count.Groups[1].Value) / 100;
+        var packs = AdditionalPacks.Match(line);
+        if (packs.Success)
+            density += (packs.Groups[1].Success ? double.Parse(packs.Groups[1].Value) : 1) * 0.03;
+        return density;
+    }
+
+    private static readonly Regex PackSizePct =
+        new(@"(\d+)%\s+increased Pack Size", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex MonsterCountPct =
+        new(@"(\d+)%\s+increased number of (?:Rare|Magic) Monsters",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex AdditionalPacks =
+        new(@"(?:(\d+)|an)\s+additional packs? of",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>
     /// How many charts to spend, at most. Null means fill the board.
     ///
     /// The game says "place UP TO nine Charts", and "your very first Voyage will require

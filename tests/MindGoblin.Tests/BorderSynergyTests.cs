@@ -74,6 +74,54 @@ public class BorderSynergyTests
     }
 
     /// <summary>
+    /// The chart-x-chart pairing: a per-monster payout ADJACENT modifier is worth more
+    /// beside a dense neighbour, so the Chaos-per-rare chart seeks out the packed tile.
+    /// Under currency the two charts' own values tie; only the pairing separates them.
+    /// </summary>
+    [Fact]
+    public void APayoutAdjacentChartSeeksTheDenseNeighbour()
+    {
+        var session = Session(out var packChart, out _);
+        var payoutChart = 7;
+        session.ApplyChartText(payoutChart,
+            "Coral Shelf\nAnchorfield\nAdjacent Modifier: "
+            + "Rare Monsters in adjacent Areas drop 2 additional Chaos Orbs");
+
+        var solution = session.Solve(Currency, TimeSpan.FromSeconds(3));
+        var plan = session.Plan(solution);
+
+        var payoutAt = Assert.Single(plan, s => s.ChartNumber == payoutChart);
+        var packAt = Assert.Single(plan, s => s.ChartNumber == packChart);
+        var a = session.CellOf(payoutAt.Square);
+        var b = session.CellOf(packAt.Square);
+        Assert.Equal(1, Math.Abs(a.Row - b.Row) + Math.Abs(a.Col - b.Col));
+    }
+
+    /// <summary>
+    /// The neighbour-density pairing: a chart whose adjacent modifier ADDS monsters is
+    /// worth more beside a per-monster payout square -- the packs it grants multiply the
+    /// payout next door. Currency has no rule for "additional packs", so the gift chart's
+    /// own value is zero and ONLY this interaction can place it deliberately.
+    /// </summary>
+    [Fact]
+    public void AMonsterGiftChartSeeksThePayoutSquare()
+    {
+        var session = Session(out _, out _);
+        var giftChart = 11;
+        session.ApplyChartText(giftChart,
+            "Kelp Forest\nAnchorfield\nAdjacent Modifier: "
+            + "Adjacent Areas contain 4 additional packs of Sea Beasts");
+        session.ApplySquareModifiers(1, ["Rare Monsters in Area drop an additional Divine Orb"]);
+
+        var solution = session.Solve(Currency, TimeSpan.FromSeconds(3));
+        var plan = session.Plan(solution);
+
+        // Square 1 is the top-left corner; its neighbours are squares 2 and 4.
+        var giftAt = Assert.Single(plan, s => s.ChartNumber == giftChart);
+        Assert.Contains(giftAt.Square, new[] { 2, 4 });
+    }
+
+    /// <summary>
     /// Zero switches the interaction off: the solve still works, and the score drops by
     /// exactly the synergy's contribution -- payout x weight x packsize/100.
     /// </summary>
