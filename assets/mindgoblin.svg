@@ -1,89 +1,161 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
   <!--
-    MindGoblin's icon: a classic goblin wearing Goldrim.
+    MindGoblin: a proper goblin under a battered Goldrim.
 
-    Drawn for the 16px case first. At tab size the only things that survive are the
-    silhouette and two colours, so the shape is built from three bold masses - the ears
-    out to the sides, the head, and the gold band across the brow - and everything finer
-    (teeth, brow, stud) is detail that may vanish without the icon becoming unreadable.
-
-    Palette is the app's own: brass #C9A227 on slate #131110, so the icon and the window
-    are recognisably the same object. Goblin green is warmed towards olive to keep it off
-    the app's verdigris, which reads as UI rather than skin.
+    Grit comes from asymmetry and damage, not from noise: one torn ear, one chipped
+    tooth, a scarred brow, dents in the gold. Light comes from above-left, so the cap
+    shades the eyes and the menace lives in that shadow. Still drawn for the 16px case -
+    the silhouette (ears / head / gold band) is what survives, and all the damage is
+    detail that may vanish without the icon going soft.
   -->
   <defs>
-    <linearGradient id="skin" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#7E9B3F"/>
-      <stop offset="1" stop-color="#4F6626"/>
+    <radialGradient id="pit" cx="0.5" cy="0.42" r="0.75">
+      <stop offset="0" stop-color="#221E18"/>
+      <stop offset="0.7" stop-color="#131110"/>
+      <stop offset="1" stop-color="#0A0908"/>
+    </radialGradient>
+    <linearGradient id="skin" x1="0.2" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#8A9E45"/>
+      <stop offset="0.55" stop-color="#5E7230"/>
+      <stop offset="1" stop-color="#3A4A1E"/>
+    </linearGradient>
+    <linearGradient id="earskin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6E8238"/>
+      <stop offset="1" stop-color="#37461C"/>
     </linearGradient>
     <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#F0D264"/>
-      <stop offset="0.45" stop-color="#C9A227"/>
-      <stop offset="1" stop-color="#8A6F22"/>
+      <stop offset="0" stop-color="#F4DA6E"/>
+      <stop offset="0.4" stop-color="#C9A227"/>
+      <stop offset="0.8" stop-color="#8A6F22"/>
+      <stop offset="1" stop-color="#5E4A15"/>
     </linearGradient>
-    <linearGradient id="leather" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#6B5A33"/>
-      <stop offset="1" stop-color="#3A301A"/>
+    <linearGradient id="leather" x1="0.3" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#5C4C2C"/>
+      <stop offset="0.6" stop-color="#3A301A"/>
+      <stop offset="1" stop-color="#241D10"/>
     </linearGradient>
   </defs>
 
-  <rect width="256" height="256" rx="56" fill="#131110"/>
+  <rect width="256" height="256" rx="56" fill="url(#pit)"/>
   <rect x="3" y="3" width="250" height="250" rx="53" fill="none"
         stroke="#2A2018" stroke-width="6"/>
 
-  <!-- Ears, behind the head and swept back. The widest thing in the icon, so they carry
-       the silhouette at sizes where the face is three pixels. -->
-  <g fill="url(#skin)" stroke="#2C3A16" stroke-width="4" stroke-linejoin="round">
-    <path d="M78 140 L14 96 C22 140 40 172 82 180 Z"/>
-    <path d="M178 140 L242 96 C234 140 216 172 174 180 Z"/>
+  <!-- Ears: long, swept back, and NOT a matching pair - the left one has been bitten. -->
+  <g stroke="#1E2810" stroke-width="4" stroke-linejoin="round">
+    <path d="M80 132 L10 92 L34 124 L22 122 C34 156 52 176 84 184 Z" fill="url(#earskin)"/>
+    <path d="M176 132 L246 90 C240 138 220 172 172 184 Z" fill="url(#earskin)"/>
+  </g>
+  <!-- inner-ear shadow -->
+  <path d="M78 142 L38 116 C48 144 62 164 82 172 Z" fill="#2A3614" opacity="0.8"/>
+  <path d="M178 142 L218 114 C210 144 196 164 174 172 Z" fill="#2A3614" opacity="0.8"/>
+
+  <!-- Head: lumpy, wider at the jaw than a clean oval would be. -->
+  <path d="M128 82 C168 82 192 112 190 150 C189 172 180 192 166 204
+           C154 214 143 220 128 220 C113 220 100 214 88 203
+           C75 191 67 172 66 150 C64 112 88 82 128 82 Z"
+        fill="url(#skin)" stroke="#1E2810" stroke-width="4"/>
+
+  <!-- Cap shadow across the face: the light is above, the Goldrim is in the way. -->
+  <path d="M67 138 C90 150 166 150 189 138 C189 130 188 124 187 118 L69 118
+           C68 124 67 130 67 138 Z" fill="#26310F" opacity="0.55"/>
+
+  <!-- Cheekbone light -->
+  <path d="M84 168 C90 178 100 186 110 189 C98 190 86 182 80 170 Z" fill="#9DB055" opacity="0.5"/>
+  <path d="M172 168 C166 178 156 186 146 189 C158 190 170 182 176 170 Z" fill="#9DB055" opacity="0.35"/>
+
+  <!-- Warts -->
+  <circle cx="88" cy="192" r="4" fill="#4A5C24"/>
+  <circle cx="86.5" cy="190.5" r="1.6" fill="#8A9E45"/>
+  <circle cx="176" cy="156" r="3.4" fill="#4A5C24"/>
+  <circle cx="175" cy="155" r="1.3" fill="#8A9E45"/>
+
+  <!-- Brow: heavy, uneven, one side scarred. -->
+  <g fill="#1E2810">
+    <path d="M82 134 L122 142 L120 156 L84 150 Z"/>
+    <path d="M174 132 L134 142 L136 156 L172 148 Z"/>
+  </g>
+  <!-- scar through the right brow and down the cheek -->
+  <g stroke="#31421A" stroke-width="4" stroke-linecap="round">
+    <path d="M158 128 L154 168"/>
+    <path d="M150 148 L162 152"/>
   </g>
 
-  <!-- Head -->
-  <path d="M128 84 C170 84 190 116 190 152 C190 194 162 220 128 220
-           C94 220 66 194 66 152 C66 116 86 84 128 84 Z"
-        fill="url(#skin)" stroke="#2C3A16" stroke-width="4"/>
+  <!-- Eyes: sunk in the cap's shadow, lit amber, glaring inward. -->
+  <path d="M88 150 C95 144 111 146 118 154 C115 164 98 167 90 161 Z" fill="#0E0C07"/>
+  <path d="M168 148 C161 143 145 145 138 153 C141 163 158 166 166 160 Z" fill="#0E0C07"/>
+  <path d="M92 152 C98 148 110 149 115 155 C112 162 98 163 92 158 Z" fill="#F2C446"/>
+  <path d="M164 150 C158 147 146 148 141 154 C144 161 158 162 164 157 Z" fill="#F2C446"/>
+  <ellipse cx="104" cy="155" rx="2.8" ry="4.6" fill="#120D04"/>
+  <ellipse cx="152" cy="154" rx="2.8" ry="4.6" fill="#120D04"/>
 
-  <!-- Brow, eyes, nose, grin -->
-  <g fill="#26310F">
-    <path d="M88 136 L120 146 L118 156 L86 148 Z"/>
-    <path d="M168 136 L136 146 L138 156 L170 148 Z"/>
+  <!-- Nose: long, hooked, broken to the left, with a shine on the bridge. -->
+  <path d="M129 142 C142 156 160 184 152 200 C147 209 128 211 120 202
+           C111 192 112 178 118 166 C114 160 116 150 129 142 Z"
+        fill="#6E8238" stroke="#1E2810" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M129 142 C142 156 160 184 152 200 C149 205 143 208 137 209
+           C146 194 138 166 126 148 Z" fill="#3A4A1E" opacity="0.7"/>
+  <path d="M124 152 C120 160 118 172 122 182" fill="none" stroke="#9DB055"
+        stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+  <ellipse cx="135" cy="197" rx="3" ry="4" fill="#26310F"/>
+
+  <!-- Grin: wide, mean, snaggled. Teeth from the TOP lip, fangs from the bottom. -->
+  <path d="M88 192 C100 212 156 214 170 190 C168 206 148 216 128 216
+           C108 216 92 208 88 192 Z" fill="#120D04" stroke="#1E2810" stroke-width="3"/>
+  <g fill="#E8DCB0">
+    <path d="M99 199 L108 200 L104 210 Z"/>
+    <path d="M117 203 L126 204 L122 212 Z"/>
+    <path d="M160 196 L152 198 L157 206 Z"/>
+    <!-- the chipped one -->
+    <path d="M138 203 L146 203 L144 208 L140 207 Z"/>
   </g>
-  <g fill="#F2E4A8">
-    <ellipse cx="105" cy="160" rx="11" ry="9"/>
-    <ellipse cx="151" cy="160" rx="11" ry="9"/>
-  </g>
-  <g fill="#1A1509">
-    <ellipse cx="107" cy="161" rx="5" ry="6"/>
-    <ellipse cx="149" cy="161" rx="5" ry="6"/>
+  <!-- underbite fangs, rising past the lip -->
+  <g fill="#E8DCB0" stroke="#1E2810" stroke-width="2.5" stroke-linejoin="round">
+    <path d="M93 200 L98 184 L105 199 Z"/>
+    <path d="M165 197 L161 182 L155 196 Z"/>
   </g>
 
-  <!-- The nose: long, hooked, and the reason a goblin reads as a goblin. Given its own
-       shadow, because drawn flat it sat in the middle of the cheek as a snout. -->
-  <path d="M127 146 C138 160 158 184 153 198 C149 208 129 210 122 201
-           C114 191 117 165 127 146 Z"
-        fill="#7A9740" stroke="#2C3A16" stroke-width="4" stroke-linejoin="round"/>
-  <path d="M127 146 C138 160 158 184 153 198 C150 204 143 207 137 207
-           C143 196 140 172 127 146 Z" fill="#4F6626" opacity="0.55"/>
-
-  <!-- Grin -->
-  <path d="M96 196 C112 214 146 214 164 195 C152 210 108 210 96 196 Z" fill="#1A1509"/>
-  <g fill="#F2E4A8">
-    <path d="M107 202 L114 201 L110 209 Z"/>
-    <path d="M152 201 L159 202 L149 209 Z"/>
+  <!-- Goldrim: a slouched leather skullcap, stitched, hanging past the band on one side. -->
+  <path d="M60 112 C52 58 90 30 128 32 C168 34 202 62 196 106
+           C188 114 182 102 184 94 C182 106 174 110 170 102
+           C170 112 160 114 156 106 C152 114 140 114 138 106
+           C132 116 118 114 116 106 C110 116 98 114 96 104
+           C92 114 82 114 80 104 C78 114 66 116 60 112 Z"
+        fill="url(#leather)" stroke="#1A140B" stroke-width="4" stroke-linejoin="round"/>
+  <!-- worn highlight + stitching -->
+  <path d="M74 56 C92 40 116 34 132 38 C110 43 90 52 78 70 Z" fill="#7C6A3E" opacity="0.55"/>
+  <g stroke="#7C6A3E" stroke-width="3" stroke-linecap="round" opacity="0.65">
+    <path d="M96 46 L102 54"/><path d="M108 42 L112 51"/><path d="M121 39 L123 49"/>
+    <path d="M134 39 L134 49"/><path d="M147 42 L144 51"/>
+  </g>
+  <!-- patch, crudely sewn -->
+  <path d="M156 50 L182 62 L174 86 L150 74 Z" fill="#2E2513" stroke="#1A140B" stroke-width="3"/>
+  <g stroke="#7C6A3E" stroke-width="2.5" stroke-linecap="round" opacity="0.8">
+    <path d="M154 58 L160 54"/><path d="M164 78 L170 74"/><path d="M173 60 L178 65"/>
   </g>
 
-  <!-- Goldrim. A leather cap whose whole identity is the band around it, so the band is
-       drawn heavy and the leather is only what shows above it. -->
-  <path d="M62 116 C58 68 88 38 126 38 C170 38 200 66 196 104
-           C192 88 186 112 194 118 Z"
-        fill="url(#leather)" stroke="#2A2018" stroke-width="4" stroke-linejoin="round"/>
-  <path d="M72 64 C90 48 114 42 130 46 C110 51 90 60 78 76 Z" fill="#7C6A3E" opacity="0.7"/>
-  <path d="M150 48 C168 58 180 76 182 98" fill="none" stroke="#2A2018"
-        stroke-width="4" stroke-linecap="round" opacity="0.5"/>
-
-  <rect x="52" y="108" width="152" height="30" rx="15"
-        fill="url(#gold)" stroke="#6B5518" stroke-width="4"/>
-  <path d="M62 116 C90 128 166 128 194 116" fill="none" stroke="#F0D264"
-        stroke-width="4" stroke-linecap="round" opacity="0.65"/>
-  <circle cx="128" cy="123" r="9" fill="#3A301A" stroke="#F0D264" stroke-width="4"/>
+  <!-- The gold band: heavy, dented, riveted. The one thing that says Goldrim - but a
+       band, not a wall. The first ragged draft was 50px tall and at 16px the icon was
+       mostly hat. -->
+  <path d="M54 106 C52 120 54 128 58 132 C100 142 156 142 198 132
+           C202 128 204 120 202 106 C200 100 196 97 190 96
+           C184 95 178 99 174 96 C166 90 158 98 148 96
+           C124 92 100 92 82 96 C74 98 68 94 62 98 C58 100 55 102 54 106 Z"
+        fill="url(#gold)" stroke="#4A3A10" stroke-width="4" stroke-linejoin="round"/>
+  <!-- the big dent, hammered in from above -->
+  <path d="M148 96 C154 102 166 104 174 100 C170 106 156 108 148 104 Z"
+        fill="#5E4A15" opacity="0.8"/>
+  <!-- dents -->
+  <path d="M84 114 C90 110 98 111 102 116 C97 120 88 120 84 114 Z" fill="#8A6F22"/>
+  <path d="M150 112 C156 108 164 110 168 115 C162 119 154 118 150 112 Z" fill="#8A6F22"/>
+  <!-- band shine -->
+  <path d="M62 108 C96 120 160 120 194 108" fill="none" stroke="#F4DA6E"
+        stroke-width="5" stroke-linecap="round" opacity="0.55"/>
+  <!-- rivets -->
+  <g fill="#3A301A" stroke="#F4DA6E" stroke-width="3">
+    <circle cx="128" cy="122" r="7"/>
+    <circle cx="86" cy="119" r="4.5"/>
+    <circle cx="170" cy="118" r="4.5"/>
+  </g>
+  <!-- scratch across the band -->
+  <path d="M104 130 L146 126" stroke="#5E4A15" stroke-width="3" stroke-linecap="round"/>
 </svg>
