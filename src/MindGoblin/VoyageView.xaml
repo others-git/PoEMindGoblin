@@ -283,7 +283,7 @@
                             ToolTip="Replace every profile with the shipped ones, discarding your edits."/>
                     <Button Content="Solve" Click="OnSolve" Margin="18,0,0,0"
                             Style="{StaticResource Primary}"/>
-                    <Button Content="Next" Click="OnNextVoyage" Margin="8,0,0,0"
+                    <Button Content="Dive again" Click="OnNextVoyage" Margin="8,0,0,0"
                             ToolTip="Voyage complete: spend the placed charts, clear the board, and re-read the rerolled border"/>
                 </StackPanel>
 
