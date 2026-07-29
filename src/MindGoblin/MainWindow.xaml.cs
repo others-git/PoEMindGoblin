@@ -17,10 +17,10 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // Before anything reads a settings file: storage moved from %LOCALAPPDATA% to
-        // MindGoblin_data/ beside the exe, and the Voyage session under the old convention is a
-        // screenshot plus dozens of hovers that must not be silently abandoned.
-        var carried = SettingsFolder.MigrateFromLegacyLocations();
+        // Before anything reads a settings file. State lives ONLY beside the exe; no
+        // reach into %LOCALAPPDATA%, ever -- a legacy migration that did was how a
+        // freshly unzipped release came to "load chart data from somewhere".
+        SettingsFolder.EnsureExists();
 
         var settings = AppSettings.Load();
 
@@ -40,8 +40,5 @@ public partial class MainWindow : Window
         // The planner owns a file watcher and a system-wide hotkey; neither is released
         // by the control going away.
         Closed += (_, _) => voyage.Dispose();
-
-        if (carried.Count > 0)
-            Title = $"MindGoblin  —  carried {carried.Count} settings files over from the old name";
     }
 }
