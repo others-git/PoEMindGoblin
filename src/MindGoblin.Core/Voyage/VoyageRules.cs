@@ -140,9 +140,7 @@ public sealed class VoyageRules : IDisposable
         Reload();
     }
 
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        SettingsFolder.Name, "voyage-rules.json");
+    public static string DefaultPath => SettingsFolder.FileIn("voyage-rules.json");
 
     public string Path_ => _path;
 

@@ -26,6 +26,19 @@ public class SettingsFolderTests : IDisposable
         File.WriteAllText(Path.Combine(_old, name), content);
     }
 
+    /// <summary>
+    /// Portable on purpose: state lives in data/ BESIDE THE EXE, where it can be found,
+    /// backed up, or deleted with the folder -- never in a hidden appdata dir.
+    /// </summary>
+    [Fact]
+    public void StorageLivesNextToTheExe()
+    {
+        Assert.Equal(Path.Combine(AppContext.BaseDirectory, "data"), SettingsFolder.Path_);
+        Assert.Equal(Path.Combine(SettingsFolder.Path_, "voyage-rules.json"),
+                     SettingsFolder.FileIn("voyage-rules.json"));
+        Assert.DoesNotContain("AppData", SettingsFolder.Path_, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void SettingsAreCarriedOverOnTheFirstRun()
     {

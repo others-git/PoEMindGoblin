@@ -94,9 +94,7 @@ public sealed class BoardLayout
         AllowTrailingCommas = true,
     };
 
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        SettingsFolder.Name, "board-layout.json");
+    public static string DefaultPath => SettingsFolder.FileIn("board-layout.json");
 
     public static BoardLayout Load(string? path = null)
     {
@@ -172,9 +170,7 @@ public sealed class ScreenLayout
         }
     }
 
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        SettingsFolder.Name, "screen-layout.json");
+    public static string DefaultPath => SettingsFolder.FileIn("screen-layout.json");
 
     private static readonly JsonSerializerOptions Options = new()
     {

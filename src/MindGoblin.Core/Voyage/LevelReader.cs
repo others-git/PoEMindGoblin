@@ -255,9 +255,7 @@ public sealed class LevelReader
 
     // ---- persistence -------------------------------------------------------------
 
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        SettingsFolder.Name, "level-digits.json");
+    public static string DefaultPath => SettingsFolder.FileIn("level-digits.json");
 
     private static readonly JsonSerializerOptions Json = new()
     {

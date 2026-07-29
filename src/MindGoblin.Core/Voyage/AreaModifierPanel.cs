@@ -51,9 +51,7 @@ public sealed class AreaModifierPanel
             return (x, y, Math.Max(1, w), Math.Max(1, h));
         }
 
-        public static string DefaultPath => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            SettingsFolder.Name, "area-modifier-panel.json");
+        public static string DefaultPath => SettingsFolder.FileIn("area-modifier-panel.json");
 
         private static readonly JsonSerializerOptions Json = new()
         {

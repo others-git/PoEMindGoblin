@@ -41,9 +41,7 @@ public sealed class AppSettings
         return odds.IsNormalised ? odds : GemRoi.CorruptionOdds.Default;
     }
 
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        SettingsFolder.Name, "settings.json");
+    public static string DefaultPath => SettingsFolder.FileIn("settings.json");
 
     private static readonly JsonSerializerOptions Options = new()
     {

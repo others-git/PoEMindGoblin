@@ -91,9 +91,7 @@ public sealed class ChartPanelReader
         /// <see cref="ScaledTo"/> only covers the pure-resolution case. A tool that works
         /// at exactly one resolution works for exactly one person.
         /// </summary>
-        public static string DefaultPath => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            SettingsFolder.Name, "panel-calibration.json");
+        public static string DefaultPath => SettingsFolder.FileIn("panel-calibration.json");
 
         private static readonly JsonSerializerOptions Json = new()
         {

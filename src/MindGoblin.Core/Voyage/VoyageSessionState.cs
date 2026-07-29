@@ -71,9 +71,7 @@ public sealed class VoyageSessionState
         public List<string> Modifiers { get; set; } = [];
     }
 
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        SettingsFolder.Name, "voyage-session.json");
+    public static string DefaultPath => SettingsFolder.FileIn("voyage-session.json");
 
     private static readonly JsonSerializerOptions Json = new()
     {
