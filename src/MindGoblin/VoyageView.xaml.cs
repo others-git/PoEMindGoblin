@@ -726,6 +726,7 @@ public partial class VoyageView : UserControl, IDisposable
     {
         _solution = solution;
         _steps = _session.Plan(_solution);
+        _badges = _session.Badges(_solution);
 
         RefreshSummary();
 
@@ -861,6 +862,9 @@ public partial class VoyageView : UserControl, IDisposable
             _session.ApplySquareModifiers(square,
                 [$"Areas contain {4 + square} additional packs of Sea Beasts",
                  square % 2 == 0 ? "Areas have 15% increased Quantity of Items found" : "Areas have 20% increased Monster Pack Size"]);
+        // Badge-worthy squares, so the sample exercises the icon row too.
+        _session.ApplySquareModifiers(6, ["Area contains 4 additional Golden Lanterns"]);
+        _session.ApplySquareModifiers(8, ["Area contains Filthscrabble"]);
 
         RefreshPanel();
         RefreshBoard();
@@ -1193,7 +1197,8 @@ public partial class VoyageView : UserControl, IDisposable
                     : step is null ? Color.FromRgb(0x1F, 0x1A, 0x15)
                     : Color.FromRgb(0x3A, 0x2E, 0x1C));
                 cell.BorderThickness = new Thickness(isTarget ? 2 : 1);
-                cell.Child = BoardSquareContent(square, step, isStranded);
+                cell.Child = BoardSquareContent(square, step, isStranded,
+                                                _badges.GetValueOrDefault(square));
                 cell.ToolTip = SquareTip(square, step, isStranded);
             }
         }
@@ -1408,7 +1413,12 @@ public partial class VoyageView : UserControl, IDisposable
     /// and drop it on the "5" here. Nine single digits beat sixty two-digit panel
     /// indices, and the chart number stays underneath for when you want it.
     /// </summary>
-    private UIElement BoardSquareContent(int square, VoyagePlan.Step? step, bool stranded)
+    /// <summary>Per-square icons for the current plan, rebuilt with each solve.</summary>
+    private IReadOnlyDictionary<int, VoyageSession.SquareBadges> _badges =
+        new Dictionary<int, VoyageSession.SquareBadges>();
+
+    private UIElement BoardSquareContent(int square, VoyagePlan.Step? step, bool stranded,
+                                         VoyageSession.SquareBadges? badges = null)
     {
         var stack = new StackPanel
         {
@@ -1472,7 +1482,84 @@ public partial class VoyageView : UserControl, IDisposable
                 Foreground = Brush(0xB8, 0x50, 0x3E),
                 HorizontalAlignment = HorizontalAlignment.Center,
             });
+
+        // The icon row: what the square CONTAINS, at a glance. A golden lantern to
+        // grab, a named boss to expect. Sourced from the same lines the scoring uses,
+        // so an icon never promises something the plan did not price.
+        if (badges is { } b && (b.GoldenLanterns > 0 || b.Bosses.Count > 0))
+        {
+            var row = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 4, 0, 0),
+            };
+            if (b.GoldenLanterns > 0)
+            {
+                var lantern = new StackPanel
+                    { Orientation = Orientation.Horizontal, Margin = new Thickness(3, 0, 3, 0) };
+                lantern.Children.Add(LanternIcon());
+                if (b.GoldenLanterns > 1)
+                    lantern.Children.Add(new TextBlock
+                    {
+                        Text = "\u00d7" + b.GoldenLanterns.ToString("0"),
+                        FontFamily = new FontFamily("Consolas"),
+                        FontSize = 10,
+                        Foreground = Brush(0xF0, 0xD2, 0x64),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(2, 0, 0, 0),
+                    });
+                lantern.ToolTip = $"{b.GoldenLanterns:0} Golden Lantern{(b.GoldenLanterns > 1 ? "s" : "")} \u2014 grab early, the quantity buff pays for the rest of the run";
+                row.Children.Add(lantern);
+            }
+            foreach (var boss in b.Bosses)
+            {
+                row.Children.Add(new TextBlock
+                {
+                    Text = "\u2620",
+                    FontFamily = new FontFamily("Segoe UI Symbol"),
+                    FontSize = 13,
+                    Foreground = Brush(0xB8, 0x50, 0x3E),
+                    Margin = new Thickness(3, 0, 3, 0),
+                    ToolTip = $"{boss} \u2014 named boss in this square",
+                });
+            }
+            stack.Children.Add(row);
+        }
         return stack;
+    }
+
+    /// <summary>A little golden lantern, drawn rather than fonted: a glowing body under
+    /// a dark cap, unmistakable at 12px against the slate.</summary>
+    private static UIElement LanternIcon()
+    {
+        var g = new Grid { Width = 10, Height = 13 };
+        g.Children.Add(new Border
+        {
+            Width = 4, Height = 2,
+            Background = Brush(0x8A, 0x6F, 0x22),
+            VerticalAlignment = VerticalAlignment.Top,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        });
+        g.Children.Add(new Border
+        {
+            Width = 8, Height = 9,
+            CornerRadius = new CornerRadius(2, 2, 3, 3),
+            Background = Brush(0xF0, 0xD2, 0x64),
+            BorderBrush = Brush(0x8A, 0x6F, 0x22),
+            BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Top,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        g.Children.Add(new Border
+        {
+            Width = 6, Height = 2,
+            Background = Brush(0x8A, 0x6F, 0x22),
+            VerticalAlignment = VerticalAlignment.Bottom,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        });
+        return g;
     }
 
     private void BuildPanel()

@@ -542,6 +542,58 @@ public sealed class VoyageSession
         }, buff: LanternBuff);
     }
 
+    /// <summary>
+    /// What a planned square CONTAINS that is worth an icon: lanterns to grab and named
+    /// bosses to expect. Computed from the board lines affecting the square plus the
+    /// neighbours' adjacent gifts -- the same sources the scoring uses, so an icon never
+    /// promises something the plan did not price.
+    /// </summary>
+    public sealed record SquareBadges(double GoldenLanterns, IReadOnlyList<string> Bosses);
+
+    public IReadOnlyDictionary<int, SquareBadges> Badges(VoyageSolver.Solution solution)
+    {
+        var result = new Dictionary<int, SquareBadges>();
+        if (solution.IsEmpty) return result;
+
+        var board = new VoyageBoard(Layout.Rows, Layout.Cols);
+        foreach (var p in solution.Placements) board.Place(p);
+
+        var boardLines = new Dictionary<Cell, List<string>>();
+        foreach (var modifier in BoardModifiers())
+            foreach (var cell in modifier.AffectedCells)
+                (boardLines.TryGetValue(cell, out var l) ? l : boardLines[cell] = [])
+                    .Add(modifier.Description);
+
+        foreach (var placement in solution.Placements)
+        {
+            var lines = new List<string>(boardLines.GetValueOrDefault(placement.Cell) ?? []);
+            foreach (var side in Enum.GetValues<Side>())
+                if (board.At(VoyageBoard.Neighbour(placement.Cell, side)) is { } n
+                    && n.Chart.AdjacentModifier is { } gift)
+                    lines.Add(gift);
+
+            var lanterns = lines.Sum(GoldenLanternCount);
+            var bosses = lines
+                .Select(l => NamedBoss.Match(l))
+                .Where(m => m.Success)
+                .Select(m => m.Groups[1].Value)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (lanterns > 0 || bosses.Count > 0)
+                result[VoyagePlan.SquareNumber(placement.Cell, Layout.Cols)] =
+                    new SquareBadges(lanterns, bosses);
+        }
+        return result;
+    }
+
+    /// <summary>The named creatures the tables can put in a square. Weird names on
+    /// purpose -- that is how you know they are bosses.</summary>
+    private static readonly System.Text.RegularExpressions.Regex NamedBoss =
+        new(@"contains?\s+(Captainsbane|Filthscrabble)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
     /// <summary>Golden Lanterns a modifier line grants, in any of the game's wordings.</summary>
     public static double GoldenLanternCount(string line)
     {
