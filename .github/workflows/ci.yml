@@ -73,24 +73,15 @@ jobs:
           -o publish
           -p:Version=${{ steps.version.outputs.version }}
 
-      - name: Package
-        shell: pwsh
-        run: |
-          # The exe is self-contained but NOT self-sufficient: the mod tables and the gem
-          # catalogue are read from assets/ beside it at runtime. Shipping the bare exe
-          # would lose the Voyage rules and the RoI vendor filter, so the release is a zip
-          # of the whole publish folder.
-          $name = "MindGoblin-${{ steps.version.outputs.version }}-win-x64"
-          Compress-Archive -Path publish\* -DestinationPath "$name.zip"
-          "asset=$name.zip" >> $env:GITHUB_OUTPUT
-        id: package
-
       - name: Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # The bare exe IS the release: the mod corpus and gem index are embedded in the
+        # assembly, and user state lives in MindGoblin_data/ created at runtime -- so
+        # there is nothing else to ship. Download, run.
         run: >
           gh release create "${{ github.ref_name }}"
-          "${{ steps.package.outputs.asset }}"
+          "publish/MindGoblin.exe"
           --title "${{ github.ref_name }}"
           --generate-notes

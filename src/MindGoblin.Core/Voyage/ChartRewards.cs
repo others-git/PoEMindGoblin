@@ -90,9 +90,21 @@ public static class ChartRewards
         path ??= DefaultPath;
         try
         {
+            // A file beside the exe OVERRIDES the embedded copy: rerunning
+            // fetch_voyage_mods.py after a patch must not require a rebuild.
             if (File.Exists(path))
             {
                 var loaded = JsonSerializer.Deserialize<Catalogue>(File.ReadAllText(path), Json);
+                if (loaded is { Count: > 0 } && Compiles(loaded)) return loaded;
+            }
+
+            // The copy embedded at build time -- the normal case for the shipped app,
+            // which is one exe with no assets folder beside it.
+            if (typeof(ChartRewards).Assembly.GetManifestResourceStream("assets/voyage-mods.json")
+                is { } embedded)
+            {
+                using var reader = new StreamReader(embedded);
+                var loaded = JsonSerializer.Deserialize<Catalogue>(reader.ReadToEnd(), Json);
                 if (loaded is { Count: > 0 } && Compiles(loaded)) return loaded;
             }
         }

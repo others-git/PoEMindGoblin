@@ -297,10 +297,12 @@ public class GemCatalogTests
     [Fact]
     public void ShippedCatalogueLoadsAndLooksSane()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "assets", "gem-index.json");
-        Assert.True(File.Exists(path), $"asset missing at {path}");
+        // Embedded, like the voyage corpus: one exe, nothing beside it.
+        Assert.NotNull(typeof(GemCatalog).Assembly
+            .GetManifestResourceStream("assets/gem-index.json"));
 
-        var c = GemCatalog.Load(path);
+        var c = GemCatalog.LoadDefault();
+        Assert.NotNull(c);
         Assert.True(c.Count > 700, $"only {c.Count} gems");
         Assert.True(c.IsVendorBuyable("Spell Echo Support"));
         Assert.False(c.IsVendorBuyable("Vaal Spark"));

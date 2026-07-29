@@ -8,4 +8,12 @@
     <DebugType>embedded</DebugType>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Shipped INSIDE the assembly, so the published app is one file and nothing else.
+         These are static data (the poedb mod corpus; the PoB gem index), not state:
+         user state lives in MindGoblin_data/ and is never part of a build. -->
+    <EmbeddedResource Include="..\..\assets\voyage-mods.json" LogicalName="assets/voyage-mods.json" />
+    <EmbeddedResource Include="..\..\assets\gem-index.json" LogicalName="assets/gem-index.json" />
+  </ItemGroup>
+
 </Project>

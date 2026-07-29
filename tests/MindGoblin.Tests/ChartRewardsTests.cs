@@ -177,10 +177,11 @@ public class ChartCatalogueTests
     public void TheShippedCatalogueLoads()
     {
         // If the asset is missing the built-in floor takes over silently and the reward
-        // filter quietly gets much worse, so assert the real file is there and covers
-        // both categories in bulk.
-        Assert.True(File.Exists(ChartRewards.DefaultPath),
-                    $"voyage-mods.json missing from {ChartRewards.DefaultPath}");
+        // filter quietly gets much worse. The corpus ships EMBEDDED in the assembly --
+        // the app is one exe with no assets folder beside it -- so assert the resource
+        // is really in there and covers both categories in bulk.
+        Assert.NotNull(typeof(ChartRewards).Assembly
+            .GetManifestResourceStream("assets/voyage-mods.json"));
 
         var lines = ChartRewards.Current.Lines;
         Assert.True(lines.Count >= 80, $"only {lines.Count} lines loaded");

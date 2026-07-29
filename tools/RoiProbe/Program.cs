@@ -13,7 +13,7 @@ var gcp = PoeWatchClient.CurrencyChaos(currency, "Gemcutter's Prism") ?? 1.0;
 var vaal = PoeWatchClient.CurrencyChaos(currency, "Vaal Orb") ?? 1.0;
 Console.WriteLine($"league={league}  gem rows={gems.Count}  GCP={gcp:0.##}c  Vaal={vaal:0.##}c\n");
 
-var catalog = GemCatalog.Load(Path.Combine(AppContext.BaseDirectory, "assets", "gem-index.json"));
+var catalog = GemCatalog.LoadDefault() ?? throw new InvalidOperationException("no gem index");
 var ladders = PoeWatchClient.ToLadders(gems, minDailyVolume: 5);
 var roi = new GemRoi();
 var costs = new GemRoi.Costs(gcp, vaal);

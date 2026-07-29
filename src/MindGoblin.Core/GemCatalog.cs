@@ -53,13 +53,23 @@ public sealed class GemCatalog
 
     public static GemCatalog? LoadDefault()
     {
+        // A file beside the exe overrides the embedded copy; the shipped app is one
+        // exe and normally has neither the folder nor the need for it.
         var path = Path.Combine(AppContext.BaseDirectory, "assets", "gem-index.json");
-        return File.Exists(path) ? Load(path) : null;
+        if (File.Exists(path)) return Load(path);
+
+        return typeof(GemCatalog).Assembly.GetManifestResourceStream("assets/gem-index.json")
+            is { } embedded ? Load(embedded) : null;
     }
 
     public static GemCatalog Load(string path)
     {
         using var stream = File.OpenRead(path);
+        return Load(stream);
+    }
+
+    public static GemCatalog Load(Stream stream)
+    {
         using var doc = JsonDocument.Parse(stream);
         var gems = new List<Gem>();
 
