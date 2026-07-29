@@ -121,6 +121,45 @@ public class RulesReviewTests
     }
 
     /// <summary>
+    /// EVERY true board multiplier must be priced as one, in every profile that scores
+    /// it. The six "X% increased ... in all Voyage Areas" stat lines multiply what the
+    /// whole voyage produces; a flat weight prices them at a rounding error, which is
+    /// exactly how the best sulphur chart in a real panel came to rank seventeenth. The
+    /// chance-type globals (Possessed, Fracture on death, flask quality) are per-entity
+    /// odds, not board multipliers, and rightly stay flat. "dump" is exempt: its board
+    /// estimate is dominated by ChartBaseValue, so it prices globals with strong flat
+    /// negatives instead -- asserted here too, because a dump that burns a board-wide
+    /// multiplier is a dump that cost more than it cleared.
+    /// </summary>
+    [Fact]
+    public void EveryGlobalMultiplierScalesWithTheBoard()
+    {
+        var multipliers = ChartRewards.Current.Lines.Keys
+            .Where(l => l.Contains("all Voyage Areas") && l.StartsWith("#% increased"))
+            .Select(l => l.Replace("#", "12"))
+            .ToList();
+        Assert.True(multipliers.Count >= 6, "the corpus lost its global multiplier lines?");
+
+        var offences = new List<string>();
+        foreach (var profile in VoyageRules.Defaults())
+            foreach (var line in multipliers)
+                foreach (var rule in profile.Rules.Where(r => r.Score(line) != 0))
+                {
+                    if (profile.Name == "dump")
+                    {
+                        if (rule.Score(line) > -40)   // 12% x a casual -1 is not a deterrent
+                            offences.Add($"dump prices '{line}' at only {rule.Score(line)}");
+                    }
+                    else if (!rule.ScalesWithBoard)
+                    {
+                        offences.Add($"{profile.Name}: '{line}' priced FLAT by {rule.Pattern}");
+                    }
+                }
+
+        Assert.True(offences.Count == 0, string.Join("\n", offences));
+    }
+
+    /// <summary>
     /// "Profiles differ from the shipped rules" must notice the PROFILE-LEVEL knobs too.
     /// SameRules compared only the rule list, so when the strongbox profile gained
     /// AreaLevelWeight from the 3.29.0b research, every existing rule file silently kept
