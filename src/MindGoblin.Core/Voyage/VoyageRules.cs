@@ -886,9 +886,13 @@ public sealed class VoyageRules : IDisposable
             BoardModifierWeight = 1.5,
             Rules =
             [
-                // "are at least Magic" upgrades the whole area, so it is worth far more
-                // than a percentage bump to how many Magic monsters spawn.
-                new VoyageRule { Pattern = @"are at least Magic", Weight = 60 },
+                // "are at least Magic" upgrades EVERY pack in the area, so its value is
+                // the tile's whole population -- priced per pack x the packs a tileset
+                // holds, like the sulphur square is priced per rare. It is classified
+                // per-monster, so the standing chart's pack size multiplies it: the
+                // upgraded tile wants the biggest population you can put on it.
+                new VoyageRule { Pattern = @"are at least Magic",
+                                 Weight = 8 * AreaPopulation.PacksPerArea },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased number of Magic Monsters(?!.*all Voyage Areas)", Weight = 1.0 },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased number of Magic Monsters in all Voyage Areas",
                                  Weight = 0.7, ScalesWithBoard = true,

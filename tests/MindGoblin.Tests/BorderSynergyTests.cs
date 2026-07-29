@@ -54,6 +54,23 @@ public class BorderSynergyTests
     /// opening it carries +0.5 rare density -- more than a +42% pack headline -- and
     /// the Divine square picks it over the packed chart.
     /// </summary>
+    /// <summary>
+    /// "At least Magic" converts the whole tile, so the tile wants the biggest
+    /// population that can stand on it: under the magic-monsters profile, the upgraded
+    /// square takes the +50% pack chart over a plain one.
+    /// </summary>
+    [Fact]
+    public void TheUpgradedTileTakesTheBiggestPacks()
+    {
+        var session = Session(out var packChart, out _);
+        session.ApplySquareModifiers(1, ["Monsters in Area are at least Magic"]);
+
+        var magic = VoyageRules.Defaults().Single(p => p.Name == "magic monsters");
+        var plan = session.Plan(session.Solve(magic, TimeSpan.FromSeconds(3)));
+
+        Assert.Equal(packChart, Assert.Single(plan, s => s.Square == 1).ChartNumber);
+    }
+
     /// <summary>Field observations, one line each: rooms measured dense, and rooms
     /// measured neutral so they are not re-tested.</summary>
     [Theory]
