@@ -74,6 +74,9 @@ public static class AreaPopulation
             // Brine ("hard to say" was the field note, so half is the honest middle).
             ["Sea Pillars"] = 0.5,
 
+            // Abyss rares throughout, judged slightly better than Sea Pillars.
+            ["Pelagic Abyss"] = 0.6,
+
             // MEASURED NEUTRAL, kept at zero so nobody re-tests them: Diving Shoals ran
             // unremarkable, and Sunken Totems adds unique mini-bosses (Utula, Ahuana --
             // Trial of the Ancestors names) which are uniques, not rares, so they feed
@@ -85,6 +88,11 @@ public static class AreaPopulation
             // Sunken Loot observed, which is why the containers and quantity profiles
             // carry an "Area: Anchorfield" rule instead of this map.
             ["Anchorfield"] = 0.0,
+
+            // Measured: a LOOT room, not a rare room -- piles of gold and treasure
+            // clams (the clams only seem to drop gold). The gold profile carries its
+            // Area rule.
+            ["Clam-infested Shelf"] = 0.0,
         };
 
     /// <summary>The room bonus for a chart, wherever the room name landed in the parse
@@ -849,6 +857,8 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size in all Voyage Areas",
                                  Weight = 0.5, ScalesWithBoard = true },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional packs? of", Weight = 1.0 },
+                new VoyageRule { Pattern = @"Area: Clam-infested Shelf", Weight = 20,
+                                 Comment = "observed: piles of gold and treasure clams dropping gold" },
             ],
         },
 

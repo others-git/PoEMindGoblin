@@ -59,6 +59,8 @@ public class BorderSynergyTests
     [Theory]
     [InlineData("Brine King's Domain", 1.0)]
     [InlineData("Sea Pillars", 0.5)]
+    [InlineData("Pelagic Abyss", 0.6)]
+    [InlineData("Clam-infested Shelf", 0.0)]
     [InlineData("Diving Shoals", 0.0)]
     [InlineData("Sunken Totems", 0.0)]
     [InlineData("Kishara's Rest", 0.0)]   // unmeasured: absent defaults to zero
