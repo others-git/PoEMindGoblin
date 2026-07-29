@@ -35,6 +35,19 @@ public class BorderSynergyTests
     public void AdditiveLinesAreNot(string line) =>
         Assert.False(VoyageProfile.IsPerMonsterPayout(line));
 
+    /// <summary>
+    /// Observed in a run: imprisoned (essence) monsters ARE rares and DO drop the
+    /// per-rare border payouts. Each is a whole rare, so an imprisoned gift carries
+    /// full weight in the density model -- 4 imprisoned outranks "+30% increased".
+    /// </summary>
+    [Theory]
+    [InlineData("Adjacent Areas contain 4 additional Imprisoned Monsters", 0.4)]
+    [InlineData("Adjacent Areas contain an additional Imprisoned Monster", 0.1)]
+    [InlineData("30% increased number of Rare Monsters in adjacent Areas", 0.3)]
+    [InlineData("12 additional packs of Crabs", 0.12)]
+    public void RareDensityCountsEveryRareSource(string line, double expected) =>
+        Assert.Equal(expected, VoyageProfile.MonsterDensityOf(line), 3);
+
     private static VoyageSession Session(out int packChart, out int plainChart)
     {
         var session = new VoyageSession();

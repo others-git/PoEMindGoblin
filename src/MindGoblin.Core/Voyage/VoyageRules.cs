@@ -194,9 +194,21 @@ public sealed class VoyageProfile
         if (packs.Success)
         {
             // n added packs, each with a chance to arrive rare-led, as a fraction of
-            // the tileset's base rares: n x 0.3 / 10 on the current estimates.
+            // the tileset's base rares.
             var n = packs.Groups[1].Success ? double.Parse(packs.Groups[1].Value) : 1;
             density += n * AreaPopulation.RareChancePerAddedPack / AreaPopulation.RaresPerArea;
+        }
+
+        var imprisoned = ImprisonedMonsters.Match(line);
+        if (imprisoned.Success)
+        {
+            // OBSERVED in a run: imprisoned (essence) monsters ARE rares, and they DO
+            // drop the per-rare border payouts -- sulphur, orbs, all of it. Each one is
+            // a whole rare, so an imprisoned gift outranks a percent roll of the same
+            // headline size: 4 imprisoned = 0.4 of the base rares, against 0.3 from
+            // "+30% increased".
+            var n = imprisoned.Groups[1].Success ? double.Parse(imprisoned.Groups[1].Value) : 1;
+            density += n / AreaPopulation.RaresPerArea;
         }
         return density;
     }
@@ -208,6 +220,9 @@ public sealed class VoyageProfile
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex AdditionalPacks =
         new(@"(?:(\d+)|an)\s+additional packs? of",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex ImprisonedMonsters =
+        new(@"(?:(\d+)|an)\s+additional Imprisoned Monsters?",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>
