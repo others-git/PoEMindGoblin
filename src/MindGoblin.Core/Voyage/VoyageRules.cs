@@ -667,7 +667,7 @@ public sealed class VoyageRules : IDisposable
                                  Weight = 30 * AreaPopulation.RaresPerArea,
                                  Comment = "the jackpot payouts: a Divine square must outrank a Chromatic one "
                                            + "here too, not only under the currency profile" },
-                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional Scarabs?", Weight = 4 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional Scarabs?", Weight = 15 * AreaPopulation.RaresPerArea },
                 new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional (?!Divine|Exalted|Scarab)",
                                  Weight = 6 * AreaPopulation.RaresPerArea,
                                  Comment = "the rest of the per-rare currency; the lookahead keeps the "
@@ -736,7 +736,7 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Chaos Orbs?", Weight = 1 * AreaPopulation.RaresPerArea },
                 new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Orbs? of Regret", Weight = 1 * AreaPopulation.RaresPerArea },
                 new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Chromatic Orbs?", Weight = 0.1 * AreaPopulation.RaresPerArea },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Scarabs?", Weight = 15 * AreaPopulation.RaresPerArea },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Scarabs?", Weight = 4 * AreaPopulation.RaresPerArea },
                 new VoyageRule { Pattern = @"(\d+)% more Currency found", Weight = 2.0 },
                 new VoyageRule { Pattern = @"(\d+)% more Scarabs found", Weight = 1.5 },
                 new VoyageRule { Pattern = @"instead drop as Stacked Decks", Weight = 40 },
