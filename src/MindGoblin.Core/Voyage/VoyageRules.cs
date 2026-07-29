@@ -13,6 +13,35 @@ namespace MindGoblin.Core.Voyage;
 /// multiplied by <see cref="Weight"/>; otherwise a match is worth <see cref="Weight"/>
 /// flat.
 /// </summary>
+/// <summary>
+/// What lives in a voyage area, as far as anyone knows.
+///
+/// ALL ESTIMATES, and deliberately named ones. No published numbers exist -- GGG ships
+/// no drop tables, poedb carries no room monster data, and the community guides are
+/// qualitative (checked July 2026). These are anchored to in-game observation: roughly
+/// thirty packs a tileset, a third of them rare-led, an added pack rolling rare about a
+/// third of the time, and the drop-sulphur figurine paying out on the order of a
+/// thousand raw sulphur across a square's rares. Every constant is a knob so a real
+/// measurement slots in without touching the model -- and everything DERIVED from them
+/// (the per-pack rare fraction, the sulphur square's price) moves together.
+/// </summary>
+public static class AreaPopulation
+{
+    /// <summary>Monster packs in one tileset. Observed order of magnitude.</summary>
+    public const double PacksPerArea = 30;
+
+    /// <summary>Rare monsters in one tileset, before any modifiers.</summary>
+    public const double RaresPerArea = 10;
+
+    /// <summary>Chance an ADDED pack ("Adjacent Areas contain 4 additional packs of
+    /// Starfish") arrives rare-led -- one or two rares per four packs.</summary>
+    public const double RareChancePerAddedPack = 0.3;
+
+    /// <summary>Raw sulphur one rare drops under the drop-sulphur figurine. The most
+    /// uncertain number here, and the one most worth measuring in game.</summary>
+    public const double SulphurPerRareDrop = 75;
+}
+
 public sealed class VoyageRule
 {
     public string Pattern { get; set; } = "";
@@ -134,9 +163,8 @@ public sealed class VoyageProfile
     /// <summary>
     /// How much monster DENSITY a modifier line adds, as a fraction of a tile's
     /// monsters. This is what per-monster payouts multiply with. Percent rolls convert
-    /// directly; "additional packs" uses a documented estimate -- a pack as roughly 3%
-    /// of a tile's monsters -- which is the one invented constant in the interaction,
-    /// scaled like everything else by the profile's synergy knob.
+    /// directly; "additional packs" converts through <see cref="AreaPopulation"/> --
+    /// added packs x rare chance per pack, over the tileset's base rares.
     /// </summary>
     public static double MonsterDensityOf(string line)
     {
@@ -147,7 +175,12 @@ public sealed class VoyageProfile
         if (count.Success) density += double.Parse(count.Groups[1].Value) / 100;
         var packs = AdditionalPacks.Match(line);
         if (packs.Success)
-            density += (packs.Groups[1].Success ? double.Parse(packs.Groups[1].Value) : 1) * 0.03;
+        {
+            // n added packs, each with a chance to arrive rare-led, as a fraction of
+            // the tileset's base rares: n x 0.3 / 10 on the current estimates.
+            var n = packs.Groups[1].Success ? double.Parse(packs.Groups[1].Value) : 1;
+            density += n * AreaPopulation.RareChancePerAddedPack / AreaPopulation.RaresPerArea;
+        }
         return density;
     }
 
@@ -440,10 +473,15 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Dead Man's Sulphur found in all Voyage Areas",
                                  Weight = 1.0, ScalesWithBoard = true,
                                  Comment = "multiplies the WHOLE board's sulphur: scored as that fraction" },
-                new VoyageRule { Pattern = @"drop Dead Man's Sulphur", Weight = 300,
-                                 Comment = "a tile's worth of rares EACH paying sulphur is a "
-                                           + "headline-sized total, not a token -- and pricing it "
-                                           + "like one is what lets rare-adding neighbours multiply it" },
+                new VoyageRule { Pattern = @"drop Dead Man's Sulphur",
+                                 Weight = AreaPopulation.RaresPerArea
+                                          * AreaPopulation.SulphurPerRareDrop * 5.0,
+                                 Comment = "EACH rare drops sulphur (the line carries no number, "
+                                           + "unlike the orb payouts, which read as area totals): "
+                                           + "rares x sulphur-per-drop x the 5/sulphur weight. On "
+                                           + "the estimates that is ~750 raw sulphur a square -- "
+                                           + "the square IS the farm, and a rare-adding neighbour "
+                                           + "multiplies it" },
             ],
         },
 
@@ -834,8 +872,10 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Giant Starfish", Weight = -2 },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Treasure", Weight = -4 },
                 new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional", Weight = -8 },
-                new VoyageRule { Pattern = @"Rare Monsters.*drop Dead Man's Sulphur", Weight = -150,
-                                 Comment = "headline-sized payout: a keeper, priced like one" },
+                new VoyageRule { Pattern = @"Rare Monsters.*drop Dead Man's Sulphur",
+                                 Weight = -(AreaPopulation.RaresPerArea
+                                            * AreaPopulation.SulphurPerRareDrop * 5.0) / 2,
+                                 Comment = "half the sulphur square's price: emphatically a keeper" },
                 new VoyageRule { Pattern = @"chance to drop a Support Gem", Weight = -0.2 },
                 new VoyageRule { Pattern = @"are at least Magic", Weight = -12 },
                 new VoyageRule { Pattern = @"Magic Monsters.*have an additional modifier", Weight = -8 },
