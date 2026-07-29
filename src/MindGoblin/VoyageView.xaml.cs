@@ -864,7 +864,9 @@ public partial class VoyageView : UserControl, IDisposable
                  square % 2 == 0 ? "Areas have 15% increased Quantity of Items found" : "Areas have 20% increased Monster Pack Size"]);
         // Badge-worthy squares, so the sample exercises the icon row too.
         _session.ApplySquareModifiers(6, ["Area contains 4 additional Golden Lanterns"]);
-        _session.ApplySquareModifiers(8, ["Area contains Filthscrabble"]);
+        _session.ApplySquareModifiers(8, ["Area contains Filthscrabble",
+                                          "Rare Monsters in Area drop Dead Man's Sulphur"]);
+        _session.ApplySquareModifiers(9, ["Area contains 2 additional Diviner's Strongboxes"]);
 
         RefreshPanel();
         RefreshBoard();
@@ -1486,7 +1488,9 @@ public partial class VoyageView : UserControl, IDisposable
         // The icon row: what the square CONTAINS, at a glance. A golden lantern to
         // grab, a named boss to expect. Sourced from the same lines the scoring uses,
         // so an icon never promises something the plan did not price.
-        if (badges is { } b && (b.GoldenLanterns > 0 || b.Bosses.Count > 0))
+        if (badges is { } b && (b.GoldenLanterns > 0 || b.Bosses.Count > 0
+                                || b.Payouts.Count > 0 || b.Strongboxes.Count > 0
+                                || b.Dangers.Count > 0))
         {
             var row = new StackPanel
             {
@@ -1524,9 +1528,83 @@ public partial class VoyageView : UserControl, IDisposable
                     ToolTip = $"{boss} \u2014 named boss in this square",
                 });
             }
+            if (b.Payouts.Count > 0)
+            {
+                var coin = CoinIcon();
+                coin.ToolTip = "Per-rare payout: " + string.Join(", ", b.Payouts)
+                               + " \u2014 every rare here pays";
+                row.Children.Add(coin);
+            }
+            if (b.Strongboxes.Count > 0)
+            {
+                var chest = ChestIcon();
+                chest.ToolTip = string.Join(", ", b.Strongboxes) + " in this square";
+                row.Children.Add(chest);
+            }
+            if (b.Dangers.Count > 0)
+            {
+                row.Children.Add(new TextBlock
+                {
+                    Text = "\u26a0",
+                    FontFamily = new FontFamily("Segoe UI Symbol"),
+                    FontSize = 12,
+                    Foreground = Brush(0xB8, 0x50, 0x3E),
+                    Margin = new Thickness(3, 0, 3, 0),
+                    ToolTip = "Fight carefully \u2014 " + string.Join("; ", b.Dangers),
+                });
+            }
             stack.Children.Add(row);
         }
         return stack;
+    }
+
+    /// <summary>A brass coin for the payout squares: a rimmed disc with a stamped dot.</summary>
+    private static FrameworkElement CoinIcon()
+    {
+        var g = new Grid { Width = 12, Height = 12, Margin = new Thickness(3, 0, 3, 0) };
+        g.Children.Add(new Border
+        {
+            Width = 11, Height = 11,
+            CornerRadius = new CornerRadius(6),
+            Background = Brush(0xF0, 0xD2, 0x64),
+            BorderBrush = Brush(0x8A, 0x6F, 0x22),
+            BorderThickness = new Thickness(1.5),
+        });
+        g.Children.Add(new Border
+        {
+            Width = 3, Height = 3,
+            CornerRadius = new CornerRadius(2),
+            Background = Brush(0x8A, 0x6F, 0x22),
+        });
+        return g;
+    }
+
+    /// <summary>A small chest: dark body, gold lid line, centre latch.</summary>
+    private static FrameworkElement ChestIcon()
+    {
+        var g = new Grid { Width = 13, Height = 11, Margin = new Thickness(3, 0, 3, 0) };
+        g.Children.Add(new Border
+        {
+            Width = 12, Height = 10,
+            CornerRadius = new CornerRadius(3, 3, 1, 1),
+            Background = Brush(0x5C, 0x4C, 0x2C),
+            BorderBrush = Brush(0xC9, 0xA2, 0x27),
+            BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Bottom,
+        });
+        g.Children.Add(new Border
+        {
+            Width = 12, Height = 1.5,
+            Background = Brush(0xC9, 0xA2, 0x27),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        g.Children.Add(new Border
+        {
+            Width = 3, Height = 4,
+            Background = Brush(0xF0, 0xD2, 0x64),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        return g;
     }
 
     /// <summary>A little golden lantern, drawn rather than fonted: a glowing body under

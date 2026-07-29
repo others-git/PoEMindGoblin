@@ -548,7 +548,12 @@ public sealed class VoyageSession
     /// neighbours' adjacent gifts -- the same sources the scoring uses, so an icon never
     /// promises something the plan did not price.
     /// </summary>
-    public sealed record SquareBadges(double GoldenLanterns, IReadOnlyList<string> Bosses);
+    public sealed record SquareBadges(
+        double GoldenLanterns,
+        IReadOnlyList<string> Bosses,
+        IReadOnlyList<string> Payouts,
+        IReadOnlyList<string> Strongboxes,
+        IReadOnlyList<string> Dangers);
 
     public IReadOnlyDictionary<int, SquareBadges> Badges(VoyageSolver.Solution solution)
     {
@@ -580,12 +585,59 @@ public sealed class VoyageSession
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            if (lanterns > 0 || bosses.Count > 0)
+            // Per-rare payouts landing on this square: the coin that says "farm HERE".
+            var payouts = lines
+                .Where(l => VoyageProfile.PayoutChannelOf(l) == VoyageProfile.PayoutChannel.Rares)
+                .Select(PayoutName)
+                .Where(n => n.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var boxes = lines
+                .Select(l => StrongboxLine.Match(l))
+                .Where(m => m.Success)
+                .Select(m => m.Groups[1].Success ? m.Groups[1].Value + " Strongboxes" : "Strongboxes")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            // Danger travels with the CHART, not the square: the run-enders among its
+            // monster mods, so you know where to fight carefully.
+            var dangers = placement.Chart.Modifiers
+                .Where(l => DangerLine.IsMatch(l))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (lanterns > 0 || bosses.Count > 0 || payouts.Count > 0
+                || boxes.Count > 0 || dangers.Count > 0)
                 result[VoyagePlan.SquareNumber(placement.Cell, Layout.Cols)] =
-                    new SquareBadges(lanterns, bosses);
+                    new SquareBadges(lanterns, bosses, payouts, boxes, dangers);
         }
         return result;
     }
+
+    /// <summary>What a per-rare payout line pays, shortly: "Dead Man's Sulphur",
+    /// "Divine Orbs", "Scarabs" -- for the coin icon's tooltip.</summary>
+    private static string PayoutName(string line)
+    {
+        var m = PayoutWhat.Match(line);
+        return m.Success ? m.Groups[1].Value.Trim() : "";
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex PayoutWhat =
+        new(@"drop (?:an |\d+ )?(?:additional )?(Dead Man's Sulphur|[A-Z][\w' ]+?s?)(?:\s*$)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    private static readonly System.Text.RegularExpressions.Regex StrongboxLine =
+        new(@"additional (Arcanist's|Diviner's|Operative's)? ?Strongbox(?:es)?",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>The run-enders: a death forfeits every square not yet reached.</summary>
+    private static readonly System.Text.RegularExpressions.Regex DangerLine =
+        new(@"Players have -?\d+% to all maximum Resistances|Monster Damage Penetrates",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>The named creatures the tables can put in a square. Weird names on
     /// purpose -- that is how you know they are bosses.</summary>

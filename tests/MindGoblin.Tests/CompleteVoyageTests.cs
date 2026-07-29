@@ -73,4 +73,28 @@ public class SquareBadgeTests
         Assert.Contains("Filthscrabble", badges[5].Bosses);
         Assert.False(badges.ContainsKey(9));   // nothing there, no icon
     }
+
+    [Fact]
+    public void PayoutsBoxesAndDangersAreBadgedToo()
+    {
+        var session = new VoyageSession();
+        session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
+            { Level = 80 }).ToList());
+        session.ApplySquareModifiers(1, ["Rare Monsters in Area drop Dead Man's Sulphur"]);
+        session.ApplySquareModifiers(3, ["Area contains 2 additional Diviner's Strongboxes"]);
+        session.ApplyChartText(2,
+            "Reach\nAnchorfield\nItem Quantity: +40%\n"
+            + "Players have -8% to all maximum Resistances");
+
+        var quantity = VoyageRules.Defaults().Single(p => p.Name == "quantity");
+        var solution = session.Solve(quantity, TimeSpan.FromSeconds(3));
+        var badges = session.Badges(solution);
+        var plan = session.Plan(solution);
+
+        Assert.Contains("Dead Man's Sulphur", badges[1].Payouts);
+        Assert.Contains("Diviner's Strongboxes", badges[3].Strongboxes);
+        var dangerSquare = Assert.Single(plan, s => s.ChartNumber == 2).Square;
+        Assert.NotEmpty(badges[dangerSquare].Dangers);
+    }
 }
