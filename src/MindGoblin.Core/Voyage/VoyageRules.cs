@@ -738,10 +738,10 @@ public sealed class VoyageRules : IDisposable
                                  Comment = "reworked this league and genuinely worth chaos now -- "
                                            + "the feed's ~2c mean was real, and the instinct to "
                                            + "discount it as listing noise was stale knowledge" },
-                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Scarabs?", Weight = 6 * AreaPopulation.RaresPerArea,
-                                 Comment = "pool median 2c, mean 11c with gold-tier outliers; 6 splits "
-                                           + "the difference in the outliers' favour, since a drop "
-                                           + "CAN be the hundred-chaos one" },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Scarabs?", Weight = 10 * AreaPopulation.RaresPerArea,
+                                 Comment = "pool median 2c, mean 11c: priced at the mean, because a "
+                                           + "square rolling many scarabs is exactly the lottery "
+                                           + "where the gold-tier outliers get their chances" },
                 new VoyageRule { Pattern = @"(\d+)% more Currency found", Weight = 2.0 },
                 new VoyageRule { Pattern = @"(\d+)% more Scarabs found", Weight = 1.5 },
                 new VoyageRule { Pattern = @"instead drop as Stacked Decks", Weight = 40 },
