@@ -46,6 +46,9 @@ public sealed class VoyageSessionState
 
     public Dictionary<string, string> Figurines { get; set; } = [];
 
+    /// <summary>Panel indices the user has X'd out of planning.</summary>
+    public List<int> Excluded { get; set; } = [];
+
     /// <summary>
     /// One chart as read.
     ///

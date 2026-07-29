@@ -21,6 +21,7 @@ namespace MindGoblin.Core.Voyage;
 public sealed class VoyageSession
 {
     private readonly Dictionary<int, Chart> _charts = new();
+    private readonly HashSet<int> _excluded = new();
     private readonly Dictionary<int, string> _figurines = new();
     private readonly Dictionary<int, List<string>> _squareModifiers = new();
 
@@ -285,14 +286,19 @@ public sealed class VoyageSession
         // the voyage produces, so they are scored as their fraction of this estimate --
         // the one number that turns "20%" from a token 40 points into the board-sized
         // value it actually is.
-        var boardEstimate = Charts
+        var eligible = ByPanelIndex
+            .Where(kv => !_excluded.Contains(kv.Key))
+            .Select(kv => kv.Value)
+            .ToList();
+
+        var boardEstimate = eligible
             .Select(c => profile.ScoreChart(c))
             .OrderByDescending(v => v)
             .Take(Layout.Rows * Layout.Cols)
             .Where(v => v > 0)
             .Sum();
 
-        var scored = Charts.Select(c =>
+        var scored = eligible.Select(c =>
         {
             var adjacent = profile.ScoreAdjacent(c);
             var payoutAdj = c.AdjacentModifier is { } adj && VoyageProfile.IsPerMonsterPayout(adj);
@@ -540,6 +546,20 @@ public sealed class VoyageSession
 
     // ---- persistence -------------------------------------------------------------
 
+    /// <summary>Panel indices the planner must ignore. The user's veto: an X on a chart
+    /// says "not this one", whatever the rules think it is worth.</summary>
+    public IReadOnlyCollection<int> Excluded => _excluded;
+
+    public bool IsExcluded(int panelIndex) => _excluded.Contains(panelIndex);
+
+    /// <summary>Toggle the X. Returns the new state: true when now excluded.</summary>
+    public bool ToggleExcluded(int panelIndex)
+    {
+        if (_excluded.Remove(panelIndex)) return false;
+        _excluded.Add(panelIndex);
+        return true;
+    }
+
     /// <summary>
     /// The voyage was run: spend its charts and clear the board.
     ///
@@ -554,7 +574,7 @@ public sealed class VoyageSession
     {
         var spent = 0;
         foreach (var index in placedCharts)
-            if (_charts.Remove(index)) spent++;
+            if (_charts.Remove(index)) { _excluded.Remove(index); spent++; }
 
         _squareModifiers.Clear();
         _figurines.Clear();
@@ -569,6 +589,7 @@ public sealed class VoyageSession
         Rows = Layout.Rows,
         Cols = Layout.Cols,
         Profile = profile,
+        Excluded = _excluded.Order().ToList(),
         Charts = _charts.OrderBy(kv => kv.Key).Select(kv => new VoyageSessionState.ChartState
         {
             PanelIndex = kv.Key,
@@ -633,6 +654,7 @@ public sealed class VoyageSession
         foreach (var (key, text) in state.Figurines)
             if (int.TryParse(key, out var index)) session._figurines[index] = text;
 
+        session._excluded.UnionWith(state.Excluded);
         return session;
     }
 

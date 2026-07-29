@@ -1502,10 +1502,30 @@ public partial class VoyageView : UserControl, IDisposable
             // Clickable so the pass is not strictly sequential: one chart that will not
             // copy should not force the other 59 to wait behind it.
             cell.MouseLeftButtonUp += OnPanelCellClicked;
+            cell.MouseRightButtonUp += OnPanelCellExcluded;
             _panelCells[i] = cell;
             PanelGrid.Children.Add(cell);
         }
         RefreshPanel();
+    }
+
+    /// <summary>
+    /// Right-click vetoes a chart: an X the planner must respect, toggled off the same
+    /// way. The rules say what a chart is WORTH; the X says "not this one anyway" --
+    /// saving it for a friend, distrusting a read, or just not wanting to run it.
+    /// </summary>
+    private void OnPanelCellExcluded(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not Border { Tag: int index }) return;
+        if (!_session.ByPanelIndex.ContainsKey(index)) return;
+        e.Handled = true;
+
+        var excluded = _session.ToggleExcluded(index);
+        Persist();
+        RefreshPanel();
+        SetStatus(excluded
+            ? $"Chart {index} excluded \u2014 Solve to replan without it."
+            : $"Chart {index} back in the pool \u2014 Solve to replan.");
     }
 
     private void RefreshPanel()
@@ -1528,6 +1548,7 @@ public partial class VoyageView : UserControl, IDisposable
                 continue;
             }
 
+            var isExcluded = _session.IsExcluded(index);
             var isPlanned = used.ContainsKey(index);
             // Not gated on read mode: manual entry works without it, and the highlight is
             // what tells you which chart the box below applies to.
@@ -1586,10 +1607,32 @@ public partial class VoyageView : UserControl, IDisposable
                 HorizontalAlignment = HorizontalAlignment.Center,
             });
 
-            cell.Child = stack;
+            if (isExcluded)
+            {
+                // The X sits OVER the dimmed cell: the chart stays identifiable under
+                // its veto, and a second right-click lifts it.
+                stack.Opacity = 0.3;
+                var host = new Grid();
+                host.Children.Add(stack);
+                host.Children.Add(new TextBlock
+                {
+                    Text = "\u2715",
+                    FontFamily = new FontFamily("Georgia"),
+                    FontSize = 30,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xB8, 0x50, 0x3E)),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                });
+                cell.Child = host;
+            }
+            else
+            {
+                cell.Child = stack;
+            }
             cell.ToolTip = Tip(
                 string.IsNullOrWhiteSpace(chart.Name) ? $"Chart {index}" : $"Chart {index} · {chart.Name}",
-                isPlanned ? $"Goes on square {used[index]}" : "Not in the plan",
+                isExcluded ? "Excluded \u2014 right-click to bring it back"
+                    : isPlanned ? $"Goes on square {used[index]}" : "Not in the plan",
                 DescribeChart(chart), hasDetail);
         }
 
