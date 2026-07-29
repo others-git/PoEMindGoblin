@@ -470,11 +470,13 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -60,
                                  Comment = "a global roll that deletes most of the loot" },
                 // Board modifiers, off the figurines rather than the charts.
-                new VoyageRule { Pattern = @"(\d+)%\s+increased explicit modifier magnitudes", Weight = 0.5,
-                                 Comment = "rolls every other modifier higher" },
-                new VoyageRule { Pattern = @"(\d+)% chance (?:for Charts? )?to not be consumed", Weight = 0.8,
-                                 Comment = "a chart you keep is a voyage you did not pay for" },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased explicit modifier magnitudes", Weight = 2.0,
+                                 Comment = "multiplies the affected chart's entire rolled mods: worth "
+                                           + "roughly that fraction of a chart, not a token" },
+                
                 new VoyageRule { Pattern = @"(\d+)% more Rarity of Items found", Weight = 1.0 },
+                new VoyageRule { Pattern = @"(\d+)% chance (?:for Charts? )?to not be consumed", Weight = 3.0,
+                                 Comment = "a refunded adjacent chart is ~its own value x the chance" },
                 new VoyageRule { Pattern = @"(\d+)% reduced quantity of items found", Weight = -1.5 },
                 new VoyageRule { Pattern = @"gain (\d+)% increased Experience", Weight = 0.1 },
             ],
@@ -613,9 +615,13 @@ public sealed class VoyageRules : IDisposable
                 // adjacent Areas drop # additional Chaos Orbs") while the Area Modifiers
                 // panel shows it resolved for the square you hovered ("in Area drop an
                 // additional Chaos Orb").
-                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional", Weight = 8,
-                                 Comment = "board modifier: extra currency per rare; the mod table "
-                                           + "has the template, the Area panel the resolved singular" },
+                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional (?:Divine|Exalted) Orbs?", Weight = 30,
+                                 Comment = "the jackpot payouts: a Divine square must outrank a Chromatic one "
+                                           + "here too, not only under the currency profile" },
+                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional Scarabs?", Weight = 15 },
+                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional (?!Divine|Exalted|Scarab)", Weight = 6,
+                                 Comment = "the rest of the per-rare currency; the lookahead keeps the "
+                                           + "jackpots on their own rules" },
 
                 // Rares spawn out of packs, so more packs is more rares -- and every
                 // payout above is per rare. This profile ignored pack size entirely,
@@ -646,6 +652,9 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Rarity of Items found in all Voyage Areas",
                                  Weight = 0.5, ScalesWithBoard = true,
                                  Comment = "rarity multiplies the unique count board-wide" },
+                new VoyageRule { Pattern = @"(\d+)% more Rarity of Items found", Weight = 1.5,
+                                 Comment = "MORE, not increased: the stronger multiplier, and this profile "
+                                           + "somehow scored it zero while quantity scored it" },
                 new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -60,
                                  Comment = "jewellery included, so this guts the profile" },
             ],
@@ -679,6 +688,8 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"chance to drop a Support Gem", Weight = 0.2 },
                 new VoyageRule { Pattern = @"a lost Pirate's Locker", Weight = 25 },
                 new VoyageRule { Pattern = @"(?:(\d+)|an) Altars? to the Goddess", Weight = 12 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased explicit modifier magnitudes", Weight = 1.5,
+                                 Comment = "bigger rolls on every payout mod the square's chart carries" },
                 // Rares are what carry all of the above, so more of them is more of it.
                 new VoyageRule { Pattern = @"(\d+)%\s+increased number of Rare [Mm]onsters(?!.*all Voyage Areas)", Weight = 0.5 },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased number of Rare Monsters in all Voyage Areas",
@@ -766,6 +777,11 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"Monsters fire (\d+) additional Projectiles", Weight = -2 },
                 new VoyageRule { Pattern = @"Area has patches of", Weight = -3 },
                 new VoyageRule { Pattern = @"(\d+)% increased Monster Damage", Weight = -0.2 },
+                new VoyageRule { Pattern = @"Monsters deal (\d+)% extra Physical Damage as", Weight = -0.15,
+                                 Comment = "a flat damage multiplier vs typical resists; deadlier than "
+                                           + "several mods that made the original list" },
+                new VoyageRule { Pattern = @"Monsters gain (\d+)% of their Physical Damage as Extra Chaos Damage",
+                                 Weight = -0.15 },
             ],
         },
         new VoyageProfile
@@ -837,8 +853,9 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"contain Friendly Jellyfish", Weight = -4 },
                 new VoyageRule { Pattern = @"contains? Filthscrabble", Weight = -5 },
                 new VoyageRule { Pattern = @"(?:(\d+)|an) Altars? to the Goddess", Weight = -10 },
+                new VoyageRule { Pattern = @"(\d+)% chance (?:for Charts? )?to not be consumed", Weight = -3,
+                                 Comment = "a chart that refunds its neighbours is a keeper, not a dump" },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased explicit modifier magnitudes", Weight = -0.3 },
-                new VoyageRule { Pattern = @"(\d+)% chance (?:for Charts? )?to not be consumed", Weight = -0.5 },
                 new VoyageRule { Pattern = @"gain (\d+)% increased Experience", Weight = -0.1 },
                 new VoyageRule { Pattern = @"Flasks found.*chance to have (\d+)% Quality", Weight = -0.2 },
                 // The one POSITIVE weight: this line reads as a reward in the game's own
