@@ -49,7 +49,8 @@ public sealed class VoyageSolver
         Func<Chart, Cell, double>? score = null,
         bool allowEmpty = true,
         double strandedPenalty = 0,
-        int? maxPlacements = null)
+        int? maxPlacements = null,
+        (string ChartId, Cell Cell)? pin = null)
     {
         _rows = rows;
         _cols = cols;
@@ -62,6 +63,51 @@ public sealed class VoyageSolver
         // only four Charts." A cap is not the same as leaving cells empty by choice: it
         // is a limit on how many charts you have to spend.
         _maxPlacements = Math.Clamp(maxPlacements ?? rows * cols, 0, rows * cols);
+
+        if (pin is { } fixed_)
+        {
+            var which = charts.ToList().FindIndex(c => c.Id == fixed_.ChartId);
+            if (which >= 0 && InBounds(fixed_.Cell))
+                _pin = (which, fixed_.Cell.Row * cols + fixed_.Cell.Col);
+        }
+    }
+
+    /// <summary>
+    /// A chart nailed to one cell, as (chart index, cell index).
+    ///
+    /// This exists for modifiers whose worth the rules cannot express. Soul Eater is
+    /// voyage-wide -- it pays the same from any square -- and what it pays is player
+    /// power rather than loot, so every profile scores it at zero and the planner simply
+    /// never places it. Pinning is how a person overrules that: take this chart, and since
+    /// where it sits cannot matter, put it on the square that has least to offer.
+    ///
+    /// It is expressed by filtering the candidate ORDERINGS rather than by testing at
+    /// every node: the pinned cell may only be offered the pinned chart, and no other cell
+    /// may be offered it at all. That makes the constraint free at search time -- it
+    /// shrinks the space rather than checking it -- and the seed obeys it automatically,
+    /// which matters, because a seed board without the pinned chart would be an incumbent
+    /// the real search is not allowed to return.
+    /// </summary>
+    private (int Chart, int CellIndex)? _pin;
+
+    private bool InBounds(Cell cell) =>
+        cell.Row >= 0 && cell.Row < _rows && cell.Col >= 0 && cell.Col < _cols;
+
+    /// <summary>Was the pin actually applied? False when the chart id was not in the panel.</summary>
+    public bool HasPin => _pin is not null;
+
+    /// <summary>
+    /// Restrict a per-cell candidate ordering to honour the pin.
+    ///
+    /// Applied to BOTH orderings -- the seed's plain one and the search's scored one --
+    /// because a constraint that only half the passes obey is not a constraint.
+    /// </summary>
+    private int[][] ApplyPin(int[][] ordering)
+    {
+        if (_pin is not { } pin) return ordering;
+        return [.. ordering.Select((cell, index) => index == pin.CellIndex
+            ? [pin.Chart]
+            : cell.Where(i => i != pin.Chart).ToArray())];
     }
 
     /// <summary>Cached: Enum.GetValues allocates a fresh array every call, and these
@@ -126,7 +172,7 @@ public sealed class VoyageSolver
         // Optimistic remaining value: the best scores any chart could achieve anywhere,
         // largest first. Never underestimates, so pruning against it is safe.
         var bestPossible = BestPossiblePerCell();
-        _ordering = BuildOrdering();
+        _ordering = ApplyPin(BuildOrdering());
 
         var best = new Solution(Array.Empty<Placement>(), double.NegativeInfinity);
         bestRank = double.NegativeInfinity;
@@ -277,7 +323,7 @@ public sealed class VoyageSolver
         // not improve on inside its budget -- sulphur fell from 3515 to 2250 doing
         // exactly that. So run the cheap one first for the existence proof, then keep
         // going while the clock allows and take the best board any dive produced.
-        var plain = BuildNeutralOrdering();
+        var plain = ApplyPin(BuildNeutralOrdering());
         Solution? best = null;
 
         foreach (var closed in new[] { BorderRule.All, BorderRule.NorthAndWest, BorderRule.None })
@@ -383,7 +429,8 @@ public sealed class VoyageSolver
             // full board, and since fewer charts is always less value, the capped search
             // could never beat its own seed -- the cap silently did nothing.
             if (board.FilledCount >= _maxPlacements)
-                return _allowEmpty && LeavingEmptyIsLegal(board, cell) && Dive(index + 1);
+                return (_pin is not { } capped || index > capped.CellIndex)
+                       && _allowEmpty && LeavingEmptyIsLegal(board, cell) && Dive(index + 1);
 
             foreach (var i in ordering[index])
             {
@@ -406,7 +453,9 @@ public sealed class VoyageSolver
             }
 
             // Leaving it empty is a legitimate branch, not a failure -- the board does
-            // not have to be full.
+            // not have to be full. The pinned cell is the exception: it has exactly one
+            // legal occupant and skipping it would lose the pin.
+            if (_pin is { } pinned && index == pinned.CellIndex) return false;
             return _allowEmpty && LeavingEmptyIsLegal(board, cell) && Dive(index + 1);
         }
 
@@ -680,6 +729,11 @@ public sealed class VoyageSolver
         // has to stay empty, which is legal -- the game says "up to nine".
         if (board.FilledCount >= _maxPlacements)
         {
+            // ...unless the pinned cell is still ahead. Filtering the ordering keeps the
+            // pinned chart OUT of every other cell, but nothing in it says the pinned cell
+            // must be used -- and an empty one would drop the pinned chart silently, which
+            // is the one outcome the button was pressed to prevent.
+            if (_pin is { } capped && index <= capped.CellIndex) return;
             if (_allowEmpty && LeavingEmptyIsLegal(board, cell))
                 Recurse(index + 1, board, used, value, bound, ref best, sw, deadline, ct);
             return;
@@ -728,6 +782,7 @@ public sealed class VoyageSolver
             }
         }
 
+        if (_pin is { } pinned && index == pinned.CellIndex) return;
         if (_allowEmpty && LeavingEmptyIsLegal(board, cell))
             Recurse(index + 1, board, used, value, bound, ref best, sw, deadline, ct);
     }

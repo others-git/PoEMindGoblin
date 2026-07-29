@@ -256,8 +256,17 @@ public sealed class VoyageSession
     /// they depend on the PROFILE: the same chart is worth a lot under a sulphur profile
     /// and nothing under a pack-size one, so scoring cannot be baked into the chart.
     /// </summary>
+    /// <param name="pinChart">
+    /// Panel index of a chart to force onto the board, at the square with least to offer.
+    ///
+    /// For modifiers worth taking that no profile can price -- Soul Eater grants player
+    /// power rather than loot, so it scores zero and the planner drops the chart entirely.
+    /// Since a voyage-wide modifier pays the same from anywhere, the square it occupies is
+    /// pure opportunity cost, and the cheapest square is the right one to spend.
+    /// </param>
     public VoyageSolver.Solution Solve(
-        VoyageProfile profile, TimeSpan? budget = null, CancellationToken ct = default)
+        VoyageProfile profile, TimeSpan? budget = null, CancellationToken ct = default,
+        int? pinChart = null)
     {
         // ScoreChart already folds in area level; adding it again here would weight it
         // twice as heavily as the profile asked for.
@@ -287,10 +296,61 @@ public sealed class VoyageSession
         double score(Chart chart, Cell cell) =>
             chart.Value + (boardValue.TryGetValue(cell, out var extra) ? extra : 0);
 
+        (string, Cell)? pin = null;
+        if (pinChart is { } index && _charts.TryGetValue(index, out var pinned)
+            && CheapestCellFor(pinned, boardValue) is { } where)
+            pin = (pinned.Id, where);
+
         return new VoyageSolver(Layout.Rows, Layout.Cols, scored, score,
                                 strandedPenalty: profile.StrandedSquarePenalty,
-                                maxPlacements: profile.MaxCharts)
+                                maxPlacements: profile.MaxCharts,
+                                pin: pin)
             .Solve(budget, ct);
+    }
+
+    /// <summary>
+    /// The square with least to offer that this chart can actually occupy.
+    ///
+    /// Two things make a square valuable and both are known before the search: what the
+    /// board grants it, and how many neighbours it has to trade adjacency with. A corner
+    /// touches two squares, an edge three, the centre four -- so among squares the board
+    /// treats alike, the corner is the cheapest thing to spend.
+    ///
+    /// Shape is why this is a search rather than a minimum. Every open edge has to face
+    /// another square, so a Crossing cannot sit in a corner at any rotation and a chart
+    /// pinned there would make the whole board unsolvable. Cells are therefore taken
+    /// cheapest-first and the first one the chart FITS wins -- a necessary condition, not
+    /// a sufficient one, but it rules out exactly the case that has no answer.
+    /// </summary>
+    private Cell? CheapestCellFor(Chart chart, IReadOnlyDictionary<Cell, double> boardValue)
+    {
+        var board = new VoyageBoard(Layout.Rows, Layout.Cols);
+
+        bool Fits(Cell cell) =>
+            ChartFace.DistinctRotations(chart.Shape).Any(rotation =>
+            {
+                var face = new ChartFace(chart.Shape, rotation);
+                return Enum.GetValues<Side>().All(side =>
+                    !face.IsOpen(side) || board.InBounds(VoyageBoard.Neighbour(cell, side)));
+            });
+
+        int Neighbours(Cell cell) =>
+            Enum.GetValues<Side>().Count(s => board.InBounds(VoyageBoard.Neighbour(cell, s)));
+
+        return AllCells()
+            .Where(Fits)
+            .OrderBy(c => boardValue.GetValueOrDefault(c))
+            .ThenBy(Neighbours)
+            .ThenBy(c => VoyagePlan.SquareNumber(c, Layout.Cols))
+            .Cast<Cell?>()
+            .FirstOrDefault();
+    }
+
+    private IEnumerable<Cell> AllCells()
+    {
+        for (var r = 0; r < Layout.Rows; r++)
+            for (var c = 0; c < Layout.Cols; c++)
+                yield return new Cell(r, c);
     }
 
     /// <summary>
@@ -355,9 +415,10 @@ public sealed class VoyageSession
     // ---- persistence -------------------------------------------------------------
 
     /// <summary>Capture everything read so far, for writing to disk.</summary>
-    public VoyageSessionState ToState(string? profile = null) => new()
+    public VoyageSessionState ToState(string? profile = null, bool useSoulEater = false) => new()
     {
         Version = VoyageSessionState.CurrentVersion,
+        UseSoulEater = useSoulEater,
         Rows = Layout.Rows,
         Cols = Layout.Cols,
         Profile = profile,
@@ -425,9 +486,9 @@ public sealed class VoyageSession
     }
 
     /// <summary>Write to disk. Cheap enough to call after every capture.</summary>
-    public void Save(string? path = null, string? profile = null)
+    public void Save(string? path = null, string? profile = null, bool useSoulEater = false)
     {
-        var state = ToState(profile);
+        var state = ToState(profile, useSoulEater);
         state.SavedAt = DateTimeOffset.Now;
         state.Save(path);
     }

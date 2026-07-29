@@ -59,6 +59,10 @@ once that captured a live boss fight instead of the app. Use `--render`.
 * **GGG misspells Quantity as "Qauntity"** — but only in the global lines. The adjacent and
   in-area versions spell it correctly. A rule matching "Quantity" scores some rolls and
   silently misses others.
+* **The Divine Orb line has its words the wrong way round** — `Rare Monsters adjacent in
+  Areas drop # additional Divine Orbs`, alone among its eleven `in adjacent Areas`
+  siblings. Also `Diviner's` contains the letters of `Divine`, so match `Divine Orb`, never
+  `Divine`.
 * **Copied chart text is not a tooltip.** It has `{ Implicit Modifier }` / `{ Prefix
   Modifier "Savage" (Tier: 3) }` headers, bracketed reminders, and a vendor line. The
   in-game HOVER instead uses a bare `Adjacent Modifier:` label with the value on the NEXT
@@ -118,6 +122,17 @@ league is newer than any model's cutoff.
   Precompute per-square board value; running the profile's regexes in there cost ~7×.
 * Adjacency is scored **once per adjacent pair**, when the second of the two is placed, and
   counted in both directions.
+* **On a FULL board, per-square board value cannot decide anything.** All nine squares are
+  occupied either way, so the sum of their board modifiers is a constant and placement only
+  matters through adjacency and shape. "Put the good reward in a corner" is therefore not
+  something the additive model can express — it needs the multiplicative synergy fix below.
+  It is also why the Soul Eater pin has to be an explicit constraint rather than something
+  the optimiser would work out.
+* **Pinning** (`VoyageSolver`'s `pin:`) nails one chart to one cell by filtering the
+  candidate orderings — free at search time, and the seed obeys it for nothing. The pinned
+  cell must also refuse to stay empty, in both the search and the seed, or the placement cap
+  drops the pin silently. Choosing the cell has to respect SHAPE: a Crossing in a corner
+  opens twice onto the border, so a pin there makes the whole board unsolvable.
 
 ## Sources, in order of trust
 
@@ -160,4 +175,9 @@ imply.
   they are the thing most worth arguing with. The rule file is hot-reloaded, and shipped
   profiles missing from an existing file are added on load.
 * A rule that matches nothing the game can roll **fails the build** (`ProfileCoverageTests`),
-  as does a reward no profile scores.
+  as does a reward no profile scores. The same applies to `VoyageAlerts` patterns.
+* **`VoyageAlerts` is not scoring.** A Divine Orb line and a Chromatic Orb line are the same
+  shape and score alike; one is worth a hundred times the other, and a sum cannot say so. It
+  is a short list checked by name, and it works because it is usually empty — keep it that
+  way. Traps (`cannot drop Equipment`, `reduced quantity per connection`, lowered max res)
+  matter as much as jackpots: the game's own tables file the first two as *rewards*.

@@ -36,6 +36,16 @@ public partial class VoyageView : UserControl, IDisposable
     private readonly VoyageRules _rules = new();
     private readonly ObservableCollection<ModifierRow> _modifiers = new();
     private readonly ObservableCollection<SummaryRow> _summary = new();
+    private readonly ObservableCollection<AlertRow> _alerts = new();
+
+    /// <summary>
+    /// Whether to force the Soul Eater chart onto the board.
+    ///
+    /// Off by default, because forcing a chart the rules score at zero costs a square
+    /// that something profitable would otherwise have. It is a judgement about how much
+    /// player power is worth to you, which is not a thing the planner can weigh.
+    /// </summary>
+    private bool _useSoulEater;
     private readonly DispatcherTimer _clipboardPoll =
         new() { Interval = TimeSpan.FromMilliseconds(250) };
 
@@ -72,12 +82,14 @@ public partial class VoyageView : UserControl, IDisposable
 
         ModifierList.ItemsSource = _modifiers;
         SummaryList.ItemsSource = _summary;
+        AlertList.ItemsSource = _alerts;
 
         // Reading a board is slow -- a screenshot, nine hovers, then a hover per chart.
         // Throwing that away on exit would make the tool worse than doing it by hand.
         var (restored, state) = VoyageSession.Restore();
         _session = restored;
         _restoredProfile = state?.Profile;
+        _useSoulEater = state?.UseSoulEater ?? false;
 
         _rules.WriteDefaultsIfMissing();
 
@@ -145,7 +157,7 @@ public partial class VoyageView : UserControl, IDisposable
         if (!_persistenceEnabled) return;
         try
         {
-            _session.Save(profile: Profile?.Name);
+            _session.Save(profile: Profile?.Name, useSoulEater: _useSoulEater);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -611,7 +623,8 @@ public partial class VoyageView : UserControl, IDisposable
             return;
         }
 
-        _solution = _session.Solve(profile, TimeSpan.FromSeconds(3));
+        var pin = _useSoulEater ? VoyageAlerts.SoulEaterChart(_session) : null;
+        _solution = _session.Solve(profile, TimeSpan.FromSeconds(3), pinChart: pin);
         _steps = _session.Plan(_solution);
 
         RefreshSummary();
@@ -727,6 +740,13 @@ public partial class VoyageView : UserControl, IDisposable
             "Drowned Shelf\nAnchorfield\nMonster Pack Size: +26%\n"
                 + "Adjacent Modifier: Adjacent Areas contain 4 additional Strongboxes",
             "Salt Barrens\nAbyssal Plain\nItem Rarity: +31%\nGold Found: +80%",
+
+            // Two of the modifiers the banner exists for, so the sample exercises that
+            // path rather than only the ordinary one.
+            "Sunken Reach\nAbyssal Plain\nItem Quantity: +18%\n"
+                + "Voyage Modifier: Players in all Voyage Areas have Soul Eater",
+            "Drowned Shelf\nAnchorfield\nItem Rarity: +22%\n"
+                + "Adjacent Modifier: Rare Monsters adjacent in Areas drop 2 additional Divine Orbs",
         };
         var i = 0;
         foreach (var index in _session.ByPanelIndex.Keys.Order().Take(samples.Length))
@@ -744,6 +764,58 @@ public partial class VoyageView : UserControl, IDisposable
         RebuildModifiers();
         RefreshProgress();
         OnSolve(this, new RoutedEventArgs());
+    }
+
+    /// <summary>
+    /// The banner above the board.
+    ///
+    /// Rebuilt with the modifier list rather than with the solve, because an alert is
+    /// about what you HAVE, not about where it ended up -- a Divine Orb line is worth
+    /// knowing the moment it is read, and waiting for a solve to mention it would be
+    /// telling you after the decision it should have informed.
+    /// </summary>
+    private void RefreshAlerts()
+    {
+        _alerts.Clear();
+
+        var soulEater = VoyageAlerts.SoulEaterChart(_session);
+        foreach (var alert in VoyageAlerts.Scan(_session))
+        {
+            // The button belongs on the row that explains it. A control somewhere else
+            // labelled "Use Soul Eater" would be a second thing to find and connect up.
+            var offersButton = soulEater is not null && alert.ChartIndex == soulEater;
+            _alerts.Add(new AlertRow(alert, offersButton, _useSoulEater));
+        }
+
+        AlertList.Visibility = _alerts.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Take Soul Eater, or stop taking it.
+    ///
+    /// Solving again immediately is the point: the board is the answer to "given what I
+    /// am willing to spend a square on", and having changed that, the old board answers a
+    /// question no longer being asked.
+    /// </summary>
+    private void OnToggleSoulEater(object sender, RoutedEventArgs e)
+    {
+        _useSoulEater = !_useSoulEater;
+        RefreshAlerts();
+
+        if (_steps.Count == 0)
+        {
+            SetStatus(_useSoulEater
+                ? "Soul Eater will be placed on the cheapest square. Solve to see where."
+                : "Soul Eater is no longer forced onto the board.");
+            return;
+        }
+
+        OnSolve(this, new RoutedEventArgs());
+
+        if (!_useSoulEater) return;
+        var square = _steps.FirstOrDefault(st => st.ChartNumber == VoyageAlerts.SoulEaterChart(_session));
+        if (square is not null) SetStatus($"Soul Eater forced onto square {square.Square}.");
+        else SetStatus("Soul Eater could not be placed on this board.", bad: true);
     }
 
     /// <summary>
@@ -1345,6 +1417,7 @@ public partial class VoyageView : UserControl, IDisposable
     /// </summary>
     private void RebuildModifiers()
     {
+        RefreshAlerts();
         var previous = (ModifierList.SelectedItem as ModifierRow)?.Key;
         _modifiers.Clear();
 
@@ -1548,6 +1621,29 @@ public partial class VoyageView : UserControl, IDisposable
     }
 
     /// <summary>One line of the summary. Shape carries the meaning, so it is prebuilt.</summary>
+    /// <summary>One banner row. Colour carries the kind, so the label never has to.</summary>
+    public sealed class AlertRow
+    {
+        public AlertRow(VoyageAlert alert, bool offersButton, bool inUse)
+        {
+            Headline = alert.Headline;
+            Detail = alert.Detail;
+            Where = alert.Where;
+            Accent = alert.Kind == AlertKind.Jackpot
+                ? new SolidColorBrush(Color.FromRgb(0xC9, 0xA2, 0x27))    // brass
+                : new SolidColorBrush(Color.FromRgb(0xB8, 0x50, 0x3E));   // rust
+            ActionVisibility = offersButton ? Visibility.Visible : Visibility.Collapsed;
+            ActionLabel = inUse ? "Drop Soul Eater" : "Use Soul Eater";
+        }
+
+        public string Headline { get; }
+        public string Detail { get; }
+        public string Where { get; }
+        public Brush Accent { get; }
+        public string ActionLabel { get; }
+        public Visibility ActionVisibility { get; }
+    }
+
     public sealed class SummaryRow
     {
         private SummaryRow(string label, string value, double size, string font, Brush brush)
