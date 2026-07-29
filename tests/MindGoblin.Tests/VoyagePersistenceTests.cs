@@ -35,6 +35,26 @@ public class VoyagePersistenceTests : IDisposable
         return session;
     }
 
+    /// <summary>
+    /// A session saved with wrapped fragments heals on load. Real sessions held
+    /// "Area contains 2 additional Treasure" / "Anchors" and the Golden/Lanterns split,
+    /// each half scoring zero until restitched.
+    /// </summary>
+    [Fact]
+    public void StoredWrappedFragmentsAreRestitchedOnLoad()
+    {
+        var state = new VoyageSessionState();
+        state.SquareModifiers["7"] = ["Area contains 2 additional Treasure", "Anchors"];
+        state.SquareModifiers["9"] = ["Area contains 4 additional Golden", "Lanterns",
+                                      "60% increased explicit modifier magnitudes"];
+
+        var session = VoyageSession.FromState(state);
+
+        Assert.Equal(["Area contains 2 additional Treasure Anchors"], session.SquareModifiers[7]);
+        Assert.Equal(["Area contains 4 additional Golden Lanterns",
+                      "60% increased explicit modifier magnitudes"], session.SquareModifiers[9]);
+    }
+
     [Fact]
     public void EverythingReadSurvivesARoundTrip()
     {

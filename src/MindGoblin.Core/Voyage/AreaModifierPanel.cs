@@ -195,6 +195,17 @@ public sealed class AreaModifierPanel
         Read(lines).Lines;
 
     /// <summary>
+    /// Re-run the wrap stitching over lines that were STORED split.
+    ///
+    /// Sessions saved before the joiner learned a wording keep the fragments forever --
+    /// a real one held "Area contains 2 additional Treasure" / "Anchors" on one square
+    /// and the Golden/Lanterns split on another, each scoring zero. Joining is
+    /// idempotent and its safety rule (never join on a word any modifier ends with)
+    /// holds for stored data exactly as for fresh reads, so old sessions heal on load.
+    /// </summary>
+    public static IReadOnlyList<string> Restitch(IReadOnlyList<string> lines) => Join(lines);
+
+    /// <summary>
     /// Rejoin modifier text that OCR split across lines.
     ///
     /// The panel wraps a modifier over two or three lines, and OCR reports each visual
@@ -218,18 +229,77 @@ public sealed class AreaModifierPanel
 
     private static bool EndsMidPhrase(string line)
     {
-        // Function words, plus the words the REAL modifiers dangle when the panel wraps
-        // them: "Rare Monsters in Area drop Dead" / "Man's Sulphur" defeated a list of
-        // function words alone, because the continuation starts uppercase and "Dead"
-        // ends nothing. Everything here is a word no modifier in the corpus ends with,
-        // so joining on it cannot glue two complete modifiers together.
-        var last = line.Split(' ')[^1].ToLowerInvariant();
-        return last is "additional" or "of" or "to" or "the" or "and" or "increased"
-                    or "more" or "with" or "have" or "contain" or "contains" or "a" or "an"
-                    or "in" or "per" or "as" or "by" or "not" or "be" or "will"
-                    or "drop" or "drops" or "dead" or "man's" or "golden" or "tormented"
-                    or "sea" or "giant" or "treasure" or "stacked" or "wildwood"
-                    or "diviner's" or "arcanist's" or "operative's" or "pirate's"
-                    or "chance" or "instead" or "least" or "voyage" or "all" or "adjacent";
+        var last = Trim(line.Split(' ')[^1]);
+        return last.Length > 0 && MidPhraseWords.Value.Contains(last);
     }
+
+    /// <summary>
+    /// The words a wrapped modifier can dangle, DERIVED from the corpus instead of
+    /// curated. A hand list failed twice over: "Rare Monsters in Area drop Dead" /
+    /// "Man's Sulphur" stayed split because "Dead" was not listed, and auditing the
+    /// corpus for every such gap demanded 66 more words -- two of which ("chance",
+    /// "Voyage") real modifiers END with, so listing them would have glued complete
+    /// modifiers together.
+    ///
+    /// The safe rule generates itself: a word joins iff it appears MID-LINE in some
+    /// modifier and NO modifier ends with it (checked across the template wordings,
+    /// the Area panel's resolved forms, and the singular forms of every last word).
+    /// Ambiguous words -- Sulphur, Areas, Chance -- are excluded automatically, so a
+    /// wrap after one stays split rather than risking a false merge, and a new mod
+    /// table regenerates the sets with no code change.
+    /// </summary>
+    private static readonly Lazy<HashSet<string>> MidPhraseWords = new(() =>
+    {
+        var interior = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var terminal = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var template in ChartRewards.Current.Lines.Keys
+                     .Concat(ChartRewards.Current.BoardLines.Keys))
+            foreach (var line in Variants(template))
+            {
+                var words = line.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(Trim).Where(w => w.Length > 0).ToArray();
+                if (words.Length == 0) continue;
+                for (var i = 0; i < words.Length - 1; i++) interior.Add(words[i]);
+
+                terminal.Add(words[^1]);
+                // The game writes the singular when a roll is 1, so a line can also end
+                // one 's' short of its template: "...an additional Divine Orb".
+                if (words[^1].EndsWith('s')) terminal.Add(words[^1][..^1]);
+            }
+
+        // Function words carry unknown modifiers (a post-patch mod the corpus has not
+        // met yet) -- still subject to the never-ends-a-line rule.
+        interior.UnionWith(["additional", "of", "to", "the", "and", "increased", "more",
+                            "with", "have", "contain", "contains", "a", "an", "in",
+                            "per", "as", "by", "not", "be", "will", "drop", "drops"]);
+
+        interior.ExceptWith(terminal);
+        return interior;
+    });
+
+    /// <summary>
+    /// The wordings a template can arrive in off the Area panel. The panel RESOLVES
+    /// modifiers for the hovered square, and one of its habits is dropping the location
+    /// suffix entirely -- a real session stored "32% increased Pack Size", full stop --
+    /// so the suffix-stripped form must contribute its last word to the terminal set or
+    /// the resolved line gets glued to whatever follows it.
+    /// </summary>
+    private static IEnumerable<string> Variants(string template)
+    {
+        var filled = template.Replace("#", "12");
+        yield return filled;
+        if (filled.Contains(" in adjacent Areas"))
+        {
+            yield return filled.Replace(" in adjacent Areas", " in Area");
+            yield return filled.Replace(" in adjacent Areas", "");
+        }
+        if (filled.Contains(" in all Voyage Areas"))
+            yield return filled.Replace(" in all Voyage Areas", "");
+        if (filled.Contains("Adjacent Areas contain"))
+            yield return filled.Replace("Adjacent Areas contains", "Area contains")
+                               .Replace("Adjacent Areas contain", "Area contains");
+    }
+
+    private static string Trim(string word) => word.Trim(',', '.', ':', ';');
 }

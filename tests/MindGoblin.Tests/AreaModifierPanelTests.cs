@@ -30,6 +30,77 @@ public class AreaModifierPanelTests
         Assert.Equal([joined], reading.Lines);
     }
 
+    /// <summary>
+    /// EVERY wrap of EVERY corpus line must survive: split each line at each word
+    /// boundary and the reader must stitch it back -- except where the boundary word is
+    /// AMBIGUOUS (some modifier ends with it), where staying split is the safe choice.
+    /// This is the exhaustive version of the "drop Dead / Man's Sulphur" bug hunt: the
+    /// hand-audit found 66 distinct gap words, which is not a list to maintain by hand.
+    /// </summary>
+    [Fact]
+    public void EveryPossibleWrapOfEveryModifierIsStitched()
+    {
+        var lines = ChartRewards.Current.Lines.Keys
+            .Concat(ChartRewards.Current.BoardLines.Keys)
+            .Select(l => l.Replace("#", "12"))
+            .ToList();
+        // Mirrors the reader's variant expansion: resolved panel wordings can DROP the
+        // location suffix, so their last words are terminal too.
+        var terminal = lines
+            .SelectMany(l => new[]
+            {
+                l,
+                l.Replace(" in adjacent Areas", ""),
+                l.Replace(" in all Voyage Areas", ""),
+            })
+            .SelectMany(l => { var w = l.Split(' ')[^1].Trim(',', '.');
+                               return w.EndsWith('s') ? new[] { w, w[..^1] } : [w]; })
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var failures = new List<string>();
+        foreach (var line in lines)
+        {
+            var words = line.Split(' ');
+            for (var cut = 1; cut < words.Length; cut++)
+            {
+                var first = string.Join(' ', words[..cut]);
+                var second = string.Join(' ', words[cut..]);
+                if (second.Length < 4 || first.Length < 4) continue; // OCR-noise filter
+                var boundary = words[cut - 1].Trim(',', '.');
+                var ambiguous = terminal.Contains(boundary);
+
+                var got = AreaModifierPanel.Read(["Area Modifiers", first, second]).Lines;
+                if (!ambiguous && (got.Count != 1 || got[0] != line))
+                    failures.Add($"'{first}' | '{second}' -> {got.Count} lines");
+            }
+        }
+        Assert.True(failures.Count == 0, string.Join("\n", failures.Take(12)));
+    }
+
+    /// <summary>
+    /// The other direction, exhaustively: NO pair of complete modifiers may ever be
+    /// merged into one, whatever order they arrive in.
+    /// </summary>
+    [Fact]
+    public void NoTwoCompleteModifiersAreEverMerged()
+    {
+        var lines = ChartRewards.Current.Lines.Keys
+            .Concat(ChartRewards.Current.BoardLines.Keys)
+            .Select(l => l.Replace("#", "12"))
+            .Where(l => !char.IsLower(l[0]))       // lowercase starts are joined by design
+            .ToList();
+
+        var failures = new List<string>();
+        foreach (var a in lines)
+            foreach (var b in lines)
+            {
+                if (a == b) continue;
+                var got = AreaModifierPanel.Read(["Area Modifiers", a, b]).Lines;
+                if (got.Count != 2) failures.Add($"'{a}' swallowed '{b}'");
+            }
+        Assert.True(failures.Count == 0, string.Join("\n", failures.Take(12)));
+    }
+
     /// <summary>Two complete modifiers must never be glued into one.</summary>
     [Fact]
     public void CompleteModifiersStaySeparate()

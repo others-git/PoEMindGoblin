@@ -586,7 +586,11 @@ public sealed class VoyageSession
         }
 
         foreach (var (key, lines) in state.SquareModifiers)
-            if (int.TryParse(key, out var square)) session._squareModifiers[square] = lines.ToList();
+            if (int.TryParse(key, out var square))
+                // Restitched on load: sessions saved before the joiner learned a wording
+                // keep their wrapped fragments forever otherwise, silently scoring zero.
+                session._squareModifiers[square] =
+                    AreaModifierPanel.Restitch(lines.ToList()).ToList();
 
         foreach (var (key, text) in state.Figurines)
             if (int.TryParse(key, out var index)) session._figurines[index] = text;
