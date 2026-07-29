@@ -48,6 +48,30 @@ public class BorderSynergyTests
     public void RareDensityCountsEveryRareSource(string line, double expected) =>
         Assert.Equal(expected, VoyageProfile.MonsterDensityOf(line), 3);
 
+    /// <summary>
+    /// A rare-dense ROOM makes its chart the right tenant for a payout square. Brine
+    /// King's Domain was observed running an exceptional number of rares, so the chart
+    /// opening it carries +0.5 rare density -- more than a +42% pack headline -- and
+    /// the Divine square picks it over the packed chart.
+    /// </summary>
+    [Fact]
+    public void ARareDenseRoomWinsThePayoutSquare()
+    {
+        // A fresh session with no pack charts: every competitor is plain, so the room
+        // bonus alone decides the payout square. (Against a +50% pack headline the
+        // current 0.5 room bonus is a legitimate tie, deliberately not pinned.)
+        var session = new VoyageSession();
+        session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
+            { Level = 80 }).ToList());
+        var brine = 7;
+        session.ApplyChartText(brine, "Deep Plunge\nCoral Reef Chart\nBrine King's Domain");
+        session.ApplySquareModifiers(1, ["Rare Monsters in Area drop an additional Divine Orb"]);
+
+        var plan = session.Plan(session.Solve(Currency, TimeSpan.FromSeconds(3)));
+        Assert.Equal(brine, Assert.Single(plan, s => s.Square == 1).ChartNumber);
+    }
+
     private static VoyageSession Session(out int packChart, out int plainChart)
     {
         var session = new VoyageSession();

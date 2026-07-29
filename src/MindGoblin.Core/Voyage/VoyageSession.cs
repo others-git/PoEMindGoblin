@@ -301,7 +301,8 @@ public sealed class VoyageSession
                 Value = profile.ScoreChart(c, boardEstimate),
                 AdjacentValue = payoutAdj ? 0 : adjacent,
                 AdjacentPerMonsterValue = payoutAdj ? adjacent : 0,
-                MonsterDensity = syn * c.MonsterPackSize / 100,
+                MonsterDensity = syn * (c.MonsterPackSize / 100
+                                        + AreaPopulation.RoomRareBonus(c)),
                 AdjacentMonsterDensity = c.AdjacentModifier is { } line
                     ? syn * VoyageProfile.MonsterDensityOf(line) : 0,
             };
@@ -400,7 +401,8 @@ public sealed class VoyageSession
     private Dictionary<Cell, double> CombinedBoardValue(VoyageProfile profile, Chart chart)
     {
         var (flat, perMonster) = BoardValueByCell(profile);
-        var factor = 1 + profile.MonsterPayoutSynergy * chart.MonsterPackSize / 100;
+        var factor = 1 + profile.MonsterPayoutSynergy
+                         * (chart.MonsterPackSize / 100 + AreaPopulation.RoomRareBonus(chart));
         var combined = new Dictionary<Cell, double>(flat);
         foreach (var (cell, worth) in perMonster)
             combined[cell] = combined.GetValueOrDefault(cell) + worth * factor;
@@ -480,7 +482,8 @@ public sealed class VoyageSession
 
         return VoyageRoute.Plan(board, placement =>
         {
-            var density = syn * placement.Chart.MonsterPackSize / 100;
+            var density = syn * (placement.Chart.MonsterPackSize / 100
+                                 + AreaPopulation.RoomRareBonus(placement.Chart));
             var worth = profile.ScoreChart(placement.Chart)
                         + flat.GetValueOrDefault(placement.Cell)
                         + perMonster.GetValueOrDefault(placement.Cell) * (1 + density);

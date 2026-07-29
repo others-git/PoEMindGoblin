@@ -53,6 +53,31 @@ public static class AreaPopulation
     /// </summary>
     public const double QuantityPerGoldenLantern = 0.05;
 
+    /// <summary>
+    /// Rooms observed to run rare-dense, as a fraction of the base rares. One entry so
+    /// far, from a single run: Brine King's Domain held an exceptional number of rares
+    /// (a named-boss arena, plausibly with a guard retinue). No community or poedb data
+    /// exists on rooms (re-checked 2026-07-30), so observations go straight in here --
+    /// a chart opening one of these rooms is denser, which multiplies any per-rare
+    /// payout square it stands on.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, double> RoomRareDensity =
+        new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Brine King's Domain"] = 0.5,
+        };
+
+    /// <summary>The room bonus for a chart, wherever the room name landed in the parse
+    /// (the hover text carries it as a bare line, so it is usually in Modifiers).</summary>
+    public static double RoomRareBonus(Chart chart)
+    {
+        if (chart.AreaName is { } area && RoomRareDensity.TryGetValue(area.Trim(), out var a))
+            return a;
+        foreach (var line in chart.Modifiers)
+            if (RoomRareDensity.TryGetValue(line.Trim(), out var b)) return b;
+        return 0;
+    }
+
     /// <summary>Raw sulphur one rare drops under the drop-sulphur figurine.
     /// OBSERVED in game at 250-350 per rare across several sightings -- the
     /// best-sourced constant in this model, where the rest are still estimates.</summary>
