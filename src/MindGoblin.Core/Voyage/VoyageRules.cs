@@ -37,9 +37,10 @@ public static class AreaPopulation
     /// Starfish") arrives rare-led -- one or two rares per four packs.</summary>
     public const double RareChancePerAddedPack = 0.3;
 
-    /// <summary>Raw sulphur one rare drops under the drop-sulphur figurine. The most
-    /// uncertain number here, and the one most worth measuring in game.</summary>
-    public const double SulphurPerRareDrop = 75;
+    /// <summary>Raw sulphur one rare drops under the drop-sulphur figurine.
+    /// OBSERVED in game at 250-350 per rare across several sightings -- the
+    /// best-sourced constant in this model, where the rest are still estimates.</summary>
+    public const double SulphurPerRareDrop = 300;
 }
 
 public sealed class VoyageRule
