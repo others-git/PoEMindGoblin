@@ -279,13 +279,26 @@ public sealed class VoyageSession
         // AdjacentMonsterDensity, realised wherever a neighbouring square holds a
         // per-monster border payout.
         var syn = profile.MonsterPayoutSynergy;
+
+        // What a full board of the BEST charts would total, at face value. Global
+        // percentage mods ("20% increased ... in all Voyage Areas") multiply everything
+        // the voyage produces, so they are scored as their fraction of this estimate --
+        // the one number that turns "20%" from a token 40 points into the board-sized
+        // value it actually is.
+        var boardEstimate = Charts
+            .Select(c => profile.ScoreChart(c))
+            .OrderByDescending(v => v)
+            .Take(Layout.Rows * Layout.Cols)
+            .Where(v => v > 0)
+            .Sum();
+
         var scored = Charts.Select(c =>
         {
             var adjacent = profile.ScoreAdjacent(c);
             var payoutAdj = c.AdjacentModifier is { } adj && VoyageProfile.IsPerMonsterPayout(adj);
             return c with
             {
-                Value = profile.ScoreChart(c),
+                Value = profile.ScoreChart(c, boardEstimate),
                 AdjacentValue = payoutAdj ? 0 : adjacent,
                 AdjacentPerMonsterValue = payoutAdj ? adjacent : 0,
                 MonsterDensity = syn * c.MonsterPackSize / 100,

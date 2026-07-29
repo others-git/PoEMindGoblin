@@ -89,6 +89,38 @@ public class RulesReviewTests
     }
 
     /// <summary>
+    /// A GLOBAL percentage mod multiplies the whole board, and must be scored that way.
+    ///
+    /// The real case: a chart carrying "20% increased Dead Man's Sulphur found in all
+    /// Voyage Areas" on a board whose best nine charts totalled ~4300 points of flat
+    /// sulphur. Twenty percent of the board is ~860 points -- the single best chart in
+    /// the panel -- and the flat rule scored it 40, ranking it seventeenth and leaving
+    /// it behind. The board-scaling rule prices it as its fraction of the board.
+    /// </summary>
+    [Fact]
+    public void AGlobalPercentIsWorthItsFractionOfTheBoard()
+    {
+        var session = new VoyageSession();
+        session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
+            { Level = 80 }).ToList());
+
+        // Nine strong flat-sulphur charts, two mediocre spares, and ONE chart whose
+        // whole worth is the global multiplier. Flat scoring ranks it dead last.
+        for (var i = 1; i <= 9; i++)
+            session.ApplyChartText(i, $"Reach\nAnchorfield\nDead Man's Sulphur: +{70 + i * 5}");
+        session.ApplyChartText(10, "Reach\nAnchorfield\nDead Man's Sulphur: +60");
+        session.ApplyChartText(11, "Reach\nAnchorfield\nDead Man's Sulphur: +60");
+        session.ApplyChartText(12, "Reach\nAnchorfield\nVoyage Modifier: "
+            + "20% increased Dead Man's Sulphur found in all Voyage Areas");
+
+        var sulphur = VoyageRules.Defaults().Single(p => p.Name == "sulphur");
+        var plan = session.Plan(session.Solve(sulphur, TimeSpan.FromSeconds(3)));
+
+        Assert.Contains(plan, s => s.ChartNumber == 12);
+    }
+
+    /// <summary>
     /// "Profiles differ from the shipped rules" must notice the PROFILE-LEVEL knobs too.
     /// SameRules compared only the rule list, so when the strongbox profile gained
     /// AreaLevelWeight from the 3.29.0b research, every existing rule file silently kept

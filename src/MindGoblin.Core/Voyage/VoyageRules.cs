@@ -17,6 +17,20 @@ public sealed class VoyageRule
 {
     public string Pattern { get; set; } = "";
     public double Weight { get; set; } = 1;
+
+    /// <summary>
+    /// This rule's captured number is a PERCENTAGE OF THE WHOLE BOARD, not a flat roll.
+    ///
+    /// "20% increased Dead Man's Sulphur found in all Voyage Areas" multiplies the
+    /// sulphur of every area in the voyage, so what it is worth is 20% of the board's
+    /// total -- on a board carrying ~850 flat sulphur that is ~170, not the token 40 a
+    /// flat weight gave it. Scored flat, the best sulphur chart in a real panel ranked
+    /// seventeenth and was left behind. The session estimates the board total from the
+    /// top boardsize chart scores and multiplies; with Weight 1 the captured number is
+    /// an exact fraction of that estimate.
+    /// </summary>
+    public bool ScalesWithBoard { get; set; }
+
     public string? Comment { get; set; }
 
     [JsonIgnore]
@@ -70,6 +84,18 @@ public sealed class VoyageProfile
 
     /// <summary>Weight applied to a chart's area level, for when higher tier is the goal.</summary>
     public double AreaLevelWeight { get; set; }
+
+    /// <summary>
+    /// A flat value for spending a chart at all, added to every chart's score.
+    ///
+    /// Exists for INVERTED objectives. The "dump" profile weights everything valuable
+    /// NEGATIVELY so the least valuable charts win -- but a solver maximising a sum of
+    /// negatives would rather leave squares empty than fill them with junk, and the whole
+    /// point of a dump voyage is to spend nine charts. A base large enough to keep every
+    /// chart net positive makes the fullest board always worth more, and the junk still
+    /// sorts to the top within it.
+    /// </summary>
+    public double ChartBaseValue { get; set; }
 
     /// <summary>
     /// How strongly per-monster border payouts scale with the tile they land on.
@@ -158,9 +184,29 @@ public sealed class VoyageProfile
     /// <summary>
     /// A chart's own value: its stats, its global Voyage Modifier and its monster mods,
     /// plus area level. The Adjacent Modifier is excluded -- see <see cref="Chart.OwnLines"/>.
+    /// Without a board estimate, board-scaling rules score at face value.
     /// </summary>
-    public double ScoreChart(Chart chart) =>
-        ScoreText(chart.OwnLines()) + chart.AreaLevel * AreaLevelWeight;
+    public double ScoreChart(Chart chart) => ScoreChart(chart, null);
+
+    /// <summary>
+    /// The same, with board-scaling rules worth their percentage OF the estimate: a
+    /// global "N% increased X in all Voyage Areas" line multiplies everything the board
+    /// produces, so its value is N% of the board's total rather than a flat N.
+    /// </summary>
+    public double ScoreChart(Chart chart, double? boardEstimate)
+    {
+        var total = chart.AreaLevel * AreaLevelWeight + ChartBaseValue;
+        foreach (var line in chart.OwnLines())
+            foreach (var rule in Rules)
+            {
+                var value = rule.Score(line);
+                if (value == 0) continue;
+                if (rule.ScalesWithBoard && boardEstimate is { } estimate)
+                    value = value * estimate / 100;
+                total += value;
+            }
+        return total;
+    }
 
     /// <summary>What a chart's Adjacent Modifier is worth to ONE neighbour.</summary>
     public double ScoreAdjacent(Chart chart) =>
@@ -291,10 +337,12 @@ public sealed class VoyageRules : IDisposable
         Math.Abs(a.BoardModifierWeight - b.BoardModifierWeight) < 1e-9
         && Math.Abs(a.AreaLevelWeight - b.AreaLevelWeight) < 1e-9
         && Math.Abs(a.MonsterPayoutSynergy - b.MonsterPayoutSynergy) < 1e-9
+        && Math.Abs(a.ChartBaseValue - b.ChartBaseValue) < 1e-9
         && Math.Abs(a.StrandedSquarePenalty - b.StrandedSquarePenalty) < 1e-9
         && a.MaxCharts == b.MaxCharts
         && a.Rules.Count == b.Rules.Count
         && a.Rules.Zip(b.Rules).All(pair => pair.First.Pattern == pair.Second.Pattern
+                                            && pair.First.ScalesWithBoard == pair.Second.ScalesWithBoard
                                             && Math.Abs(pair.First.Weight - pair.Second.Weight) < 1e-9);
 
     /// <summary>
@@ -385,8 +433,13 @@ public sealed class VoyageRules : IDisposable
             [
                 new VoyageRule { Pattern = @"Dead Man's Sulphur:\s*\+?(\d+)", Weight = 5.0,
                                  Comment = "the chart's own total, its largest source" },
-                new VoyageRule { Pattern = @"(\d+)%\s+increased Dead Man's Sulphur", Weight = 2.0,
-                                 Comment = "the global and adjacent rolls" },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Dead Man's Sulphur(?!\s+found in all Voyage Areas)",
+                                 Weight = 2.0,
+                                 Comment = "the adjacent, in-area and panel-resolved wordings; "
+                                           + "the global one is the board-scaling rule below" },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Dead Man's Sulphur found in all Voyage Areas",
+                                 Weight = 1.0, ScalesWithBoard = true,
+                                 Comment = "multiplies the WHOLE board's sulphur: scored as that fraction" },
                 new VoyageRule { Pattern = @"drop Dead Man's Sulphur", Weight = 30,
                                  Comment = "board modifier: rares drop it directly" },
             ],
@@ -400,8 +453,12 @@ public sealed class VoyageRules : IDisposable
             [
                 new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 1.0 },
                 new VoyageRule { Pattern = @"Item Rarity:\s*\+?(\d+)", Weight = 0.5 },
-                new VoyageRule { Pattern = @"(\d+)%\s+increased Q(?:uantity|auntity) of Items", Weight = 1.5,
-                                 Comment = "GGG spells it 'Qauntity' in the global lines only" },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Quantity of Items(?!\s+found in all Voyage Areas)",
+                                 Weight = 1.5,
+                                 Comment = "adjacent, in-area and panel-resolved wordings; global scales below" },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Q(?:uantity|auntity) of Items found in all Voyage Areas",
+                                 Weight = 1.0, ScalesWithBoard = true,
+                                 Comment = "GGG spells it 'Qauntity' here; multiplies the whole board's loot" },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Rarity of Items", Weight = 0.75 },
                 new VoyageRule { Pattern = @"Flasks found.*chance to have (\d+)% Quality", Weight = 0.4,
                                  Comment = "a quality flask is a better item, so it belongs here" },
@@ -676,6 +733,76 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"Monsters fire (\d+) additional Projectiles", Weight = -2 },
                 new VoyageRule { Pattern = @"Area has patches of", Weight = -3 },
                 new VoyageRule { Pattern = @"(\d+)% increased Monster Damage", Weight = -0.2 },
+            ],
+        },
+        new VoyageProfile
+        {
+            Name = "dump",
+            Description = "Burn the least valuable charts to clear panel space.",
+            // Everything valuable scores NEGATIVE, so the junk sorts to the top; the
+            // base keeps every chart net positive, so the board still fills. Border
+            // modifiers are ignored outright -- a dump voyage is not trying to land
+            // anything anywhere -- and low area levels are preferred: high tiers are
+            // worth keeping for a real voyage.
+            ChartBaseValue = 500,
+            AreaLevelWeight = -1,
+            BoardModifierWeight = 0,
+            MonsterPayoutSynergy = 0,
+            Rules =
+            [
+                new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = -1 },
+                new VoyageRule { Pattern = @"Item Rarity:\s*\+?(\d+)", Weight = -0.5 },
+                new VoyageRule { Pattern = @"Monster Pack Size:\s*\+?(\d+)", Weight = -0.5 },
+                new VoyageRule { Pattern = @"Gold Found:\s*\+?(\d+)", Weight = -0.3 },
+                new VoyageRule { Pattern = @"Dead Man's Sulphur:\s*\+?(\d+)", Weight = -2 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Q(?:uantity|auntity) of Items", Weight = -1 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Rarity of Items", Weight = -0.5 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = -0.75 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Gold found", Weight = -0.3 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Dead Man's Sulphur", Weight = -1 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased number of (?:Rare|Magic) Monsters", Weight = -0.5 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Arcanist's Strongbox(?:es)?", Weight = -20 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Diviner's Strongbox(?:es)?", Weight = -20 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Operative's Strongbox(?:es)?", Weight = -16 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Strongbox(?:es)?", Weight = -6 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Golden Lanterns?", Weight = -8 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional packs? of", Weight = -2 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Imprisoned Monsters?", Weight = -2 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional cages? of Tormented Spirits", Weight = -5 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Clusters? of Barrels", Weight = -1 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Messages? in (?:a )?Bottles?", Weight = -3 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Giant Starfish", Weight = -2 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Treasure", Weight = -4 },
+                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional", Weight = -8 },
+                new VoyageRule { Pattern = @"Rare Monsters.*drop Dead Man's Sulphur", Weight = -25 },
+                new VoyageRule { Pattern = @"chance to drop a Support Gem", Weight = -0.2 },
+                new VoyageRule { Pattern = @"are at least Magic", Weight = -12 },
+                new VoyageRule { Pattern = @"Magic Monsters.*have an additional modifier", Weight = -8 },
+                new VoyageRule { Pattern = @"imprisoned by Essences", Weight = -40 },
+                new VoyageRule { Pattern = @"Atziri's Influence", Weight = -20 },
+                new VoyageRule { Pattern = @"will have a Pantheon Modifier", Weight = -12 },
+                new VoyageRule { Pattern = @"(\d+)% chance for Rare Monsters.*to be Possessed", Weight = -0.2 },
+                new VoyageRule { Pattern = @"chance to instead drop as a Unique", Weight = -3 },
+                new VoyageRule { Pattern = @"chance to be Fractured", Weight = -6 },
+                new VoyageRule { Pattern = @"instead drop as Stacked Decks", Weight = -20 },
+                new VoyageRule { Pattern = @"have Soul Eater", Weight = -10 },
+                new VoyageRule { Pattern = @"(\d+)% more (?:Currency|Rarity|Scarabs) found", Weight = -1.5 },
+                new VoyageRule { Pattern = @"Placing Lanterns does not reduce", Weight = -10 },
+                new VoyageRule { Pattern = @"a lost Pirate's Locker", Weight = -15 },
+                new VoyageRule { Pattern = @"contain Captainsbane", Weight = -8 },
+                new VoyageRule { Pattern = @"contain a Brinerot raiding party", Weight = -10 },
+                new VoyageRule { Pattern = @"highly prized and exotic Fish", Weight = -6 },
+                new VoyageRule { Pattern = @"contain Friendly Jellyfish", Weight = -4 },
+                new VoyageRule { Pattern = @"contains? Filthscrabble", Weight = -5 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an) Altars? to the Goddess", Weight = -10 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased explicit modifier magnitudes", Weight = -0.3 },
+                new VoyageRule { Pattern = @"(\d+)% chance (?:for Charts? )?to not be consumed", Weight = -0.5 },
+                new VoyageRule { Pattern = @"gain (\d+)% increased Experience", Weight = -0.1 },
+                new VoyageRule { Pattern = @"Flasks found.*chance to have (\d+)% Quality", Weight = -0.2 },
+                // The one POSITIVE weight: this line reads as a reward in the game's own
+                // tables and deletes most of the loot -- a chart carrying it is junk by
+                // definition, which is exactly what a dump voyage wants to burn.
+                new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = 15 },
             ],
         },
     ];
