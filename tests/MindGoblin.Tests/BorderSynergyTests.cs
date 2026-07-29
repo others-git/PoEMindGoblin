@@ -63,7 +63,8 @@ public class BorderSynergyTests
     [InlineData("Clam-infested Shelf", 0.0)]
     [InlineData("Diving Shoals", 0.0)]
     [InlineData("Sunken Totems", 0.0)]
-    [InlineData("Kishara's Rest", 0.0)]   // unmeasured: absent defaults to zero
+    [InlineData("Hazardous Depths", 0.0)] // sighted: Rotmother loot box, open question
+    [InlineData("Kishara's Rest", 0.0)]   // sighted: possible boss fight, open question
     public void RoomObservationsAreOnRecord(string room, double expected)
     {
         var chart = new Chart("c", "c", ChartShape.Crossing, 80, [room]);

@@ -93,6 +93,13 @@ public static class AreaPopulation
             // clams (the clams only seem to drop gold). The gold profile carries its
             // Area rule.
             ["Clam-infested Shelf"] = 0.0,
+
+            // SIGHTED, not settled -- zeros with open questions, kept so the next run
+            // through them knows what to look for. Hazardous Depths: a Rotmother-themed
+            // loot box, possibly unique-item related. Kishara's Rest: possibly a boss
+            // fight. Neither showed extra rares; promote them the moment a run says so.
+            ["Hazardous Depths"] = 0.0,
+            ["Kishara's Rest"] = 0.0,
         };
 
     /// <summary>The room bonus for a chart, wherever the room name landed in the parse
