@@ -282,23 +282,23 @@ public sealed class VoyageSession
         // times -- and the obvious version ran the profile's regexes over each board
         // modifier on every one of those calls. A square's board value depends only on
         // the square, so it is a lookup. Chart value is already computed once above, so
-        // scoring is now two additions.
-        var modifiers = BoardModifiers();
-        var boardValue = new Dictionary<Cell, double>();
-        foreach (var modifier in modifiers)
-        {
-            var worth = profile.ScoreText([modifier.Description]) * profile.BoardModifierWeight;
-            if (worth == 0) continue;
-            foreach (var cell in modifier.AffectedCells)
-                boardValue[cell] = boardValue.GetValueOrDefault(cell) + worth;
-        }
+        // scoring stays a handful of arithmetic ops.
+        //
+        // Split flat vs PER-MONSTER, because on a full board a purely per-cell term is a
+        // constant over every layout and steers nothing. Per-monster payouts multiply
+        // with the tile's pack size instead, which is what lets a Divine Orb square pull
+        // the monster-dense chart onto itself. See VoyageProfile.MonsterPayoutSynergy.
+        var (flat, perMonster) = BoardValueByCell(profile);
 
         double score(Chart chart, Cell cell) =>
-            chart.Value + (boardValue.TryGetValue(cell, out var extra) ? extra : 0);
+            chart.Value
+            + flat.GetValueOrDefault(cell)
+            + perMonster.GetValueOrDefault(cell)
+              * (1 + profile.MonsterPayoutSynergy * chart.MonsterPackSize / 100);
 
         (string, Cell)? pin = null;
         if (pinChart is { } index && _charts.TryGetValue(index, out var pinned)
-            && CheapestCellFor(pinned, boardValue) is { } where)
+            && CheapestCellFor(pinned, CombinedBoardValue(profile, pinned)) is { } where)
             pin = (pinned.Id, where);
 
         return new VoyageSolver(Layout.Rows, Layout.Cols, scored, score,
@@ -322,6 +322,38 @@ public sealed class VoyageSession
     /// cheapest-first and the first one the chart FITS wins -- a necessary condition, not
     /// a sufficient one, but it rules out exactly the case that has no answer.
     /// </summary>
+    /// <summary>
+    /// What each square grants, split into flat value and per-monster payouts. The
+    /// per-monster half multiplies with the pack size of whatever chart stands there;
+    /// the flat half is position money regardless of the tile.
+    /// </summary>
+    private (Dictionary<Cell, double> Flat, Dictionary<Cell, double> PerMonster)
+        BoardValueByCell(VoyageProfile profile)
+    {
+        var flat = new Dictionary<Cell, double>();
+        var perMonster = new Dictionary<Cell, double>();
+        foreach (var modifier in BoardModifiers())
+        {
+            var worth = profile.ScoreText([modifier.Description]) * profile.BoardModifierWeight;
+            if (worth == 0) continue;
+            var into = VoyageProfile.IsPerMonsterPayout(modifier.Description) ? perMonster : flat;
+            foreach (var cell in modifier.AffectedCells)
+                into[cell] = into.GetValueOrDefault(cell) + worth;
+        }
+        return (flat, perMonster);
+    }
+
+    /// <summary>The two halves combined for ONE known chart, for the pin's cell choice.</summary>
+    private Dictionary<Cell, double> CombinedBoardValue(VoyageProfile profile, Chart chart)
+    {
+        var (flat, perMonster) = BoardValueByCell(profile);
+        var factor = 1 + profile.MonsterPayoutSynergy * chart.MonsterPackSize / 100;
+        var combined = new Dictionary<Cell, double>(flat);
+        foreach (var (cell, worth) in perMonster)
+            combined[cell] = combined.GetValueOrDefault(cell) + worth * factor;
+        return combined;
+    }
+
     private Cell? CheapestCellFor(Chart chart, IReadOnlyDictionary<Cell, double> boardValue)
     {
         var board = new VoyageBoard(Layout.Rows, Layout.Cols);
@@ -368,19 +400,15 @@ public sealed class VoyageSession
         var board = new VoyageBoard(Layout.Rows, Layout.Cols);
         foreach (var placement in solution.Placements) board.Place(placement);
 
-        var boardValue = new Dictionary<Cell, double>();
-        foreach (var modifier in BoardModifiers())
-        {
-            var worth = profile.ScoreText([modifier.Description]) * profile.BoardModifierWeight;
-            if (worth == 0) continue;
-            foreach (var cell in modifier.AffectedCells)
-                boardValue[cell] = boardValue.GetValueOrDefault(cell) + worth;
-        }
+        var (flat, perMonster) = BoardValueByCell(profile);
 
         return VoyageRoute.Plan(board, placement =>
         {
             var worth = profile.ScoreChart(placement.Chart)
-                        + boardValue.GetValueOrDefault(placement.Cell);
+                        + flat.GetValueOrDefault(placement.Cell)
+                        + perMonster.GetValueOrDefault(placement.Cell)
+                          * (1 + profile.MonsterPayoutSynergy
+                                 * placement.Chart.MonsterPackSize / 100);
 
             // What the neighbours push in. Received only -- what this chart gives THEM is
             // counted when they are visited, not here.

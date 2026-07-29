@@ -72,6 +72,40 @@ public sealed class VoyageProfile
     public double AreaLevelWeight { get; set; }
 
     /// <summary>
+    /// How strongly per-monster border payouts scale with the tile they land on.
+    ///
+    /// A border modifier like "Rare Monsters in adjacent Areas drop # additional Divine
+    /// Orbs" pays PER MONSTER, so its real value multiplies with how many monsters the
+    /// tile has -- and the tile's Monster Pack Size is a stat the chart states. Scored
+    /// flat, the payout square is worth the same +120 under a rare-packed chart as under
+    /// a dead one, and since a full board occupies every square either way, the border
+    /// mods then decide NOTHING about placement: their sum is a constant over any full
+    /// layout. This factor is what lets a payout square pull the monster-dense chart
+    /// onto itself: the payout is multiplied by (1 + synergy x PackSize/100).
+    ///
+    /// 1.0 says "trust the tile's pack size at face value"; 0 switches the interaction
+    /// off and returns to flat scoring. What it deliberately does NOT model: neighbours'
+    /// adjacent monster mods boosting the payout tile (a three-way interaction the
+    /// pairwise solver cannot see), and global monster multipliers (which lift every
+    /// square equally and so cannot steer placement).
+    /// </summary>
+    public double MonsterPayoutSynergy { get; set; } = 1.0;
+
+    /// <summary>
+    /// Is this border modifier a per-monster payout? Matches the lines that START with a
+    /// monster noun -- "Rare Monsters ... drop/have ...", "Magic Monsters ... have an
+    /// additional modifier", "Monsters ... are at least Magic" -- and deliberately not
+    /// the density lines ("#% increased number of Rare Monsters"), which ADD monsters
+    /// rather than pay per monster and stay additive.
+    /// </summary>
+    public static bool IsPerMonsterPayout(string description) =>
+        PerMonster.IsMatch(description);
+
+    private static readonly Regex PerMonster =
+        new(@"^\s*(?:Rare\s+|Magic\s+)?Monsters\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>
     /// How many charts to spend, at most. Null means fill the board.
     ///
     /// The game says "place UP TO nine Charts", and "your very first Voyage will require
@@ -227,6 +261,7 @@ public sealed class VoyageRules : IDisposable
     private static bool SameRules(VoyageProfile a, VoyageProfile b) =>
         Math.Abs(a.BoardModifierWeight - b.BoardModifierWeight) < 1e-9
         && Math.Abs(a.AreaLevelWeight - b.AreaLevelWeight) < 1e-9
+        && Math.Abs(a.MonsterPayoutSynergy - b.MonsterPayoutSynergy) < 1e-9
         && Math.Abs(a.StrandedSquarePenalty - b.StrandedSquarePenalty) < 1e-9
         && a.MaxCharts == b.MaxCharts
         && a.Rules.Count == b.Rules.Count
