@@ -58,8 +58,8 @@ public class BorderSynergyTests
     public void ARareDenseRoomWinsThePayoutSquare()
     {
         // A fresh session with no pack charts: every competitor is plain, so the room
-        // bonus alone decides the payout square. (Against a +50% pack headline the
-        // current 0.5 room bonus is a legitimate tie, deliberately not pinned.)
+        // bonus alone decides the payout square. At 1.0 the room outranks any pack
+        // headline in the tables too -- doubled rares beat a half-again pack.
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
             new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)

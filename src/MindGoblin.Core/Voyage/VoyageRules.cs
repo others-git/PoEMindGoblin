@@ -64,7 +64,11 @@ public static class AreaPopulation
     public static readonly IReadOnlyDictionary<string, double> RoomRareDensity =
         new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Brine King's Domain"] = 0.5,
+            // "Exceptional" was the observation, and 0.5 undersold it: at half the
+            // pack-headline scale the chart drifted to a NEIGHBOURING tile of the
+            // sulphur square. Double the base rares says what was seen, and makes the
+            // payout tile unambiguously its seat.
+            ["Brine King's Domain"] = 1.0,
         };
 
     /// <summary>The room bonus for a chart, wherever the room name landed in the parse

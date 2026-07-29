@@ -299,13 +299,13 @@ public sealed class VoyageSolver
     private sealed class DeadlineReached : Exception { }
 
     /// <summary>
-    /// Improve a solution by swaps that cannot break it.
+    /// Improve a solution by swaps that cannot break its route.
     ///
-    /// Two charts of the SAME SHAPE are interchangeable anywhere: keep the rotation and
-    /// every edge stays exactly as it was, so validity and connectivity are preserved by
-    /// construction -- no re-check, no re-search. Greedy best-swap until nothing
-    /// improves, over unused-for-placed substitutions and placed-placed exchanges; the
-    /// space is 9 cells x 60 charts, so this costs microseconds against a search
+    /// Same-shape swaps preserve every edge by construction; CROSS-shape moves are
+    /// legal too whenever a rotation reproduces the cell's inner edges, because border
+    /// edges connect nothing -- checked cheaply per move (IsValid plus a stranded-count
+    /// comparison on a nine-cell board). Greedy best-first until nothing improves; the
+    /// space is 9 cells x 60 charts x 4 rotations, still microseconds against a search
     /// measured in millions of nodes.
     ///
     /// This exists because branch and bound dies on plateaus. With many near-equal
@@ -329,6 +329,16 @@ public sealed class VoyageSolver
         var pinCell = _pin is { } pin
             ? new Cell(pin.CellIndex / _cols, pin.CellIndex % _cols) : (Cell?)null;
 
+        // The connectivity of a layout lives ENTIRELY in its inner edges: border-facing
+        // edges connect nothing, and both open and closed are legal against the border.
+        // So any chart whose SOME rotation reproduces a cell's inner edges can take that
+        // cell -- whatever its shape -- and the route is untouched. The first polish
+        // only swapped like shapes, and a rare-dense Corner sat one tile away from a
+        // 15000-point payout square held by a Junction it could not displace.
+        var strandedBefore = board.StrandedCells().Count;
+
+        bool KeepsRoute() => board.IsValid() && board.StrandedCells().Count <= strandedBefore;
+
         var improved = true;
         while (improved)
         {
@@ -340,36 +350,54 @@ public sealed class VoyageSolver
                 if (placement.Cell == pinCell) continue;
                 var baseline = Evaluate(board);
 
-                // An unused chart of the same shape, in the same rotation.
-                for (var i = 0; i < _charts.Count; i++)
+                // Any unused chart, any rotation that fits the cell's inner edges.
+                for (var i = 0; i < _charts.Count && !improved; i++)
                 {
-                    if (used[i] || _charts[i].Shape != placement.Chart.Shape) continue;
-                    board.Clear(placement.Cell);
-                    board.Place(placement with { Chart = _charts[i] });
-                    if (Evaluate(board) > baseline + 1e-9)
+                    if (used[i]) continue;
+                    foreach (var rotation in ChartFace.DistinctRotations(_charts[i].Shape))
                     {
-                        used[i] = true;
-                        if (indexOf.TryGetValue(placement.Chart.Id, out var old)) used[old] = false;
-                        improved = true;
-                        break;
+                        board.Clear(placement.Cell);
+                        var candidate = new Placement(_charts[i], placement.Cell, rotation);
+                        board.Place(candidate);
+                        if (KeepsRoute() && Evaluate(board) > baseline + 1e-9)
+                        {
+                            used[i] = true;
+                            if (indexOf.TryGetValue(placement.Chart.Id, out var old))
+                                used[old] = false;
+                            improved = true;
+                            break;
+                        }
+                        board.Clear(placement.Cell);
+                        board.Place(placement);
                     }
-                    board.Clear(placement.Cell);
-                    board.Place(placement);
                 }
                 if (improved) break;
 
-                // Two placed charts trading cells (same shape, rotations kept per cell).
+                // Two placed charts trading cells, re-choosing both rotations.
                 foreach (var other in placements)
                 {
                     if (other.Cell == placement.Cell || other.Cell == pinCell) continue;
-                    if (other.Chart.Shape != placement.Chart.Shape) continue;
                     board.Clear(placement.Cell);
                     board.Clear(other.Cell);
-                    board.Place(placement with { Chart = other.Chart });
-                    board.Place(other with { Chart = placement.Chart });
-                    if (Evaluate(board) > baseline + 1e-9) { improved = true; break; }
-                    board.Clear(placement.Cell);
-                    board.Clear(other.Cell);
+                    foreach (var ra in ChartFace.DistinctRotations(other.Chart.Shape))
+                    {
+                        foreach (var rb in ChartFace.DistinctRotations(placement.Chart.Shape))
+                        {
+                            var a = new Placement(other.Chart, placement.Cell, ra);
+                            var b = new Placement(placement.Chart, other.Cell, rb);
+                            board.Place(a);
+                            board.Place(b);
+                            if (KeepsRoute() && Evaluate(board) > baseline + 1e-9)
+                            {
+                                improved = true;
+                                break;
+                            }
+                            board.Clear(placement.Cell);
+                            board.Clear(other.Cell);
+                        }
+                        if (improved) break;
+                    }
+                    if (improved) break;
                     board.Place(placement);
                     board.Place(other);
                 }
