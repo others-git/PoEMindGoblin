@@ -134,18 +134,24 @@ public sealed class VoyageBoard
         }
     }
 
-    public int FilledCount => Placements.Count();
+    /// <summary>Maintained by Place/Clear rather than counted: the solver reads this at
+    /// every node of the search, and enumerating the grid there added a full board scan
+    /// to the innermost loop.</summary>
+    public int FilledCount { get; private set; }
 
     public void Place(Placement placement)
     {
         if (!InBounds(placement.Cell))
             throw new ArgumentOutOfRangeException(nameof(placement), "cell is off the board");
+        if (_cells[placement.Cell.Row, placement.Cell.Col] is null) FilledCount++;
         _cells[placement.Cell.Row, placement.Cell.Col] = placement;
     }
 
     public void Clear(Cell c)
     {
-        if (InBounds(c)) _cells[c.Row, c.Col] = null;
+        if (!InBounds(c) || _cells[c.Row, c.Col] is null) return;
+        _cells[c.Row, c.Col] = null;
+        FilledCount--;
     }
 
     public static Cell Neighbour(Cell c, Side side)

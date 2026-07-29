@@ -169,13 +169,13 @@ public sealed class VoyageSolver
         NodesExplored = 0;
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var deadline = budget ?? TimeSpan.FromSeconds(5);
-        // Optimistic remaining value: the best scores any chart could achieve anywhere,
-        // largest first. Never underestimates, so pruning against it is safe.
-        var bestPossible = BestPossiblePerCell();
+        // Optimistic remaining value. Never underestimates, so pruning against it is
+        // safe -- the tests hold it to that.
+        PrepareBounds();
         _ordering = ApplyPin(BuildOrdering());
 
         var best = new Solution(Array.Empty<Placement>(), double.NegativeInfinity);
-        bestRank = double.NegativeInfinity;
+        _bestRank = double.NegativeInfinity;
 
         // Start from a connected board if one can be found cheaply. Without this the
         // search can run for minutes and still return a layout with a dead corner --
@@ -198,27 +198,27 @@ public sealed class VoyageSolver
         if (SeedConnected(sw, deadline * SeedShare) is { } seed)
         {
             best = seed;
-            bestRank = seed.Value + seed.Placements.Count * FullnessEpsilon;
+            _bestRank = seed.Value + seed.Placements.Count * FullnessEpsilon;
             _requireConnected = true;
         }
 
 
-        // Search the RESTRICTED space first, then widen.
+        // Search the RESTRICTED space first, then the whole of it.
         //
-        // Forbidding edges that open onto the border makes connected boards common rather
-        // than one in ten million, so a pass there finds a good JOINED layout quickly.
-        // Without it the search spends its whole budget on layouts that are rejected for
-        // being cut off, never improves on the seed, and hands back a board chosen for
-        // connectivity alone -- which is how the strongbox profile came to skip every
-        // strongbox chart it had.
+        // Forbidding edges that open onto the border makes connected boards dense, so a
+        // short pass there harvests strong incumbents that the real search then prunes
+        // with. Measured on a real 42-chart panel this is not a nicety: with the passes,
+        // sulphur proves 3525 and currency finds 96; without them, 3440 and 66.
         //
-        // The restriction rules out perfectly good layouts, so it is only ever a head
-        // start: each pass keeps the incumbent, and the final unrestricted pass is free
-        // to beat it. Only that last pass decides whether the answer was proved.
-        // Only the UNRESTRICTED pass can prove anything. The restricted ones search a
-        // deliberately smaller space, so finishing one says nothing about the layouts it
-        // was forbidden from considering -- and if the budget ran out before that pass
-        // started, the honest answer is that nothing was proved.
+        // But a restricted pass is a SCOUT, and a scout that spends the army's budget
+        // loses the war: the high-tier profile scores every chart so alike that only a
+        // near-complete unrestricted pass improves on the seed, and letting the scouts
+        // run 250k nodes each starved it from 714 down to 571. Hence the tight node cap
+        // and the hard clock share in Recurse -- on a small instance the scouts finish
+        // for free, on a big one they pay for themselves, and either way the final pass
+        // keeps the bulk of the budget. Only that final, unrestricted pass can prove
+        // anything: the scouts deliberately ignore legal layouts, so finishing one says
+        // nothing about what it was forbidden from considering.
         var exhausted = false;
         foreach (var rule in new[] { BorderRule.All, BorderRule.NorthAndWest, BorderRule.None })
         {
@@ -226,23 +226,19 @@ public sealed class VoyageSolver
             var completed = true;
             _passStartNodes = NodesExplored;
 
-            // A FRESH board and used-set per pass.
-            //
-            // DeadlineReached unwinds through every recursive frame, and those frames
-            // undo their placement AFTER the recursive call returns -- so an abort leaves
-            // the board half filled and charts marked used. Reusing it meant the next
-            // pass started from that wreckage, bottomed out after two nodes, and reported
-            // itself EXHAUSTED, which is how a search that had explored almost nothing
-            // came to claim it had proved the answer.
+            // A FRESH board and used-set per pass: DeadlineReached unwinds through every
+            // recursive frame, and those frames undo their placement AFTER the recursive
+            // call returns -- an aborted pass leaves the board half filled. Reusing it
+            // once made the next pass bottom out in two nodes and claim a proof.
             var board = new VoyageBoard(_rows, _cols);
             var used = new bool[_charts.Count];
             if (Trace)
                 Console.Error.WriteLine(
-                    $"    pass {rule,-13} start best={best.Value,10:0.##} bound0={bestPossible[0]:0.##} "
+                    $"    pass {rule,-13} start best={best.Value,10:0.##} bound0={Bound(0, 0):0.##} "
                     + $"nodes={NodesExplored} t={sw.Elapsed.TotalMilliseconds:0}ms");
             try
             {
-                Recurse(0, board, used, 0.0, bestPossible, ref best, sw, deadline, ct);
+                Recurse(0, board, used, 0.0, 0.0, ref best, sw, deadline, ct);
             }
             catch (DeadlineReached)
             {
@@ -256,6 +252,7 @@ public sealed class VoyageSolver
             if (sw.Elapsed >= deadline) break;
         }
         _searchRule = BorderRule.None;
+
         sw.Stop();
 
         var result = best.Value == double.NegativeInfinity
@@ -283,20 +280,6 @@ public sealed class VoyageSolver
     private sealed class DeadlineReached : Exception { }
 
     /// <summary>
-    /// Find one connected board fast, to start the search from something decent.
-    ///
-    /// The trick is a restriction the main search cannot make: every edge facing the
-    /// BORDER must be closed. An edge open to the border is precisely a path that leads
-    /// nowhere, so forbidding them removes almost every dead corner by construction --
-    /// and it collapses the space enough to hit a connected board in a handful of nodes
-    /// where the unrestricted search needed eleven million.
-    ///
-    /// It is only a seed, never the answer: the restriction rules out perfectly good
-    /// layouts, so whatever it finds is scored honestly and handed to the real search as
-    /// an incumbent to beat. Returns null when no such board exists, which is legitimate
-    /// -- some chart sets cannot close every border.
-    /// </summary>
-    /// <summary>
     /// How much of the budget the seed may spend.
     ///
     /// It needs a clock as well as a node cap. With six dives to try -- three border
@@ -306,6 +289,19 @@ public sealed class VoyageSolver
     /// </summary>
     private const double SeedShare = 0.3;
 
+    /// <summary>
+    /// Find one connected board fast, to start the search from something decent.
+    ///
+    /// The trick is closing every edge that faces the BORDER: such an edge is precisely
+    /// a path that leads nowhere, so forbidding them removes almost every dead corner by
+    /// construction -- and it collapses the space enough to hit a connected board in a
+    /// handful of nodes where the unrestricted search needed eleven million.
+    ///
+    /// It is only a seed, never the answer: the restriction rules out perfectly good
+    /// layouts, so whatever it finds is scored honestly and handed to the real search as
+    /// an incumbent to beat. Returns null when no such board exists, which is legitimate
+    /// -- some chart sets cannot close every border.
+    /// </summary>
     private Solution? SeedConnected(System.Diagnostics.Stopwatch sw, TimeSpan deadline)
     {
         // Try several dives and keep the BEST, rather than the first that works.
@@ -496,67 +492,74 @@ public sealed class VoyageSolver
         return gain;
     }
 
+    /// <summary>Per-chart score ceiling: the best this chart scores on ANY cell, floored
+    /// at zero. Indexed like <see cref="_charts"/>; maintained as a running sum down the
+    /// search so the chart bound can subtract what the placed charts have used up.</summary>
+    private double[] _chartCeil = [];
+
+    /// <summary>Sum of the top boardsize chart ceilings -- the most ANY full board's
+    /// placements could be worth, ignoring shape and position.</summary>
+    private double _topChartSum;
+
+    /// <summary>Suffix sums of each cell's best possible score, from cell i onward.</summary>
+    private double[] _cellSuffix = [];
+
+    /// <summary>Adjacency headroom from cell i onward: unscored pairs x 2 x best modifier.</summary>
+    private double[] _pairSlack = [];
+
     /// <summary>
-    /// Upper bound on the value still obtainable from cell <c>i</c> onwards.
+    /// Precompute the pieces of the upper bound on the value still obtainable from cell
+    /// <c>i</c> onwards, given what the placed charts have already consumed.
     ///
-    /// Bounded PER CELL, not per chart. The obvious version -- take each chart's best
-    /// score anywhere, sort, sum the top nine -- is admissible but useless once board
-    /// modifiers exist: it assumes all nine charts land on a buffed square when only one
-    /// or two squares are buffed, so the bound sits far above anything reachable and
-    /// prunes nothing. Measured with two modifiers over 60 charts, that version explored
-    /// 4 million nodes without finishing; this one settles it in milliseconds.
+    /// Three admissible parts; the score term takes the smaller of two:
     ///
-    /// Ceiling each cell by the best any chart could score THERE. Still admissible (no
-    /// cell can beat its own maximum) and far tighter, because an unbuffed cell now
-    /// carries an unbuffed ceiling.
+    ///   BY CHART, dynamic: topChartSum minus the ceilings of the charts already placed.
+    ///   The future charts are distinct from each other AND from the placed ones, so
+    ///   placed + future together can never out-sum the best boardsize ceilings. This
+    ///   must be DYNAMIC. The old static version assumed the cells filled so far had
+    ///   taken the top-ranked charts, so a branch that opened with a modest chart while
+    ///   a top chart waited for its true cell was UNDER-bounded -- and with per-cell
+    ///   scoring, which is exactly what board modifiers create, the search pruned the
+    ///   real optimum and still reported the answer proved (see
+    ///   SolverSoundnessTests.PerCellScoringCannotPruneTheTrueOptimum: 13 "proved" on an
+    ///   instance whose optimum is 18). On the greedy first descent the subtraction
+    ///   equals the old suffix exactly, so the pruning that made the search fast is kept.
+    ///
+    ///   BY CELL, static: the best any chart could score on each remaining cell. Captures
+    ///   the scarcity of buffed squares -- without it, one buffed square lets every
+    ///   remaining chart pretend it will land there, and the bound prunes nothing.
+    ///
+    ///   ADJACENCY, per remaining PAIR: scored once per pair when its second cell is
+    ///   placed, each worth at most both charts' modifiers. Charging every cell for four
+    ///   neighbours both ways triple-counts (72 x best on a 3x3 where the truth is 24 x)
+    ///   and is why nine charts on nine cells once could not be proved.
     /// </summary>
-    private double[] BestPossiblePerCell()
+    private void PrepareBounds()
     {
         var cells = AllCells().ToList();
         var n = cells.Count;
 
-        // Bound A -- by chart. Each chart's best score anywhere, biggest first. Captures
-        // "a chart is used at most once", so it is tight when every cell scores alike.
-        // Useless once board modifiers exist: it assumes all nine charts land on a buffed
-        // square when only one or two squares are buffed.
-        var chartBest = _charts
-            .Select(c => Math.Max(0, cells.Max(cell => _score(c, cell))))
-            .OrderByDescending(v => v)
-            .ToList();
+        _chartCeil = [.. _charts.Select(c => Math.Max(0, cells.Max(cell => _score(c, cell))))];
+        _topChartSum = _chartCeil.OrderByDescending(v => v).Take(n).Sum();
 
-        // Bound B -- by cell. The best any chart could score on THAT cell. Captures the
-        // scarcity of buffed squares, but repeats the single best chart across every
-        // cell, so it loses the no-repeat information that A has.
         var cellBest = cells
             .Select(cell => _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c => _score(c, cell))))
             .ToList();
-
-        // Adjacency can only ADD value, so the bound has to allow for it or it stops
-        // being admissible and the search could discard the true best layout.
-        //
-        // Bounded per adjacent PAIR rather than per cell. Adjacency is scored once per
-        // pair -- when the second of the two is placed -- and each pair is worth at most
-        // both charts' modifiers, so 2 x the best. Charging every remaining CELL for four
-        // neighbours counted both ways triple-counts: on a 3x3 that is 72 x best where
-        // the truth is 24 x best, and a bound that loose prunes almost nothing. It is why
-        // even nine charts on nine cells could not be proved.
         var bestAdjacent = _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c => c.AdjacentValue));
         var pairsRemaining = AdjacentPairsFrom();
 
-        // Both are admissible, so the smaller is admissible and never worse than either.
-        // Neither alone is enough: A collapses with modifiers, B collapses without them,
-        // and each left the search grinding through millions of nodes on its bad case.
-        var suffix = new double[n + 1];
-        var byChart = new double[n + 1];
-        var byCell = new double[n + 1];
+        _cellSuffix = new double[n + 1];
+        _pairSlack = new double[n + 1];
         for (var i = n - 1; i >= 0; i--)
         {
-            byChart[i] = byChart[i + 1] + (i < chartBest.Count ? chartBest[i] : 0);
-            byCell[i] = byCell[i + 1] + cellBest[i];
-            suffix[i] = Math.Min(byChart[i], byCell[i]) + 2 * bestAdjacent * pairsRemaining[i];
+            _cellSuffix[i] = _cellSuffix[i + 1] + cellBest[i];
+            _pairSlack[i] = 2 * bestAdjacent * pairsRemaining[i];
         }
-        return suffix;
     }
+
+    /// <summary>Most that filling cells i.. can still add, with usedCeil already spent.</summary>
+    private double Bound(int index, double usedCeil) =>
+        Math.Min(_topChartSum - usedCeil, _cellSuffix[index]) + _pairSlack[index];
 
     /// <summary>
     /// How many adjacent pairs are still unscored once filling reaches cell i.
@@ -599,10 +602,12 @@ public sealed class VoyageSolver
         for (var i = 0; i < cells.Count; i++)
         {
             var cell = cells[i];
-            // Ordered by an UPPER BOUND on what the chart could be worth here: its own
-            // score plus the most its adjacency could ever pay, which is to all four
-            // neighbours counted both ways. Ordering on the own-score alone buried the
-            // charts whose whole value is what they give the squares around them.
+            // Ordered by the chart's own score plus DOUBLE the most its adjacency can
+            // pay (four neighbours is the true cap -- what neighbours give back does not
+            // depend on which candidate is chosen). Deliberately overweighted: this only
+            // orders candidates, and surfacing adjacency charts early is what matters --
+            // ordering on the own-score alone buried the charts whose whole value is
+            // what they give the squares around them.
             result[i] = Enumerable.Range(0, _charts.Count)
                 .OrderByDescending(idx => _score(_charts[idx], cell)
                                           + Math.Max(0, _charts[idx].AdjacentValue) * 8)
@@ -618,34 +623,29 @@ public sealed class VoyageSolver
                 yield return new Cell(r, c);
     }
 
-    private double bestRank = double.NegativeInfinity;
+    private double _bestRank = double.NegativeInfinity;
 
     /// <summary>Set once the seed proves a fully joined board is possible for these charts.</summary>
     private bool _requireConnected;
 
-    /// <summary>Print per-pass diagnostics. Set by a probe, never by the app.</summary>
+    /// <summary>Print search diagnostics. Set by a probe, never by the app.</summary>
     public static bool Trace { get; set; }
 
     /// <summary>Border restriction in force for the current search pass.</summary>
     private BorderRule _searchRule = BorderRule.None;
 
     /// <summary>
-    /// Work allowed to a RESTRICTED pass, in nodes.
-    ///
-    /// Bounded by work rather than by a slice of the clock. Taking a fraction of the
-    /// budget meant that on a small board -- where the unrestricted search can finish and
-    /// find the true optimum -- half the time went on passes that could not, and the real
-    /// search ran out before it got there. A node cap is generous on a big instance,
-    /// where these passes are the only thing that finds a joined board at all, and nearly
-    /// free on a small one.
+    /// Work allowed to a restricted scout pass, in nodes. Small on purpose: the scouts'
+    /// job is a strong incumbent in the first few descents, and everything past that is
+    /// budget taken from the one pass that can prove the answer.
     /// </summary>
-    private const long RestrictedPassNodes = 250_000;
+    private const long RestrictedPassNodes = 60_000;
 
     private long _passStartNodes;
 
     private void Recurse(
         int index, VoyageBoard board, bool[] used, double value,
-        double[] bound, ref Solution best,
+        double usedCeil, ref Solution best,
         System.Diagnostics.Stopwatch sw, TimeSpan deadline, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -659,10 +659,11 @@ public sealed class VoyageSolver
         {
             if (sw.Elapsed > deadline) throw new DeadlineReached();
 
-            // A restricted pass is a head start, not the search. Cap its work so the
-            // unrestricted pass keeps the bulk of the budget.
+            // A scout pass ends at its node cap or at half the clock, whichever bites
+            // first -- the unrestricted pass must keep the bulk of the budget.
             if (_searchRule != BorderRule.None
-                && NodesExplored - _passStartNodes > RestrictedPassNodes)
+                && (NodesExplored - _passStartNodes > RestrictedPassNodes
+                    || sw.Elapsed > deadline * 0.5))
                 throw new DeadlineReached();
         }
 
@@ -680,8 +681,12 @@ public sealed class VoyageSolver
             if (!board.IsValid()) return;
 
             // Connectivity is a property of the WHOLE board, so it cannot be scored per
-            // placement like everything else -- it is only knowable here.
-            var stranded = _strandedPenalty > 0 ? board.StrandedCells() : [];
+            // placement like everything else -- it is only knowable here. Computed even
+            // when nothing is charged for it: with a zero penalty it still gates the
+            // require-connected constraint and still has to be REPORTED -- a solution
+            // claiming every square is joined while one is dead is worse than a fee.
+            // Few boards get this far past the value gate, so the BFS is cheap.
+            var stranded = board.StrandedCells();
 
             // A chart on a stranded square is FORFEIT, not merely taxed.
             //
@@ -711,9 +716,9 @@ public sealed class VoyageSolver
             var rank = final - stranded.Count * StrandedEpsilon
                              + board.FilledCount * FullnessEpsilon;
 
-            if (rank > bestRank)
+            if (rank > _bestRank)
             {
-                bestRank = rank;
+                _bestRank = rank;
                 best = new Solution(board.Placements.ToList(), final)
                     { StrandedCells = stranded };
             }
@@ -721,7 +726,7 @@ public sealed class VoyageSolver
         }
 
         // Nothing below can beat the incumbent -- stop.
-        if (value + bound[index] <= best.Value) return;
+        if (value + Bound(index, usedCeil) <= best.Value) return;
 
         var cell = new Cell(index / _cols, index % _cols);
 
@@ -735,7 +740,7 @@ public sealed class VoyageSolver
             // is the one outcome the button was pressed to prevent.
             if (_pin is { } capped && index <= capped.CellIndex) return;
             if (_allowEmpty && LeavingEmptyIsLegal(board, cell))
-                Recurse(index + 1, board, used, value, bound, ref best, sw, deadline, ct);
+                Recurse(index + 1, board, used, value, usedCeil, ref best, sw, deadline, ct);
             return;
         }
 
@@ -766,17 +771,23 @@ public sealed class VoyageSolver
             // That is how the strongbox profile came to skip every strongbox chart it
             // had: chart 33 carried +112 quantity AND three Operative's Strongboxes,
             // worth several times anything chosen, and was never even tried.
-            if (value + gain + bound[index + 1] <= best.Value) continue;
+            if (value + gain + Bound(index + 1, usedCeil + _chartCeil[i]) <= best.Value)
+                continue;
 
             foreach (var rotation in ChartFace.DistinctRotations(chart.Shape))
             {
                 var face = new ChartFace(chart.Shape, rotation);
+                // What makes a scout pass a scout: no edge may open onto the border it
+                // is scouting. (For years this check only existed in the seed, so the
+                // "restricted" passes silently searched the full space with a node cap.)
+                if (OpensOntoBorder(board, cell, face, _searchRule)) continue;
                 if (!board.CanPlace(cell, face)) continue;
                 if (!SatisfiesDecidedNeighbours(board, cell, face)) continue;
 
                 used[i] = true;
                 board.Place(new Placement(chart, cell, rotation));
-                Recurse(index + 1, board, used, value + gain, bound, ref best, sw, deadline, ct);
+                Recurse(index + 1, board, used, value + gain,
+                        usedCeil + _chartCeil[i], ref best, sw, deadline, ct);
                 board.Clear(cell);
                 used[i] = false;
             }
@@ -784,7 +795,7 @@ public sealed class VoyageSolver
 
         if (_pin is { } pinned && index == pinned.CellIndex) return;
         if (_allowEmpty && LeavingEmptyIsLegal(board, cell))
-            Recurse(index + 1, board, used, value, bound, ref best, sw, deadline, ct);
+            Recurse(index + 1, board, used, value, usedCeil, ref best, sw, deadline, ct);
     }
 
     /// <summary>
