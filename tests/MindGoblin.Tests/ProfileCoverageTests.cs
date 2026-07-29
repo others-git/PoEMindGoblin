@@ -218,10 +218,12 @@ public class ProfileCoverageTests
         // "additional Strongboxes" must not also match "additional Diviner's
         // Strongboxes", or the good types are paid for twice over.
         var strongbox = VoyageRules.Defaults().Single(p => p.Name == "strongbox");
-        var plainRule = strongbox.Rules.Single(r => r.Pattern.Contains(@"additional Strongboxes"));
+        var plainRule = strongbox.Rules.Single(r => r.Pattern.Contains(@"additional Strongbox"));
 
         Assert.Equal(0, plainRule.Score("Adjacent Areas contain 3 additional Diviner's Strongboxes"));
+        Assert.Equal(0, plainRule.Score("Adjacent Areas contain an additional Diviner's Strongbox"));
         Assert.NotEqual(0, plainRule.Score("Adjacent Areas contain 3 additional Strongboxes"));
+        Assert.NotEqual(0, plainRule.Score("Adjacent Areas contain an additional Strongbox"));
     }
 
     [Fact]

@@ -33,8 +33,14 @@ public sealed class VoyageRule
         var m = Compiled.Match(text);
         if (!m.Success) return 0;
 
-        // A captured number scales the weight, so "8 additional packs" beats "2".
-        if (m.Groups.Count > 1 && double.TryParse(m.Groups[1].Value, out var n))
+        // A captured number scales the weight, so "8 additional packs" beats "2". A
+        // pattern may offer the number as ONE branch of an alternation -- the shipped
+        // count rules read "(?:(\d+)|an)", because the game writes the singular when a
+        // roll is 1 ("an additional cage") -- and then an unfilled group falls through
+        // to the flat weight, which prices the singular exactly as a roll of 1.
+        if (m.Groups.Count > 1 && double.TryParse(m.Groups[1].Value,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var n))
             return n * Weight;
         return Weight;
     }
@@ -97,19 +103,6 @@ public sealed class VoyageProfile
     public double ScoreAdjacent(Chart chart) =>
         string.IsNullOrEmpty(chart.AdjacentModifier) ? 0 : ScoreText([chart.AdjacentModifier!]);
 
-    /// <summary>Builds the (chart, cell) scorer the solver needs from this profile.</summary>
-    public Func<Chart, Cell, double> Scorer(IReadOnlyList<BoardModifier> boardModifiers)
-    {
-        var byCell = new Dictionary<Cell, double>();
-        foreach (var m in boardModifiers)
-        {
-            var value = ScoreText([m.Description]) * BoardModifierWeight;
-            foreach (var cell in m.AffectedCells)
-                byCell[cell] = byCell.GetValueOrDefault(cell) + value;
-        }
-
-        return (chart, cell) => ScoreChart(chart) + byCell.GetValueOrDefault(cell);
-    }
 }
 
 /// <summary>
@@ -228,8 +221,15 @@ public sealed class VoyageRules : IDisposable
         return new DefaultsStatus(missing, outdated);
     }
 
+    // The profile-level knobs count as much as the rules: when strongbox gained
+    // AreaLevelWeight, a comparison of rules alone told every existing file it was
+    // current while it silently scored area level at zero.
     private static bool SameRules(VoyageProfile a, VoyageProfile b) =>
-        a.Rules.Count == b.Rules.Count
+        Math.Abs(a.BoardModifierWeight - b.BoardModifierWeight) < 1e-9
+        && Math.Abs(a.AreaLevelWeight - b.AreaLevelWeight) < 1e-9
+        && Math.Abs(a.StrandedSquarePenalty - b.StrandedSquarePenalty) < 1e-9
+        && a.MaxCharts == b.MaxCharts
+        && a.Rules.Count == b.Rules.Count
         && a.Rules.Zip(b.Rules).All(pair => pair.First.Pattern == pair.Second.Pattern
                                             && Math.Abs(pair.First.Weight - pair.Second.Weight) < 1e-9);
 
@@ -341,16 +341,15 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Rarity of Items", Weight = 0.75 },
                 new VoyageRule { Pattern = @"Flasks found.*chance to have (\d+)% Quality", Weight = 0.4,
                                  Comment = "a quality flask is a better item, so it belongs here" },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Golden Lanterns", Weight = 6,
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Golden Lanterns?", Weight = 6,
                                  Comment = "3.29.0b: these now grant increased Quantity too" },
                 new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -60,
                                  Comment = "a global roll that deletes most of the loot" },
                 // Board modifiers, off the figurines rather than the charts.
                 new VoyageRule { Pattern = @"(\d+)%\s+increased explicit modifier magnitudes", Weight = 0.5,
                                  Comment = "rolls every other modifier higher" },
-                new VoyageRule { Pattern = @"(\d+)% [Cc]hance (?:for Chart|to not be consumed)", Weight = 0.8,
+                new VoyageRule { Pattern = @"(\d+)% chance (?:for Charts? )?to not be consumed", Weight = 0.8,
                                  Comment = "a chart you keep is a voyage you did not pay for" },
-                new VoyageRule { Pattern = @"Charts have (\d+)% chance to not be consumed", Weight = 0.8 },
                 new VoyageRule { Pattern = @"(\d+)% more Rarity of Items found", Weight = 1.0 },
                 new VoyageRule { Pattern = @"(\d+)% reduced quantity of items found", Weight = -1.5 },
                 new VoyageRule { Pattern = @"gain (\d+)% increased Experience", Weight = 0.1 },
@@ -366,14 +365,18 @@ public sealed class VoyageRules : IDisposable
             [
                 new VoyageRule { Pattern = @"Monster Pack Size:\s*\+?(\d+)", Weight = 1.0 },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = 1.5 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional packs of", Weight = 3.0,
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional packs? of", Weight = 3.0,
                                  Comment = "Crabs, Octopi, Sea Beasts, the Drowned" },
                 new VoyageRule { Pattern = @"Magic Monsters.*have an additional modifier", Weight = 8,
                                  Comment = "board modifier" },
                 new VoyageRule { Pattern = @"(\d+)% increased number of Rare monsters.*per connection",
                                  Weight = 0.4, Comment = "board modifier: scales with connections" },
-                new VoyageRule { Pattern = @"(\d+)%\s+increased number of (?:Rare|Magic) Monsters", Weight = 0.75 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Imprisoned Monsters", Weight = 4.0 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased number of (?:Rare|Magic) Monsters(?!.*per connection)",
+                                 Weight = 0.75,
+                                 Comment = "the lookahead keeps the per-connection line to its own rule: "
+                                           + "these regexes are case-insensitive, so its lowercase "
+                                           + "'monsters' matched here too and the line was paid twice" },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Imprisoned Monsters?", Weight = 4.0 },
                 new VoyageRule { Pattern = @"are at least Magic", Weight = 15 },
                 new VoyageRule { Pattern = @"have Soul Eater", Weight = 10,
                                  Comment = "worth having where the packs are" },
@@ -394,12 +397,12 @@ public sealed class VoyageRules : IDisposable
                 // patterns are mutually exclusive: "additional Strongboxes" cannot match
                 // "additional Diviner's Strongboxes", because the type sits between the
                 // two words, so nothing is scored twice.
-                new VoyageRule { Pattern = @"(\d+)\s+additional Arcanist's Strongboxes", Weight = 25,
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Arcanist's Strongbox(?:es)?", Weight = 25,
                                  Comment = "currency" },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Diviner's Strongboxes", Weight = 25,
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Diviner's Strongbox(?:es)?", Weight = 25,
                                  Comment = "divination cards" },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Operative's Strongboxes", Weight = 20 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Strongboxes", Weight = 8,
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Operative's Strongbox(?:es)?", Weight = 20 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Strongbox(?:es)?", Weight = 8,
                                  Comment = "the plain roll: random types" },
                 // Box contents roll against area quantity and rarity, so the tile's own
                 // stats decide what the boxes are actually worth.
@@ -417,15 +420,15 @@ public sealed class VoyageRules : IDisposable
             BoardModifierWeight = 1.5,
             Rules =
             [
-                new VoyageRule { Pattern = @"(\d+)\s+additional Clusters of Barrels", Weight = 1.5 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Golden Lanterns", Weight = 12,
+                // Every count rule accepts "an": the game writes the singular when a roll
+                // is 1 -- first seen on the cage line, and true of the whole family.
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Clusters? of Barrels", Weight = 1.5 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Golden Lanterns?", Weight = 12,
                                  Comment = "3.29.0b also made these grant increased Quantity" },
-                new VoyageRule { Pattern = @"(\d+)\s+additional cages of Tormented Spirits", Weight = 8 },
-                new VoyageRule { Pattern = @"an additional cage of Tormented Spirits", Weight = 8,
-                                 Comment = "the game writes the singular when the roll is 1" },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Messages in Bottles", Weight = 5 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Giant Starfish", Weight = 4 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Treasure", Weight = 5,
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional cages? of Tormented Spirits", Weight = 8 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Messages? in (?:a )?Bottles?", Weight = 5 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Giant Starfish", Weight = 4 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Treasure", Weight = 5,
                                  Comment = "Treasure Anchors" },
                 new VoyageRule { Pattern = @"highly prized and exotic Fish", Weight = 8 },
                 new VoyageRule { Pattern = @"contain Friendly Jellyfish", Weight = 5 },
@@ -471,9 +474,9 @@ public sealed class VoyageRules : IDisposable
                 // adjacent Areas drop # additional Chaos Orbs") while the Area Modifiers
                 // panel shows it resolved for the square you hovered ("in Area drop an
                 // additional Chaos Orb").
-                new VoyageRule { Pattern = @"Rare Monsters.*drop (\d+) additional", Weight = 8,
-                                 Comment = "board modifier: extra currency per rare" },
-                new VoyageRule { Pattern = @"Rare Monsters.*drop an additional", Weight = 8 },
+                new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional", Weight = 8,
+                                 Comment = "board modifier: extra currency per rare; the mod table "
+                                           + "has the template, the Area panel the resolved singular" },
 
                 // Rares spawn out of packs, so more packs is more rares -- and every
                 // payout above is per rare. This profile ignored pack size entirely,
@@ -481,8 +484,8 @@ public sealed class VoyageRules : IDisposable
                 // monsters over one with the same modifier and half again as many.
                 new VoyageRule { Pattern = @"Monster Pack Size:\s*\+?(\d+)", Weight = 0.3 },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = 0.5 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional packs of", Weight = 1.5 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional Imprisoned Monsters", Weight = 2.0,
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional packs? of", Weight = 1.5 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Imprisoned Monsters?", Weight = 2.0,
                                  Comment = "an imprisoned monster is a rare" },
             ],
         },
@@ -514,24 +517,24 @@ public sealed class VoyageRules : IDisposable
                 // These are figurine modifiers, so they decide which SQUARE is worth
                 // standing a chart on rather than which chart to pick. Weighted by rough
                 // trade value, which is the part most worth arguing with.
-                new VoyageRule { Pattern = @"drop (\d+) additional Divine Orbs", Weight = 120 },
-                new VoyageRule { Pattern = @"drop (\d+) additional Exalted Orbs", Weight = 60 },
-                new VoyageRule { Pattern = @"drop (\d+) additional Ancient Orbs", Weight = 12 },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Divine Orbs?", Weight = 120 },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Exalted Orbs?", Weight = 60 },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Ancient Orbs?", Weight = 12 },
                 new VoyageRule { Pattern = @"drop (\d+) additional Orbs of Annulment", Weight = 12 },
-                new VoyageRule { Pattern = @"drop (\d+) additional Vaal Orbs", Weight = 6 },
-                new VoyageRule { Pattern = @"drop (\d+) additional Regal Orbs", Weight = 5 },
-                new VoyageRule { Pattern = @"drop (\d+) additional Gemcutter's Prisms", Weight = 5 },
-                new VoyageRule { Pattern = @"drop (\d+) additional Blessed Orbs", Weight = 4 },
-                new VoyageRule { Pattern = @"drop (\d+) additional Chaos Orbs", Weight = 4 },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Vaal Orbs?", Weight = 6 },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Regal Orbs?", Weight = 5 },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Gemcutter's Prisms?", Weight = 5 },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Blessed Orbs?", Weight = 4 },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Chaos Orbs?", Weight = 4 },
                 new VoyageRule { Pattern = @"drop (\d+) additional Orbs of Regret", Weight = 2 },
-                new VoyageRule { Pattern = @"drop (\d+) additional Chromatic Orbs", Weight = 1 },
-                new VoyageRule { Pattern = @"drop (\d+) additional Scarabs", Weight = 15 },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Chromatic Orbs?", Weight = 1 },
+                new VoyageRule { Pattern = @"drop (?:(\d+)|an) additional Scarabs?", Weight = 15 },
                 new VoyageRule { Pattern = @"(\d+)% more Currency found", Weight = 2.0 },
                 new VoyageRule { Pattern = @"(\d+)% more Scarabs found", Weight = 1.5 },
                 new VoyageRule { Pattern = @"instead drop as Stacked Decks", Weight = 40 },
                 new VoyageRule { Pattern = @"chance to drop a Support Gem", Weight = 0.2 },
                 new VoyageRule { Pattern = @"a lost Pirate's Locker", Weight = 25 },
-                new VoyageRule { Pattern = @"(\d+) Altars to the Goddess", Weight = 12 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an) Altars? to the Goddess", Weight = 12 },
                 // Rares are what carry all of the above, so more of them is more of it.
                 new VoyageRule { Pattern = @"(\d+)%\s+increased number of Rare [Mm]onsters", Weight = 0.5 },
                 // The one that pushes the other way, and unusually it scales with how
@@ -553,7 +556,7 @@ public sealed class VoyageRules : IDisposable
                                  Weight = 1.0 },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = 0.5,
                                  Comment = "gold comes off monsters" },
-                new VoyageRule { Pattern = @"(\d+)\s+additional packs of", Weight = 1.0 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional packs? of", Weight = 1.0 },
             ],
         },
 
@@ -573,7 +576,7 @@ public sealed class VoyageRules : IDisposable
                 // More monsters of any kind means more of them get upgraded.
                 new VoyageRule { Pattern = @"Monster Pack Size:\s*\+?(\d+)", Weight = 0.5 },
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Pack Size", Weight = 0.75 },
-                new VoyageRule { Pattern = @"(\d+)\s+additional packs of", Weight = 1.5 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional packs? of", Weight = 1.5 },
                 // No penalty on extra rares. "increased number of Rare Monsters" ADDS
                 // rares; it does not convert magic ones into them, so it costs this
                 // objective nothing and pricing it as a loss would skew boards away from

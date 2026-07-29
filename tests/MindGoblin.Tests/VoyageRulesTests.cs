@@ -93,6 +93,11 @@ public class VoyageProfileTests
     [Fact]
     public void ScorerRoutesBoardModifierValueToAdjacentCells()
     {
+        // Composed the way VoyageSession.Solve composes it. VoyageProfile used to offer
+        // its own Scorer() helper for this, but nothing in the app called it and it ran
+        // the profile regexes inside the per-node lambda -- the exact O(1)-per-call trap
+        // the session's precomputed dictionary exists to avoid -- so it was deleted
+        // rather than left as an attractive wrong turn.
         var profile = new VoyageProfile
         {
             BoardModifierWeight = 2.0,
@@ -101,11 +106,12 @@ public class VoyageProfileTests
         var buffed = new Cell(1, 0);
         var mods = new[] { new BoardModifier("Adjacent Areas contain 8 additional packs", [buffed]) };
 
-        var score = profile.Scorer(mods);
+        var score = VoyageSolver.ScoreWith(
+            mods, (m, _) => profile.ScoreText([m.Description]) * profile.BoardModifierWeight);
         var chart = Chart();
 
-        Assert.Equal(16, score(chart, buffed), 3);            // 8 x 1 x 2.0
-        Assert.Equal(0, score(chart, new Cell(0, 0)), 3);     // untouched cell
+        Assert.Equal(16, score(chart, buffed) - chart.Value, 3);        // 8 x 1 x 2.0
+        Assert.Equal(0, score(chart, new Cell(0, 0)) - chart.Value, 3); // untouched cell
     }
 }
 
