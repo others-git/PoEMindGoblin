@@ -260,6 +260,10 @@
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content="Identify Charts" Click="OnReadPanel"
                             ToolTip="Screenshot the game and decode every chart's shape and level"/>
+                    <ToggleButton x:Name="SweepBtn" Content="Sweep" Margin="8,0,0,0"
+                                  Checked="OnSweepChanged" Unchecked="OnSweepChanged"
+                                  ToolTip="Bulk import: arm this, then run the generated AutoHotkey script (right-click this button to create it) over the in-game chart panel. Each copied chart lands in order as it arrives."
+                                  MouseRightButtonUp="OnExportSweepScript"/>
                     <ToggleButton x:Name="ReadModeBtn" Content="Load Details" Margin="8,0,0,0"
                                   Checked="OnReadModeChanged" Unchecked="OnReadModeChanged"
                                   ToolTip="Guided pass: the app names each chart and square, you copy it in game"/>
