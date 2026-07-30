@@ -40,6 +40,8 @@ public partial class VoyageView : UserControl, IDisposable
 
     /// <summary>Whether the alert banner is dropped down over the board.</summary>
     private bool _alertsOpen;
+    private bool _weightsOpen;
+    private readonly VoyageWeightStore _weights = new();
     private readonly DispatcherTimer _clipboardPoll =
         new() { Interval = TimeSpan.FromMilliseconds(250) };
 
@@ -221,10 +223,107 @@ public partial class VoyageView : UserControl, IDisposable
 
     private VoyageProfile? Profile => ProfileBox.SelectedItem as VoyageProfile;
 
+    /// <summary>The active profile with the user's category sliders applied -- what
+    /// every scoring path uses, so the sliders are never silently ignored.</summary>
+    private VoyageProfile? Tuned =>
+        Profile is { } p ? WeightCategories.Scaled(p, _weights.For(p.Name)) : null;
+
     private void OnProfileChanged(object sender, SelectionChangedEventArgs e)
     {
         if (Profile is { Description: { } d } && !string.IsNullOrWhiteSpace(d)) SetStatus(d);
         if (IsLoaded) Persist();          // so the app reopens on the same objective
+        if (IsLoaded) RefreshWeights();   // sliders belong to the profile being tuned
+    }
+
+    // ---- category weight sliders ---------------------------------------------------
+
+    private void OnToggleWeights(object sender, RoutedEventArgs e)
+    {
+        _weightsOpen = !_weightsOpen;
+        RefreshWeights();
+    }
+
+    private void OnResetWeights(object sender, RoutedEventArgs e)
+    {
+        if (Profile is not { } profile) return;
+        _weights.Reset(profile.Name);
+        RefreshWeights();
+        SetStatus($"Weights for \"{profile.Name}\" back to shipped \u2014 Solve to replan.");
+        if (_steps.Count > 0) _ = SolveAsync();
+    }
+
+    /// <summary>
+    /// Rebuild the slider rows for the active profile: one per category it has rules
+    /// in, 1-20 with the shipped weights at 10. Saving happens on every tick; the
+    /// re-solve waits for the drag to END, because a solve per tick would race the
+    /// solver against the user's hand.
+    /// </summary>
+    private void RefreshWeights()
+    {
+        WeightsBtn.Content = Profile is { } p0 && _weights.AnyTuned(p0.Name)
+            ? "Weights ●" : "Weights";
+        WeightsPanel.Visibility = _weightsOpen && Profile is not null
+            ? Visibility.Visible : Visibility.Collapsed;
+        if (!_weightsOpen || Profile is not { } profile) return;
+
+        WeightsTitle.Text = $"W E I G H T S   ·   {profile.Name}";
+        WeightsList.Children.Clear();
+        foreach (var category in WeightCategories.CategoriesIn(profile))
+        {
+            var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
+
+            var label = new TextBlock
+            {
+                Text = category,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xB8, 0xB1, 0xA2)),
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 12,
+            };
+            row.Children.Add(label);
+
+            var value = _weights.Get(profile.Name, category);
+            var readout = new TextBlock
+            {
+                Text = $"×{WeightCategories.Multiplier(value):0.0}",
+                Foreground = new SolidColorBrush(value == WeightCategories.Baseline
+                    ? Color.FromRgb(0x6B, 0x5F, 0x4E) : Color.FromRgb(0xC9, 0xA2, 0x27)),
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Right,
+            };
+            Grid.SetColumn(readout, 2);
+            row.Children.Add(readout);
+
+            var slider = new Slider
+            {
+                Minimum = WeightCategories.Min,
+                Maximum = WeightCategories.Max,
+                Value = value,
+                IsSnapToTickEnabled = true,
+                TickFrequency = 1,
+                Margin = new Thickness(8, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var cat = category;   // capture per row, not the loop variable
+            slider.ValueChanged += (_, args) =>
+            {
+                var v = (int)Math.Round(args.NewValue);
+                _weights.Set(profile.Name, cat, v);
+                readout.Text = $"×{WeightCategories.Multiplier(v):0.0}";
+                readout.Foreground = new SolidColorBrush(v == WeightCategories.Baseline
+                    ? Color.FromRgb(0x6B, 0x5F, 0x4E) : Color.FromRgb(0xC9, 0xA2, 0x27));
+                WeightsBtn.Content = _weights.AnyTuned(profile.Name) ? "Weights ●" : "Weights";
+            };
+            slider.LostMouseCapture += (_, _) => { if (_steps.Count > 0) _ = SolveAsync(); };
+            Grid.SetColumn(slider, 1);
+            row.Children.Add(slider);
+
+            WeightsList.Children.Add(row);
+        }
     }
 
     private void OnCalibrate(object sender, RoutedEventArgs e)
@@ -664,7 +763,7 @@ public partial class VoyageView : UserControl, IDisposable
     /// </summary>
     private async Task<bool> SolveAsync()
     {
-        if (Profile is not { } profile) { SetStatus("No rule profile loaded.", bad: true); return false; }
+        if (Tuned is not { } profile) { SetStatus("No rule profile loaded.", bad: true); return false; }
         if (_session.Charts.Count == 0)
         {
             // The figurine ring reflects what has been READ, not what has been planned,
@@ -706,7 +805,7 @@ public partial class VoyageView : UserControl, IDisposable
     /// board.</summary>
     private void SolveNow()
     {
-        if (Profile is not { } profile) return;
+        if (Tuned is not { } profile) return;
         ApplySolution(_session.Solve(profile, TimeSpan.FromSeconds(3)), profile);
     }
 
@@ -951,7 +1050,7 @@ public partial class VoyageView : UserControl, IDisposable
         // and the two are different questions -- a square is entered from a neighbour that
         // opens onto it, and the valuable ones are worth reaching before the lanterns thin
         // out and before anything can go wrong.
-        if (Profile is { } profile)
+        if (Tuned is { } profile)
         {
             var route = _session.Route(profile, _solution);
             if (!route.IsEmpty)
@@ -1841,7 +1940,7 @@ public partial class VoyageView : UserControl, IDisposable
         // find out what is worth writing a rule for.
         foreach (var (tileset, count) in _session.Tilesets)
         {
-            var scored = Profile?.ScoreText([$"Area: {tileset}"]) ?? 0;
+            var scored = Tuned?.ScoreText([$"Area: {tileset}"]) ?? 0;
             _modifiers.Add(new ModifierRow(
                 ModifierRow.Sort.Tileset, 0,
                 tileset, count == 1 ? "1 chart" : $"{count} charts",
