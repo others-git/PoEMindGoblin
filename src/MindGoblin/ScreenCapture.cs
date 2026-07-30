@@ -9,10 +9,10 @@ namespace MindGoblin;
 /// <summary>
 /// Grabs the screen so the board can be read.
 ///
-/// Read-only by construction. This takes pictures and nothing else -- there is no mouse
-/// movement, no key injection, no window manipulation of the game. Synthetic input to the
-/// client is the line that gets accounts banned, and a screenshot is on the safe side of
-/// it in a way that automated hovering is not.
+/// Read-only by construction: this class takes pictures and nothing else. The one thing
+/// in the app that sends input toward the game is GameInput -- a single hover-and-copy
+/// fired only inside the user's own F9 press, which is the one-action-per-keypress line
+/// GGG's macro policy draws. Nothing anywhere runs input on a timer or in a loop.
 ///
 /// Pixels are read from a locked buffer rather than GetPixel: a 2560x1440 sweep through
 /// GetPixel takes seconds, which would make reading the board feel broken.

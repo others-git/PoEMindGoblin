@@ -231,7 +231,7 @@ public partial class VoyageView : UserControl, IDisposable
     /// <summary>The active profile with the user's category sliders applied -- what
     /// every scoring path uses, so the sliders are never silently ignored.</summary>
     private VoyageProfile? Tuned =>
-        Profile is { } p ? WeightCategories.Scaled(p, _weights.For(p.Name)) : null;
+        Profile is { } p ? WeightCategories.Blended(p, _weights.For(p.Name), _rules.Profiles) : null;
 
     private void OnProfileChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -241,6 +241,13 @@ public partial class VoyageView : UserControl, IDisposable
     }
 
     // ---- category weight sliders ---------------------------------------------------
+
+    /// <summary>Render-harness hook: show the weights panel in an offscreen shot.</summary>
+    public void OpenWeightsForRender()
+    {
+        _weightsOpen = true;
+        RefreshWeights();
+    }
 
     private void OnToggleWeights(object sender, RoutedEventArgs e)
     {
@@ -273,28 +280,32 @@ public partial class VoyageView : UserControl, IDisposable
 
         WeightsTitle.Text = $"W E I G H T S   ·   {profile.Name}";
         WeightsList.Children.Clear();
-        foreach (var category in WeightCategories.CategoriesIn(profile))
+        foreach (var category in WeightCategories.SliderCategories(profile))
         {
+            var def = WeightCategories.DefaultFor(profile, category);
+            var value = _weights.Get(profile.Name, category, def);
+            var owner = WeightCategories.Owners
+                .FirstOrDefault(o => o.Category == category).Owner;
+            var borrowed = def == 0;
+
             var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(126) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
 
             var label = new TextBlock
             {
                 Text = category,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xB8, 0xB1, 0xA2)),
-                VerticalAlignment = VerticalAlignment.Center,
                 FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = borrowed && owner is not null
+                    ? $"Not part of \"{profile.Name}\" — raising it borrows the \"{owner}\" rules at this strength"
+                    : null,
             };
             row.Children.Add(label);
 
-            var value = _weights.Get(profile.Name, category);
             var readout = new TextBlock
             {
-                Text = $"×{WeightCategories.Multiplier(value):0.0}",
-                Foreground = new SolidColorBrush(value == WeightCategories.Baseline
-                    ? Color.FromRgb(0x6B, 0x5F, 0x4E) : Color.FromRgb(0xC8, 0xAA, 0x6E)),
                 FontFamily = new FontFamily("Consolas"),
                 FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -302,6 +313,16 @@ public partial class VoyageView : UserControl, IDisposable
             };
             Grid.SetColumn(readout, 2);
             row.Children.Add(readout);
+
+            void Paint(int v)
+            {
+                readout.Text = v == 0 ? "off" : $"×{WeightCategories.Multiplier(v):0.0}";
+                readout.Foreground = new SolidColorBrush(v == def
+                    ? Color.FromRgb(0x6B, 0x5F, 0x4E) : Color.FromRgb(0xC8, 0xAA, 0x6E));
+                label.Foreground = new SolidColorBrush(v == 0
+                    ? Color.FromRgb(0x6B, 0x5F, 0x4E) : Color.FromRgb(0xB8, 0xB1, 0xA2));
+            }
+            Paint(value);
 
             var slider = new Slider
             {
@@ -312,15 +333,15 @@ public partial class VoyageView : UserControl, IDisposable
                 TickFrequency = 1,
                 Margin = new Thickness(8, 0, 8, 0),
                 VerticalAlignment = VerticalAlignment.Center,
+                Style = TryFindResource("Tuner") as Style,
             };
             var cat = category;   // capture per row, not the loop variable
+            var catDefault = def;
             slider.ValueChanged += (_, args) =>
             {
                 var v = (int)Math.Round(args.NewValue);
-                _weights.Set(profile.Name, cat, v);
-                readout.Text = $"×{WeightCategories.Multiplier(v):0.0}";
-                readout.Foreground = new SolidColorBrush(v == WeightCategories.Baseline
-                    ? Color.FromRgb(0x6B, 0x5F, 0x4E) : Color.FromRgb(0xC8, 0xAA, 0x6E));
+                _weights.Set(profile.Name, cat, v, catDefault);
+                Paint(v);
                 WeightsBtn.Content = _weights.AnyTuned(profile.Name) ? "Weights ●" : "Weights";
             };
             slider.LostMouseCapture += (_, _) => { if (_steps.Count > 0) _ = SolveAsync(); };
@@ -525,20 +546,19 @@ public partial class VoyageView : UserControl, IDisposable
         var text = SafeClipboardText();
         if (text.Length == 0 || text == _lastClipboard) return;
         _lastClipboard = text;
-        if (_sweep is not null) SweepCapture(text);
-        else Capture(text, "copied");
+        if (_sweep is not null) return;   // the F9 handler owns the clipboard mid-sweep
+        Capture(text, "copied");
     }
 
-    // ---- bulk sweep: an external hover script feeds the clipboard ------------------
+    // ---- step-through sweep: F9 captures one chart per press -----------------------
+
+    private int? _sweepHotkey;
 
     /// <summary>
-    /// Arm or disarm the bulk sweep. The app itself never injects input into the game
-    /// -- that is the account-ban line ScreenCapture draws -- so the hovering half
-    /// lives in a user-run AutoHotkey script (right-click the button to generate it,
-    /// calibrated from the same panel coordinates the screenshot read uses). While
-    /// armed, every chart the script copies lands on the next read cell in panel
-    /// order; ApplyChartText's shape check self-heals the ordering when a cell copies
-    /// nothing or a duplicate is swallowed by the clipboard diff.
+    /// Arm or disarm the step-through sweep. Each F9 press -- pressed by the user, in
+    /// the game -- performs ONE hover-and-copy on the next read cell: the TradeMacro
+    /// shape, one action per keypress, nothing on a timer (see GameInput). The modal
+    /// coaches which chart the next press will take and tracks the pass.
     /// </summary>
     private void OnSweepChanged(object sender, RoutedEventArgs e)
     {
@@ -548,116 +568,121 @@ public partial class VoyageView : UserControl, IDisposable
             if (pending.Count == 0)
             {
                 SweepBtn.IsChecked = false;
-                SetStatus("Identify Charts first \u2014 the sweep needs to know which cells hold charts.", bad: true);
+                SetStatus("Identify Charts first \u2014  the sweep needs to know which cells hold charts.", bad: true);
+                return;
+            }
+            if (Window.GetWindow(this) is not { } window)
+            {
+                SweepBtn.IsChecked = false;
+                return;
+            }
+            _hotkeys ??= new HotkeyService(window);
+            _sweepHotkey ??= _hotkeys.Register(
+                System.Windows.Input.Key.F9, HotkeyService.Mod.None, OnSweepKey);
+            if (_sweepHotkey is null)
+            {
+                SweepBtn.IsChecked = false;
+                SetStatus("F9 is taken by another program \u2014 free it and arm the sweep again.", bad: true);
                 return;
             }
             _sweep = new Queue<int>(pending);
+            _sweepTotal = pending.Count;
             _lastClipboard = SafeClipboardText();     // ignore whatever is already there
-            _clipboardPoll.Start();
-            SetStatus($"Sweep armed for {pending.Count} charts \u2014 switch to PoE and press F9 in the sweep script.");
+            RefreshSweepPanel();
+            SetStatus($"Sweep armed for {pending.Count} charts \u2014 switch to PoE and press F9.");
         }
         else
         {
-            _sweep = null;
-            if (ReadModeBtn.IsChecked != true && _targetIndex == 0) _clipboardPoll.Stop();
-            SetStatus("Sweep off.");
+            StopSweep("Sweep off.");
         }
         UpdateCaptureHint();
     }
 
-    private void SweepCapture(string text)
+    private int _sweepTotal;
+
+    private void RefreshSweepPanel()
     {
-        if (_sweep is null) return;
-
-        // Walk forward until a cell accepts the text. A cell that copied nothing, or
-        // whose duplicate text the clipboard diff swallowed, is simply passed over --
-        // it stays "awaiting detail" on the panel rather than silently mis-filed.
-        while (_sweep.Count > 0)
+        if (_sweep is not { } queue || queue.Count == 0)
         {
-            var index = _sweep.Dequeue();
-            if (!_session.ApplyChartText(index, text)) continue;
-
-            _solution = null;
-            Persist();
-            RefreshPanel();
-            RefreshProgress();
-            var left = _sweep.Count;
-            SetStatus($"Chart {index} swept \u2014 {left} to go.");
-            if (left == 0) FinishSweep();
+            SweepPanel.Visibility = Visibility.Collapsed;
             return;
         }
-        FinishSweep();
+        var done = _sweepTotal - queue.Count;
+        SweepInfo.Text = $"Press F9 in game \u2014 captures chart {queue.Peek()} "
+                       + $"({done} of {_sweepTotal} done). Keep the chart panel open and unscrolled.";
+        SweepPanel.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// One F9 press: hover the next cell, one Ctrl+C, read what arrived. Runs inside
+    /// the press, never from a timer; the delays only give the game time to draw the
+    /// tooltip and fill the clipboard for THIS press's single copy.
+    /// </summary>
+    private async void OnSweepKey()
+    {
+        if (_sweep is not { Count: > 0 })
+        {
+            FinishSweep();
+            return;
+        }
+        var index = _sweep.Peek();
+        var o = ChartPanelReader.Options.Load();
+        var (row, col) = ((index - 1) / o.Cols, (index - 1) % o.Cols);
+        GameInput.HoverAt(o.OriginX + col * o.Pitch, o.OriginY + row * o.Pitch);
+        await Task.Delay(140);
+        GameInput.SendCopy();
+        await Task.Delay(110);
+
+        var text = SafeClipboardText();
+        if (text.Length == 0 || text == _lastClipboard)
+        {
+            SetStatus($"Chart {index}: nothing copied \u2014 F9 retries it, or Skip.", bad: true);
+            return;
+        }
+        _lastClipboard = text;
+        if (!_session.ApplyChartText(index, text))
+        {
+            SetStatus($"Chart {index}: the copied text did not match its cell \u2014 F9 retries it, or Skip.", bad: true);
+            return;
+        }
+
+        _sweep.Dequeue();
+        _solution = null;
+        Persist();
+        RefreshPanel();
+        RefreshProgress();
+        RefreshSweepPanel();
+        if (_sweep.Count == 0) FinishSweep();
+        else SetStatus($"Chart {index} captured \u2014 {_sweep.Count} to go.");
+    }
+
+    /// <summary>Move past a cell that will not copy (an empty tooltip, a mis-read).</summary>
+    private void OnSweepSkip(object sender, RoutedEventArgs e)
+    {
+        if (_sweep is not { Count: > 0 }) return;
+        var skipped = _sweep.Dequeue();
+        RefreshSweepPanel();
+        if (_sweep.Count == 0) FinishSweep();
+        else SetStatus($"Chart {skipped} skipped \u2014 it stays awaiting detail.");
+    }
+
+    private void OnSweepStop(object sender, RoutedEventArgs e) => SweepBtn.IsChecked = false;
+
+    private void StopSweep(string status)
+    {
+        _sweep = null;
+        if (_sweepHotkey is { } id) { _hotkeys?.Unregister(id); _sweepHotkey = null; }
+        SweepPanel.Visibility = Visibility.Collapsed;
+        SetStatus(status);
     }
 
     private async void FinishSweep()
     {
-        _sweep = null;
-        SweepBtn.IsChecked = false;
-        if (ReadModeBtn.IsChecked != true && _targetIndex == 0) _clipboardPoll.Stop();
+        SweepBtn.IsChecked = false;      // routes through StopSweep via OnSweepChanged
+        StopSweep("Sweep complete \u2014 solving.");
         RebuildModifiers();
-        SetStatus("Sweep complete \u2014 solving.");
         await SolveAsync();
     }
-
-    /// <summary>
-    /// Write the hover-and-copy AutoHotkey script, calibrated from the SAME panel
-    /// coordinates the screenshot read uses -- one calibration, both features. The
-    /// script is generated rather than shipped so the coordinates in it are always
-    /// the user's own.
-    /// </summary>
-    private void OnExportSweepScript(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        e.Handled = true;
-        try
-        {
-            var o = ChartPanelReader.Options.Load();
-            var path = MindGoblin.Core.SettingsFolder.FileIn("sweep-charts.ahk");
-            File.WriteAllText(path, $$"""
-                #Requires AutoHotkey v2.0
-                #SingleInstance Force
-                CoordMode "Mouse", "Screen"
-                ; Generated by MindGoblin from panel-calibration.json -- regenerate after
-                ; recalibrating. Open PoE with the Voyage chart panel visible (unscrolled),
-                ; arm "Sweep" in MindGoblin, then press F9 here. F10 aborts.
-                F10:: ExitApp
-                F9:: {
-                    if !WinExist("Path of Exile") {
-                        TrayTip "Path of Exile is not running."
-                        return
-                    }
-                    WinActivate "Path of Exile"
-                    Sleep 300
-                    Loop {{o.Rows}} {
-                        r := A_Index - 1
-                        Loop {{o.Cols}} {
-                            c := A_Index - 1
-                            MouseMove {{o.OriginX}} + c * {{o.Pitch}}, {{o.OriginY}} + r * {{o.Pitch}}, 0
-                            Sleep 90
-                            Send "^c"
-                            Sleep 90
-                        }
-                    }
-                    TrayTip "Sweep done -- check MindGoblin."
-                }
-                """);
-            Process.Start(new ProcessStartInfo(System.IO.Path.GetDirectoryName(path)!)
-                { UseShellExecute = true });
-            SetStatus($"Sweep script written to {System.IO.Path.GetFileName(path)} \u2014 needs AutoHotkey v2.");
-        }
-        catch (Exception ex)
-        {
-            SetStatus($"Could not write the sweep script: {ex.Message}", bad: true);
-        }
-    }
-
-    /// <summary>
-    /// Apply captured text to whatever is currently targeted.
-    ///
-    /// Shared by the clipboard watcher and the manual box on purpose: the game only
-    /// supports Ctrl+C on things it treats as items, so a figurine may not be copyable at
-    /// all. Both routes must land in exactly the same place, or the checklist would track
-    /// one of them and not the other.
-    /// </summary>
     private void Capture(string text, string how)
     {
         if (_targetIndex == 0)

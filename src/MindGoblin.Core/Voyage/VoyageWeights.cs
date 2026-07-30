@@ -16,7 +16,7 @@ namespace MindGoblin.Core.Voyage;
 public static class WeightCategories
 {
     public const int Baseline = 10;
-    public const int Min = 1;
+    public const int Min = 0;
     public const int Max = 20;
 
     public static double Multiplier(int slider) =>
@@ -58,21 +58,82 @@ public static class WeightCategories
         return Other;
     }
 
-    /// <summary>The categories a profile actually has rules in, in display order.</summary>
-    public static IReadOnlyList<string> CategoriesIn(VoyageProfile profile)
+    /// <summary>
+    /// Which shipped profile OWNS each category -- where its rules come from when the
+    /// active profile has none of its own. This is what makes the sliders a blend
+    /// rather than a pointless uniform rescale: a single-minded profile like sulphur
+    /// classifies into ONE category, and scaling one category by itself changes no
+    /// ordering at all. Pulling a silent category in from its owner does.
+    /// </summary>
+    public static readonly IReadOnlyList<(string Category, string Owner)> Owners =
+    [
+        ("Sulphur", "sulphur"),
+        ("Currency", "currency"),
+        ("Gold", "gold"),
+        ("Rares", "rare monsters"),
+        ("Magic monsters", "magic monsters"),
+        ("Packs", "pack size"),
+        ("Containers", "containers"),
+        ("Loot", "uniques"),
+    ];
+
+    /// <summary>Baseline for the profile's own categories, off for borrowed ones --
+    /// so all-defaults is exactly the plain profile.</summary>
+    public static int DefaultFor(VoyageProfile profile, string category) =>
+        CategoriesIn(profile).Contains(category) ? Baseline : 0;
+
+    /// <summary>
+    /// Every category the panel should offer for a profile: its own, plus each owned
+    /// category it could borrow. An INVERTED profile (dump prices value negatively so
+    /// junk sorts first) only gets its own -- blending positive rules into it would
+    /// quietly turn the junk detector into a value detector.
+    /// </summary>
+    public static IReadOnlyList<string> SliderCategories(VoyageProfile profile)
     {
-        var present = profile.Rules.Select(CategoryOf).ToHashSet(StringComparer.Ordinal);
-        return [.. Classifier.Select(c => c.Category).Append(Other).Where(present.Contains)];
+        var own = CategoriesIn(profile);
+        if (profile.ChartBaseValue > 0) return own;
+        var ordered = Owners.Select(o => o.Category)
+            .Concat(own)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        // canonical order first, then any leftover profile-only categories (Areas, Other)
+        return [.. Classifier.Select(c => c.Category).Append(Other)
+            .Where(c => ordered.Contains(c))];
     }
 
     /// <summary>
-    /// The profile with every rule's weight scaled by its category's slider. A fresh
-    /// clone each call -- the loaded profile stays at shipped values, so sliding back
-    /// to 10 is always an exact return, not an accumulation of roundings.
+    /// The profile the solver actually runs: its own rules scaled by their category
+    /// sliders, plus -- for each category it has no rules in but whose slider is
+    /// raised above zero -- the owning profile's rules for that category, scaled the
+    /// same way. All-default sliders return the profile itself, exactly.
     /// </summary>
-    public static VoyageProfile Scaled(VoyageProfile profile, IReadOnlyDictionary<string, int> sliders)
+    public static VoyageProfile Blended(
+        VoyageProfile profile,
+        IReadOnlyDictionary<string, int> sliders,
+        IReadOnlyList<VoyageProfile> library)
     {
-        if (sliders.Count == 0 || sliders.Values.All(v => v == Baseline)) return profile;
+        var own = CategoriesIn(profile).ToHashSet(StringComparer.Ordinal);
+        var allDefault = SliderCategories(profile)
+            .All(c => sliders.GetValueOrDefault(c, DefaultFor(profile, c))
+                      == DefaultFor(profile, c));
+        if (allDefault) return profile;
+
+        var rules = profile.Rules.Select(r => Scale(r,
+            sliders.GetValueOrDefault(CategoryOf(r), Baseline))).ToList();
+
+        if (profile.ChartBaseValue <= 0)
+            foreach (var (category, ownerName) in Owners)
+            {
+                if (own.Contains(category)) continue;
+                var v = sliders.GetValueOrDefault(category, 0);
+                if (v <= 0) continue;
+                var owner = library.FirstOrDefault(p => p.Name == ownerName);
+                if (owner is null || ReferenceEquals(owner, profile)) continue;
+                rules.AddRange(owner.Rules
+                    .Where(r => CategoryOf(r) == category)
+                    .Select(r => Scale(r, v)));
+            }
+
         return new VoyageProfile
         {
             Name = profile.Name,
@@ -83,16 +144,25 @@ public static class WeightCategories
             MonsterPayoutSynergy = profile.MonsterPayoutSynergy,
             StrandedSquarePenalty = profile.StrandedSquarePenalty,
             MaxCharts = profile.MaxCharts,
-            Rules = [.. profile.Rules.Select(r => new VoyageRule
-            {
-                Pattern = r.Pattern,
-                Weight = r.Weight
-                         * Multiplier(sliders.GetValueOrDefault(CategoryOf(r), Baseline)),
-                ScalesWithBoard = r.ScalesWithBoard,
-                Comment = r.Comment,
-            })],
+            Rules = rules,
         };
     }
+
+    private static VoyageRule Scale(VoyageRule r, int slider) => new()
+    {
+        Pattern = r.Pattern,
+        Weight = r.Weight * Multiplier(slider),
+        ScalesWithBoard = r.ScalesWithBoard,
+        Comment = r.Comment,
+    };
+
+    /// <summary>The categories a profile actually has rules in, in display order.</summary>
+    public static IReadOnlyList<string> CategoriesIn(VoyageProfile profile)
+    {
+        var present = profile.Rules.Select(CategoryOf).ToHashSet(StringComparer.Ordinal);
+        return [.. Classifier.Select(c => c.Category).Append(Other).Where(present.Contains)];
+    }
+
 }
 
 /// <summary>
@@ -129,19 +199,20 @@ public sealed class VoyageWeightStore
         return [];
     }
 
-    /// <summary>Sliders for a profile; categories it has no entry for are Baseline.</summary>
+    /// <summary>Sliders for a profile; absent categories are at their per-profile
+    /// default (baseline for its own categories, off for borrowed ones).</summary>
     public IReadOnlyDictionary<string, int> For(string profileName) =>
         _byProfile.GetValueOrDefault(profileName) ?? [];
 
-    public int Get(string profileName, string category) =>
-        For(profileName).GetValueOrDefault(category, WeightCategories.Baseline);
+    public int Get(string profileName, string category, int @default) =>
+        For(profileName).GetValueOrDefault(category, @default);
 
-    public void Set(string profileName, string category, int slider)
+    public void Set(string profileName, string category, int slider, int @default)
     {
         var sliders = _byProfile.TryGetValue(profileName, out var s)
             ? s : _byProfile[profileName] = [];
-        // baseline entries are absence, so the file only records actual opinions
-        if (slider == WeightCategories.Baseline) sliders.Remove(category);
+        // default entries are absence, so the file only records actual opinions
+        if (slider == @default) sliders.Remove(category);
         else sliders[category] = Math.Clamp(slider, WeightCategories.Min, WeightCategories.Max);
         Save();
     }

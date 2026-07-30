@@ -32,18 +32,19 @@ public partial class App : Application
             var demo = demoIndex >= 0 && demoIndex + 1 < e.Args.Length
                 ? e.Args[demoIndex + 1]
                 : null;
-            RenderToFile(view, path, demoIndex >= 0, demo);
+            RenderToFile(view, path, demoIndex >= 0, demo,
+                         weights: Array.IndexOf(e.Args, "--weights") >= 0);
             Shutdown();
             return;
         }
         base.OnStartup(e);
     }
 
-    private static void RenderToFile(string view, string path, bool demo, string? screenshot)
+    private static void RenderToFile(string view, string path, bool demo, string? screenshot, bool weights = false)
     {
         FrameworkElement element = view.ToLowerInvariant() switch
         {
-            "voyage" => BuildVoyage(demo, screenshot),
+            "voyage" => BuildVoyage(demo, screenshot, weights),
             _ => throw new ArgumentException($"unknown view '{view}'"),
         };
 
@@ -77,10 +78,13 @@ public partial class App : Application
     /// the real solver, so what gets rendered is what the code produces rather than a
     /// picture of what it is meant to produce.
     /// </summary>
-    private static FrameworkElement BuildVoyage(bool demo, string? screenshot)
+    private static FrameworkElement BuildVoyage(bool demo, string? screenshot,
+                                                bool weights = false)
     {
         var view = new VoyageView();
         if (demo) view.LoadSample(screenshot);
+        // --weights: render with the panel open, so slider chrome is checkable offscreen
+        if (weights) view.OpenWeightsForRender();
         return view;
     }
 }
