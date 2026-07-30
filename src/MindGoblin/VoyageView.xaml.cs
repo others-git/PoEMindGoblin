@@ -600,11 +600,17 @@ public partial class VoyageView : UserControl, IDisposable
                     .Where(i => !unreachable.Contains(i))
                     .Select(i => (true, i)));
             }
-            pending.AddRange(_session.ByPanelIndex.Keys.Order().Select(i => (false, i)));
+            // Only charts still AWAITING detail: after Dive Again the survivors keep
+            // their data, so a post-dive sweep is squares-only -- and re-arming after
+            // a partial pass resumes exactly the gaps. Re-read a changed chart by
+            // clicking it and copying, as ever.
+            pending.AddRange(_session.ChartsAwaitingDetail.Order().Select(i => (false, i)));
             if (pending.Count == 0)
             {
                 SweepBtn.IsChecked = false;
-                SetStatus("Identify Charts first \u2014  the sweep needs to know which cells hold charts.", bad: true);
+                SetStatus(_session.Charts.Count == 0
+                    ? "Identify Charts first \u2014 the sweep needs to know which cells hold charts."
+                    : "Nothing to sweep \u2014 every chart has its details already.", bad: true);
                 return;
             }
             if (Window.GetWindow(this) is not { } window)
