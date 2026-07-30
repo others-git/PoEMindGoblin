@@ -590,10 +590,16 @@ public partial class VoyageView : UserControl, IDisposable
         {
             // Squares lead, as in the guided pass: the border rerolls every voyage and
             // reading it costs one press per square. Charts follow, only the read ones.
+            // Squares no figurine reaches (the centre) are skipped outright -- they
+            // never have board modifiers, and a press spent proving that is wasted.
             var pending = new List<(bool IsSquare, int Index)>();
             if (ScreenOcr.IsAvailable)
+            {
+                var unreachable = _session.SquaresWithoutFigurines.ToHashSet();
                 pending.AddRange(Enumerable.Range(1, _session.Layout.Rows * _session.Layout.Cols)
+                    .Where(i => !unreachable.Contains(i))
                     .Select(i => (true, i)));
+            }
             pending.AddRange(_session.ByPanelIndex.Keys.Order().Select(i => (false, i)));
             if (pending.Count == 0)
             {
