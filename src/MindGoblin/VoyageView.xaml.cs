@@ -290,7 +290,7 @@ public partial class VoyageView : UserControl, IDisposable
             {
                 Text = $"×{WeightCategories.Multiplier(value):0.0}",
                 Foreground = new SolidColorBrush(value == WeightCategories.Baseline
-                    ? Color.FromRgb(0x6B, 0x5F, 0x4E) : Color.FromRgb(0xC9, 0xA2, 0x27)),
+                    ? Color.FromRgb(0x6B, 0x5F, 0x4E) : Color.FromRgb(0xC8, 0xAA, 0x6E)),
                 FontFamily = new FontFamily("Consolas"),
                 FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -316,7 +316,7 @@ public partial class VoyageView : UserControl, IDisposable
                 _weights.Set(profile.Name, cat, v);
                 readout.Text = $"×{WeightCategories.Multiplier(v):0.0}";
                 readout.Foreground = new SolidColorBrush(v == WeightCategories.Baseline
-                    ? Color.FromRgb(0x6B, 0x5F, 0x4E) : Color.FromRgb(0xC9, 0xA2, 0x27));
+                    ? Color.FromRgb(0x6B, 0x5F, 0x4E) : Color.FromRgb(0xC8, 0xAA, 0x6E));
                 WeightsBtn.Content = _weights.AnyTuned(profile.Name) ? "Weights ●" : "Weights";
             };
             slider.LostMouseCapture += (_, _) => { if (_steps.Count > 0) _ = SolveAsync(); };
@@ -1325,7 +1325,7 @@ public partial class VoyageView : UserControl, IDisposable
                     : isStranded ? Color.FromRgb(0x22, 0x13, 0x10)
                     : Color.FromRgb(0x18, 0x14, 0x10));
                 cell.BorderBrush = new SolidColorBrush(isTarget
-                    ? Color.FromRgb(0xC9, 0xA2, 0x27)
+                    ? Color.FromRgb(0xC8, 0xAA, 0x6E)
                     : isStranded ? Color.FromRgb(0x6E, 0x2F, 0x25)
                     : hasModifiers ? Color.FromRgb(0x44, 0x5C, 0x38)
                     : step is null ? Color.FromRgb(0x1F, 0x1A, 0x15)
@@ -1443,9 +1443,9 @@ public partial class VoyageView : UserControl, IDisposable
         stack.Children.Add(new TextBlock
         {
             Text = title,
-            FontFamily = new FontFamily("Georgia"),
+            FontFamily = PoeFonts.Display,
             FontSize = 16,
-            Foreground = Brush(0xC9, 0xA2, 0x27),
+            Foreground = Brush(0xC8, 0xAA, 0x6E),
         });
         if (!string.IsNullOrEmpty(subtitle))
             stack.Children.Add(new TextBlock
@@ -1517,7 +1517,15 @@ public partial class VoyageView : UserControl, IDisposable
             FontStyle = haveDetail ? FontStyles.Normal : FontStyles.Italic,
             Margin = margin,
         };
-        var prose = haveDetail ? Brush(0xC8, 0xBC, 0xA4) : Brush(0x94, 0x86, 0x6F);
+        // Scope carries the game's own colour language: adjacent mods read in rare
+        // yellow, voyage-wide ones in unique orange, and a plain area mod stays prose.
+        var scoped = line.Contains("all Voyage Areas", StringComparison.OrdinalIgnoreCase)
+                     || line.StartsWith("Voyage Modifier", StringComparison.OrdinalIgnoreCase)
+            ? Brush(0xAF, 0x60, 0x25)
+            : line.Contains("adjacent", StringComparison.OrdinalIgnoreCase)
+                ? Brush(0xD9, 0xC9, 0x56)
+                : null;
+        var prose = scoped ?? (haveDetail ? Brush(0xC8, 0xBC, 0xA4) : Brush(0x94, 0x86, 0x6F));
         var number = haveDetail ? Brush(0xF0, 0xD2, 0x64) : Brush(0xB0, 0x9E, 0x7A);
 
         var at = 0;
@@ -1565,7 +1573,7 @@ public partial class VoyageView : UserControl, IDisposable
             stack.Children.Add(new TextBlock
             {
                 Text = square.ToString(),
-                FontFamily = new FontFamily("Georgia"),
+                FontFamily = PoeFonts.Display,
                 FontSize = 30,
                 Foreground = Brush(0x3A, 0x30, 0x24),
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -1585,13 +1593,13 @@ public partial class VoyageView : UserControl, IDisposable
 
         var accent = stranded
             ? Color.FromRgb(0xB8, 0x50, 0x3E)
-            : Color.FromRgb(0xC9, 0xA2, 0x27);
+            : Color.FromRgb(0xC8, 0xAA, 0x6E);
 
         stack.Children.Add(Glyph(new ChartFace(step.Chart.Shape, step.Rotation), 56, accent));
         stack.Children.Add(new TextBlock
         {
             Text = square.ToString(),
-            FontFamily = new FontFamily("Georgia"),
+            FontFamily = PoeFonts.Display,
             FontSize = 34,
             Foreground = new SolidColorBrush(accent),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -1699,14 +1707,14 @@ public partial class VoyageView : UserControl, IDisposable
             Width = 11, Height = 11,
             CornerRadius = new CornerRadius(6),
             Background = Brush(0xF0, 0xD2, 0x64),
-            BorderBrush = Brush(0x8A, 0x6F, 0x22),
+            BorderBrush = Brush(0xA3, 0x8D, 0x6D),
             BorderThickness = new Thickness(1.5),
         });
         g.Children.Add(new Border
         {
             Width = 3, Height = 3,
             CornerRadius = new CornerRadius(2),
-            Background = Brush(0x8A, 0x6F, 0x22),
+            Background = Brush(0xA3, 0x8D, 0x6D),
         });
         return g;
     }
@@ -1720,14 +1728,14 @@ public partial class VoyageView : UserControl, IDisposable
             Width = 12, Height = 10,
             CornerRadius = new CornerRadius(3, 3, 1, 1),
             Background = Brush(0x5C, 0x4C, 0x2C),
-            BorderBrush = Brush(0xC9, 0xA2, 0x27),
+            BorderBrush = Brush(0xC8, 0xAA, 0x6E),
             BorderThickness = new Thickness(1),
             VerticalAlignment = VerticalAlignment.Bottom,
         });
         g.Children.Add(new Border
         {
             Width = 12, Height = 1.5,
-            Background = Brush(0xC9, 0xA2, 0x27),
+            Background = Brush(0xC8, 0xAA, 0x6E),
             VerticalAlignment = VerticalAlignment.Center,
         });
         g.Children.Add(new Border
@@ -1747,7 +1755,7 @@ public partial class VoyageView : UserControl, IDisposable
         g.Children.Add(new Border
         {
             Width = 4, Height = 2,
-            Background = Brush(0x8A, 0x6F, 0x22),
+            Background = Brush(0xA3, 0x8D, 0x6D),
             VerticalAlignment = VerticalAlignment.Top,
             HorizontalAlignment = HorizontalAlignment.Center,
         });
@@ -1756,7 +1764,7 @@ public partial class VoyageView : UserControl, IDisposable
             Width = 8, Height = 9,
             CornerRadius = new CornerRadius(2, 2, 3, 3),
             Background = Brush(0xF0, 0xD2, 0x64),
-            BorderBrush = Brush(0x8A, 0x6F, 0x22),
+            BorderBrush = Brush(0xA3, 0x8D, 0x6D),
             BorderThickness = new Thickness(1),
             VerticalAlignment = VerticalAlignment.Top,
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -1765,7 +1773,7 @@ public partial class VoyageView : UserControl, IDisposable
         g.Children.Add(new Border
         {
             Width = 6, Height = 2,
-            Background = Brush(0x8A, 0x6F, 0x22),
+            Background = Brush(0xA3, 0x8D, 0x6D),
             VerticalAlignment = VerticalAlignment.Bottom,
             HorizontalAlignment = HorizontalAlignment.Center,
         });
@@ -1862,8 +1870,8 @@ public partial class VoyageView : UserControl, IDisposable
                 ? Color.FromRgb(0x2A, 0x21, 0x0E)
                 : Color.FromRgb(0x16, 0x13, 0x11));
             cell.BorderBrush = new SolidColorBrush(isTarget
-                ? Color.FromRgb(0xC9, 0xA2, 0x27)
-                : isPlanned ? Color.FromRgb(0x8A, 0x6F, 0x22)
+                ? Color.FromRgb(0xC8, 0xAA, 0x6E)
+                : isPlanned ? Color.FromRgb(0xA3, 0x8D, 0x6D)
                 : hasDetail ? Color.FromRgb(0x44, 0x5C, 0x38)
                 : Color.FromRgb(0x24, 0x1D, 0x16));
             cell.BorderThickness = new Thickness(isTarget ? 2 : 1);
@@ -1875,7 +1883,7 @@ public partial class VoyageView : UserControl, IDisposable
                 FontFamily = new FontFamily("Consolas"),
                 FontSize = 10,
                 Foreground = new SolidColorBrush(isPlanned
-                    ? Color.FromRgb(0x8A, 0x6F, 0x22)
+                    ? Color.FromRgb(0xA3, 0x8D, 0x6D)
                     : Color.FromRgb(0x6B, 0x5F, 0x4E)),
                 HorizontalAlignment = HorizontalAlignment.Center,
             });
@@ -1887,9 +1895,9 @@ public partial class VoyageView : UserControl, IDisposable
                 stack.Children.Add(new TextBlock
                 {
                     Text = used[index].ToString(),
-                    FontFamily = new FontFamily("Georgia"),
+                    FontFamily = PoeFonts.Display,
                     FontSize = 26,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xA2, 0x27)),
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xC8, 0xAA, 0x6E)),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     Margin = new Thickness(0, -3, 0, -3),
                 });
@@ -1920,7 +1928,7 @@ public partial class VoyageView : UserControl, IDisposable
                 host.Children.Add(new TextBlock
                 {
                     Text = "\u2715",
-                    FontFamily = new FontFamily("Georgia"),
+                    FontFamily = PoeFonts.Display,
                     FontSize = 30,
                     Foreground = new SolidColorBrush(Color.FromRgb(0xB8, 0x50, 0x3E)),
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -1938,7 +1946,7 @@ public partial class VoyageView : UserControl, IDisposable
                 {
                     Text = "\u2605",
                     FontSize = 11,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xA2, 0x27)),
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xC8, 0xAA, 0x6E)),
                     HorizontalAlignment = HorizontalAlignment.Right,
                     VerticalAlignment = VerticalAlignment.Top,
                     Margin = new Thickness(0, 0, 2, 0),
@@ -2168,9 +2176,9 @@ public partial class VoyageView : UserControl, IDisposable
         public string Key => $"{Kind}:{Index}";
 
         public Brush Accent => new SolidColorBrush(
-            Selected ? Color.FromRgb(0xC9, 0xA2, 0x27)
-            : Kind == Sort.VoyageWide ? Color.FromRgb(0xC9, 0xA2, 0x27)
-            : Kind == Sort.Tileset && Captured ? Color.FromRgb(0x8A, 0x6F, 0x22)
+            Selected ? Color.FromRgb(0xC8, 0xAA, 0x6E)
+            : Kind == Sort.VoyageWide ? Color.FromRgb(0xC8, 0xAA, 0x6E)
+            : Kind == Sort.Tileset && Captured ? Color.FromRgb(0xA3, 0x8D, 0x6D)
             : Muted ? Color.FromRgb(0x2A, 0x20, 0x18)
             : Captured ? Color.FromRgb(0x86, 0xA8, 0x6A)
             : Color.FromRgb(0x2A, 0x20, 0x18));
@@ -2194,7 +2202,7 @@ public partial class VoyageView : UserControl, IDisposable
             Detail = alert.Detail;
             Where = alert.Where;
             Accent = alert.Kind == AlertKind.Jackpot
-                ? new SolidColorBrush(Color.FromRgb(0xC9, 0xA2, 0x27))    // brass
+                ? new SolidColorBrush(Color.FromRgb(0xC8, 0xAA, 0x6E))    // brass
                 : new SolidColorBrush(Color.FromRgb(0xB8, 0x50, 0x3E));   // rust
         }
 
@@ -2206,7 +2214,7 @@ public partial class VoyageView : UserControl, IDisposable
 
     public sealed class SummaryRow
     {
-        private SummaryRow(string label, string value, double size, string font, Brush brush)
+        private SummaryRow(string label, string value, double size, FontFamily font, Brush brush)
         {
             Label = label;
             Value = value;
@@ -2218,25 +2226,25 @@ public partial class VoyageView : UserControl, IDisposable
         public string Label { get; }
         public string Value { get; }
         public double Size { get; }
-        public string Font { get; }
+        public FontFamily Font { get; }
         public Brush Brush { get; }
-        public Brush ValueBrush => new SolidColorBrush(Color.FromRgb(0xC9, 0xA2, 0x27));
+        public Brush ValueBrush => new SolidColorBrush(Color.FromRgb(0xC8, 0xAA, 0x6E));
 
         private static Brush Of(byte r, byte g, byte b) => new SolidColorBrush(Color.FromRgb(r, g, b));
 
         public static SummaryRow Heading(string text) =>
-            new(text, "", 15, "Georgia", Of(0xE6, 0xDB, 0xC2));
+            new(text, "", 15, PoeFonts.Display, Of(0xE6, 0xDB, 0xC2));
 
         public static SummaryRow Stat(string name, string total) =>
-            new(name, total, 13, "Segoe UI", Of(0xE6, 0xDB, 0xC2));
+            new(name, total, 13, PoeFonts.Body, Of(0xE6, 0xDB, 0xC2));
 
         public static SummaryRow Section(string text) =>
-            new(text, "", 11, "Georgia", Of(0x6B, 0x5F, 0x4E));
+            new(text, "", 11, PoeFonts.Display, Of(0x6B, 0x5F, 0x4E));
 
         public static SummaryRow Detail(string text, string value = "") =>
-            new(text, value, 12, "Segoe UI", Of(0x94, 0x86, 0x6F));
+            new(text, value, 12, PoeFonts.Body, Of(0x94, 0x86, 0x6F));
 
         public static SummaryRow Route(string order) =>
-            new(order, "", 15, "Georgia", Of(0xC9, 0xA2, 0x27));
+            new(order, "", 15, PoeFonts.Display, Of(0xC8, 0xAA, 0x6E));
     }
 }
