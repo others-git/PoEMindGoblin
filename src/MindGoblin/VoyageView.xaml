@@ -449,8 +449,27 @@
                             ToolTip="Replace every profile with the shipped ones, discarding your edits."/>
                     <Button x:Name="WeightsBtn" Content="Weights" Click="OnToggleWeights" Margin="6,0,0,0"
                             ToolTip="Category emphasis sliders for the selected profile. 10 is the shipped baseline."/>
-                    <Button Content="Solve" Click="OnSolve" Margin="18,0,0,0"
+                    <Button x:Name="SolveBtn" Content="Solve" Click="OnSolve" Margin="18,0,0,0"
                             Style="{StaticResource Primary}"/>
+                    <!-- The pre-dive ritual, floated over the toolbar after every solve:
+                         boxes get juiced BEFORE they are opened, and the orbs cannot be
+                         fetched once you are on the seafloor. Non-modal -- it steals no
+                         focus, dies on its own, and a click dismisses it early. -->
+                    <Popup x:Name="AlchNote" AllowsTransparency="True" Placement="Top"
+                           PlacementTarget="{Binding ElementName=SolveBtn}"
+                           PopupAnimation="Fade" VerticalOffset="-10" Focusable="False">
+                        <Border Background="#F5161108" BorderBrush="#C8AA6E" BorderThickness="1"
+                                Padding="14,8" Margin="8" Cursor="Hand"
+                                MouseDown="OnAlchNoteClick">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#000000" BlurRadius="14"
+                                                  ShadowDepth="3" Opacity="0.7"/>
+                            </Border.Effect>
+                            <TextBlock Text="DON'T FORGET YOUR ALCHS"
+                                       FontFamily="{x:Static local:PoeFonts.Display}"
+                                       FontSize="14" Foreground="#E7D7AB"/>
+                        </Border>
+                    </Popup>
                     <Button Content="Dive again" Click="OnNextVoyage" Margin="8,0,0,0"
                             ToolTip="Voyage complete: spend the placed charts, clear the board, and re-read the rerolled border"/>
                     <Button Content="Stash search" Click="OnCopyStashSearch" Margin="8,0,0,0"

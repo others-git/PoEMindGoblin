@@ -75,9 +75,14 @@ public partial class VoyageView : UserControl, IDisposable
     /// <summary>Items deliberately passed over, so the checklist cannot stall on one of them.</summary>
     private readonly HashSet<(Target, int)> _skipped = new();
 
+    /// <summary>Fades the alch reminder out on its own; a click beats it to it.</summary>
+    private readonly DispatcherTimer _alchTimer =
+        new() { Interval = TimeSpan.FromSeconds(6) };
+
     public VoyageView()
     {
         InitializeComponent();
+        _alchTimer.Tick += (_, _) => { _alchTimer.Stop(); AlchNote.IsOpen = false; };
 
         ModifierList.ItemsSource = _modifiers;
         SummaryList.ItemsSource = _summary;
@@ -1008,6 +1013,23 @@ public partial class VoyageView : UserControl, IDisposable
                       + (unseated.Count == 1 ? " " : "s ") + string.Join(", ", unseated)
                       + " \u2014 the rest were placed.", bad: true);
         else SetStatus($"Placed {_solution.Placements.Count} charts for \"{profile.Name}\".");
+
+        // The plan is made; the next thing that goes wrong is at the vendor.
+        ShowAlchReminder();
+    }
+
+    private void ShowAlchReminder()
+    {
+        if (!IsLoaded) return;   // offscreen renders have no window for a popup to float over
+        AlchNote.IsOpen = true;
+        _alchTimer.Stop();
+        _alchTimer.Start();
+    }
+
+    private void OnAlchNoteClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        _alchTimer.Stop();
+        AlchNote.IsOpen = false;
     }
 
     /// <summary>Copy a stash search string that lights up the solved board's charts.</summary>
