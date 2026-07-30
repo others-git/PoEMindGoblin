@@ -13,10 +13,11 @@ namespace MindGoblin;
 /// says. Drawing them as plain dots put the twelve most position-dependent modifiers in
 /// the interface on a par with a bullet point.
 ///
-/// This is a small escutcheon in vector: a central mask flanked by two scrolled volutes,
-/// with a raised bevel above and a cast shadow below. It is the one bold element on the
-/// panel; everything around it is deliberately quiet. Verdigris fills it once read, so a
-/// glance at the board says which edges are still missing their modifier.
+/// This is a small sea serpent in vector, arched over a number medallion -- the game's
+/// own frame is carved with sea serpents, and the earlier mask-and-volutes attempt read
+/// as anything but. It is the one bold element on the panel; everything around it is
+/// deliberately quiet. Verdigris fills it once read, so a glance at the board says which
+/// edges are still missing their modifier.
 ///
 /// Drawn rather than an image so it stays crisp at any DPI and recolours by state without
 /// shipping four bitmaps -- and so it scales with the board rather than the other way up.
@@ -25,27 +26,39 @@ internal static class VoyageOrnament
 {
     /// <summary>Native size of the geometry below; everything scales from this.</summary>
     private const double DesignWidth = 44;
-    private const double DesignHeight = 22;
+    private const double DesignHeight = 24;
 
-    /// <summary>Central mask: a shield with a pointed crown and a rounded chin.</summary>
-    private const string MaskPath =
-        "M22,1.5 C25.5,1.5 28,4.5 28.4,8.4 C30.4,9 30.4,10.4 28.4,11 "
-        + "C28,16 25.5,20.5 22,20.5 C18.5,20.5 16,16 15.6,11 "
-        + "C13.6,10.4 13.6,9 15.6,8.4 C16,4.5 18.5,1.5 22,1.5 Z";
+    /// <summary>
+    /// The serpent: a ribbon of body rising from the left, arching over the medallion,
+    /// and diving back down to the right, with a wedge head at the left end and a
+    /// curled tail at the right.
+    /// </summary>
+    private const string SerpentPath =
+        "M3.5,15 C4,10.5 8,7.5 12,8.5 C16,9.4 18,6.6 22,6.2 "
+        + "C26,6.6 28,9.4 32,8.5 C36,7.5 40,10.5 40.5,15 "
+        + "C39,12.8 36.5,10.6 33,11.4 C29,12.3 26.5,9.4 22,9.1 "
+        + "C17.5,9.4 15,12.3 11,11.4 C7.5,10.6 5,12.8 3.5,15 Z";
 
-    /// <summary>Scrolled wings sweeping out to either side, as on the carved header.</summary>
-    private const string WingsPath =
-        "M15.8,7.6 C11,4.4 6,4.6 2.2,7.4 C0.6,8.6 0.6,10.6 2.4,11.4 "
-        + "C4.4,12.3 6.2,11.4 6.2,9.8 C6.2,8.8 5.2,8.2 4.4,8.8 "
-        + "C5.4,7.6 7.4,7.2 9.2,8 C11.6,9 13.4,10.6 15.4,12.6 Z "
-        + "M28.2,7.6 C33,4.4 38,4.6 41.8,7.4 C43.4,8.6 43.4,10.6 41.6,11.4 "
-        + "C39.6,12.3 37.8,11.4 37.8,9.8 C37.8,8.8 38.8,8.2 39.6,8.8 "
-        + "C38.6,7.6 36.6,7.2 34.8,8 C32.4,9 30.6,10.6 28.6,12.6 Z";
+    /// <summary>Wedge head with an open jaw at the serpent's left end.</summary>
+    private const string HeadPath =
+        "M0.8,15.6 C0.6,13 2.4,11.2 4.8,11.9 C6.6,12.5 7.2,14.4 6.4,16 "
+        + "C6,16.8 4.8,17.3 3.8,17.1 L1.2,18.4 L2.2,16.6 C1.5,16.4 0.9,16.1 0.8,15.6 Z";
 
-    /// <summary>A small pendant drop below the mask, which grounds the shape.</summary>
-    private const string DropPath =
-        "M22,20 C23.2,20 24,21 24,22 C24,23.2 23.2,24 22,24 "
-        + "C20.8,24 20,23.2 20,22 C20,21 20.8,20 22,20 Z";
+    /// <summary>The tail, curling under itself at the right end.</summary>
+    private const string TailPath =
+        "M40.5,15 C42.6,13.2 44,14.6 43.2,16.6 C42.6,18.1 40.6,18.2 39.8,17 "
+        + "C40.5,17.2 41.6,17 41.9,16.1 C42.2,15.1 41.4,14.4 40.5,15 Z";
+
+    /// <summary>Three dorsal fins along the arch.</summary>
+    private const string FinsPath =
+        "M11.5,8.6 L13.2,5.2 L15.2,8.2 Z "
+        + "M20,6.6 L22,3.2 L24,6.6 Z "
+        + "M28.8,8.2 L30.8,5.2 L32.5,8.6 Z";
+
+    /// <summary>The medallion the serpent guards; the number is engraved on it.</summary>
+    private const string MedallionPath =
+        "M22,7.6 C25.9,7.6 28.6,10.2 28.6,13.8 C28.6,17.4 25.9,20.4 22,20.4 "
+        + "C18.1,20.4 15.4,17.4 15.4,13.8 C15.4,10.2 18.1,7.6 22,7.6 Z";
 
     internal enum State { Unread, Captured, Selected, Skipped }
 
@@ -68,21 +81,33 @@ internal static class VoyageOrnament
 
         // Cast shadow first: the same silhouette a pixel down, which is what reads as
         // relief rather than a flat sticker.
-        art.Children.Add(Figure(WingsPath, ShadowBrush, null, 0, 1.6));
-        art.Children.Add(Figure(MaskPath, ShadowBrush, null, 0, 1.6));
-        art.Children.Add(Figure(DropPath, ShadowBrush, null, 0, 1.6));
+        foreach (var part in new[] { MedallionPath, SerpentPath, FinsPath, HeadPath, TailPath })
+            art.Children.Add(Figure(part, ShadowBrush, null, 0, 1.6));
 
-        art.Children.Add(Figure(WingsPath, fill, stroke, 0, 0));
-        art.Children.Add(Figure(DropPath, fill, stroke, 0, 0));
-        art.Children.Add(Figure(MaskPath, fill, stroke, 0, 0));
+        // The medallion under the serpent, then the beast over it.
+        art.Children.Add(Figure(MedallionPath, fill, stroke, 0, 0));
+        art.Children.Add(Figure(FinsPath, fill, stroke, 0, 0));
+        art.Children.Add(Figure(SerpentPath, fill, stroke, 0, 0));
+        art.Children.Add(Figure(HeadPath, fill, stroke, 0, 0));
+        art.Children.Add(Figure(TailPath, fill, stroke, 0, 0));
 
-        // Bevel: a hairline of light along the top edge of the mask only. One highlight,
-        // not an outline on everything -- the latter reads as neon, not bronze.
+        // The eye: one dark dot is what makes the wedge read as a head.
+        art.Children.Add(new Ellipse
+        {
+            Width = 1.6, Height = 1.6,
+            Fill = ShadowBrush,
+            Margin = new Thickness(2.6, 12.9, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+        });
+
+        // Bevel: a hairline of light along the serpent's arch. One highlight, not an
+        // outline on everything -- the latter reads as neon, not bronze.
         art.Children.Add(new Path
         {
-            Data = Geometry.Parse("M17.4,7.2 C18.2,3.8 20,2.6 22,2.6 C24,2.6 25.8,3.8 26.6,7.2"),
+            Data = Geometry.Parse("M13,8.9 C17,9.8 18.6,7.1 22,6.7 C25.4,7.1 27,9.8 31,8.9"),
             Stroke = BevelBrush,
-            StrokeThickness = 1,
+            StrokeThickness = 0.9,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round,
         });
@@ -111,8 +136,8 @@ internal static class VoyageOrnament
         host.Children.Add(new TextBlock
         {
             Text = label.ToString(),
-            FontFamily = new FontFamily("Georgia"),
-            FontSize = 10 * scale,
+            FontFamily = PoeFonts.Display,
+            FontSize = 9.5 * scale,
             Foreground = ink,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
