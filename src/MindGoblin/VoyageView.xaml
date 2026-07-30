@@ -470,8 +470,25 @@
                                        FontSize="14" Foreground="#E7D7AB"/>
                         </Border>
                     </Popup>
-                    <Button Content="Dive again" Click="OnNextVoyage" Margin="8,0,0,0"
+                    <Button x:Name="DiveBtn" Content="Dive again" Click="OnNextVoyage" Margin="8,0,0,0"
                             ToolTip="Voyage complete: spend the placed charts, clear the board, and re-read the rerolled border"/>
+                    <!-- The post-dive twin of the alch note: the border rerolled, and a
+                         plan on stale board modifiers is confidently wrong. -->
+                    <Popup x:Name="BoardNote" AllowsTransparency="True" Placement="Top"
+                           PlacementTarget="{Binding ElementName=DiveBtn}"
+                           PopupAnimation="Fade" VerticalOffset="-10" Focusable="False">
+                        <Border Background="#F5161108" BorderBrush="#C8AA6E" BorderThickness="1"
+                                Padding="14,8" Margin="8" Cursor="Hand"
+                                MouseDown="OnBoardNoteClick">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#000000" BlurRadius="14"
+                                                  ShadowDepth="3" Opacity="0.7"/>
+                            </Border.Effect>
+                            <TextBlock Text="READ NEW BOARD MODIFIERS"
+                                       FontFamily="{x:Static local:PoeFonts.Display}"
+                                       FontSize="14" Foreground="#E7D7AB"/>
+                        </Border>
+                    </Popup>
                     <Button Content="Stash search" Click="OnCopyStashSearch" Margin="8,0,0,0"
                             ToolTip="Copy an in-game search string that highlights the solved board's charts in your chart stash"/>
                     <!-- The solve runs on a worker for up to 3 s; this is the sign that

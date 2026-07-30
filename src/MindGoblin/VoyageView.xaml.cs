@@ -67,9 +67,10 @@ public partial class VoyageView : UserControl, IDisposable
     private Target _target = Target.Chart;
     private int _targetIndex;
 
-    /// <summary>Panel indices still ahead of the sweep cursor, ascending. Non-null
-    /// while the Sweep toggle is armed.</summary>
-    private Queue<int>? _sweep;
+    /// <summary>Steps still ahead of the sweep cursor: board squares first (hover +
+    /// panel OCR, no key injection at all), then charts (hover + one Ctrl+C).
+    /// Non-null while the Sweep toggle is armed.</summary>
+    private Queue<(bool IsSquare, int Index)>? _sweep;
     private string _lastClipboard = "";
 
     /// <summary>Items deliberately passed over, so the checklist cannot stall on one of them.</summary>
@@ -79,10 +80,15 @@ public partial class VoyageView : UserControl, IDisposable
     private readonly DispatcherTimer _alchTimer =
         new() { Interval = TimeSpan.FromSeconds(6) };
 
+    /// <summary>Same, for the post-dive "read the new border" reminder.</summary>
+    private readonly DispatcherTimer _boardNoteTimer =
+        new() { Interval = TimeSpan.FromSeconds(8) };
+
     public VoyageView()
     {
         InitializeComponent();
         _alchTimer.Tick += (_, _) => { _alchTimer.Stop(); AlchNote.IsOpen = false; };
+        _boardNoteTimer.Tick += (_, _) => { _boardNoteTimer.Stop(); BoardNote.IsOpen = false; };
 
         ModifierList.ItemsSource = _modifiers;
         SummaryList.ItemsSource = _summary;
@@ -478,33 +484,9 @@ public partial class VoyageView : UserControl, IDisposable
         var square = _targetIndex;
         try
         {
-            var options = AreaModifierPanel.Options.Load();
-            var screen = ScreenCapture.PrimaryScreenBounds();
-            var (x, y, w, h) = options.ToPixels(screen.Width, screen.Height);
-            var raw = await ScreenOcr.ReadRegionAsync(
-                new System.Drawing.Rectangle(x, y, w, h), options.Upscale);
-
-            var reading = AreaModifierPanel.Read(raw);
-            if (!reading.IsRead)
-            {
-                // An empty panel has three meanings and only one of them is an error the
-                // user can fix by hovering. Saying which is the difference between a
-                // useful message and a wrong one.
-                SetStatus(reading.State == AreaModifierPanel.PanelState.Placeholder
-                    ? $"Hover square {square} in game before pressing Ctrl+Alt+C."
-                    : "Could not find the Area Modifiers panel — open the Voyage screen, "
-                      + "or adjust the region under Calibrate.",
-                    bad: true);
+            if (!await ReadAreaPanelInto(square, hoverHint: $"Hover square {square} in game "
+                                                           + "before pressing Ctrl+Alt+C."))
                 return;
-            }
-
-            _session.ApplySquareModifiers(square, reading.Lines);
-            _solution = null;
-            Persist();
-            SetStatus(reading.Lines.Count == 0
-                ? $"Square {square}: no board modifiers."
-                : $"Square {square}: read {reading.Lines.Count} "
-                  + (reading.Lines.Count == 1 ? "modifier." : "modifiers."));
             AdvanceTarget();
             RefreshBoard();
             RefreshPanel();
@@ -519,6 +501,43 @@ public partial class VoyageView : UserControl, IDisposable
         {
             _capturing = false;
         }
+    }
+
+    /// <summary>
+    /// The OCR core both capture routes share: screenshot the Area Modifiers panel and
+    /// record what it says about ONE square. The hotkey route and the sweep must land
+    /// in exactly the same place, or the checklist would track one and not the other.
+    /// </summary>
+    private async Task<bool> ReadAreaPanelInto(int square, string hoverHint)
+    {
+        var options = AreaModifierPanel.Options.Load();
+        var screen = ScreenCapture.PrimaryScreenBounds();
+        var (x, y, w, h) = options.ToPixels(screen.Width, screen.Height);
+        var raw = await ScreenOcr.ReadRegionAsync(
+            new System.Drawing.Rectangle(x, y, w, h), options.Upscale);
+
+        var reading = AreaModifierPanel.Read(raw);
+        if (!reading.IsRead)
+        {
+            // An empty panel has three meanings and only one of them is an error the
+            // user can fix by hovering. Saying which is the difference between a
+            // useful message and a wrong one.
+            SetStatus(reading.State == AreaModifierPanel.PanelState.Placeholder
+                ? hoverHint
+                : "Could not find the Area Modifiers panel — open the Voyage screen, "
+                  + "or adjust the region under Calibrate.",
+                bad: true);
+            return false;
+        }
+
+        _session.ApplySquareModifiers(square, reading.Lines);
+        _solution = null;
+        Persist();
+        SetStatus(reading.Lines.Count == 0
+            ? $"Square {square}: no board modifiers."
+            : $"Square {square}: read {reading.Lines.Count} "
+              + (reading.Lines.Count == 1 ? "modifier." : "modifiers."));
+        return true;
     }
 
     // ---- pass 2: hover + clipboard -----------------------------------------------
@@ -569,7 +588,13 @@ public partial class VoyageView : UserControl, IDisposable
     {
         if (SweepBtn.IsChecked == true)
         {
-            var pending = _session.ByPanelIndex.Keys.Order().ToList();
+            // Squares lead, as in the guided pass: the border rerolls every voyage and
+            // reading it costs one press per square. Charts follow, only the read ones.
+            var pending = new List<(bool IsSquare, int Index)>();
+            if (ScreenOcr.IsAvailable)
+                pending.AddRange(Enumerable.Range(1, _session.Layout.Rows * _session.Layout.Cols)
+                    .Select(i => (true, i)));
+            pending.AddRange(_session.ByPanelIndex.Keys.Order().Select(i => (false, i)));
             if (pending.Count == 0)
             {
                 SweepBtn.IsChecked = false;
@@ -590,11 +615,13 @@ public partial class VoyageView : UserControl, IDisposable
                 SetStatus("F9 is taken by another program \u2014 free it and arm the sweep again.", bad: true);
                 return;
             }
-            _sweep = new Queue<int>(pending);
+            _sweep = new Queue<(bool, int)>(pending);
             _sweepTotal = pending.Count;
             _lastClipboard = SafeClipboardText();     // ignore whatever is already there
             RefreshSweepPanel();
-            SetStatus($"Sweep armed for {pending.Count} charts \u2014 switch to PoE and press F9.");
+            SetStatus($"Sweep armed: {pending.Count(p => p.IsSquare)} squares, "
+                      + $"{pending.Count(p => !p.IsSquare)} charts \u2014 switch to PoE and press F9."
+                      + (ScreenOcr.IsAvailable ? "" : " (No OCR pack: squares skipped.)"));
         }
         else
         {
@@ -613,8 +640,10 @@ public partial class VoyageView : UserControl, IDisposable
             return;
         }
         var done = _sweepTotal - queue.Count;
-        SweepInfo.Text = $"Press F9 in game \u2014 captures chart {queue.Peek()} "
-                       + $"({done} of {_sweepTotal} done). Keep the chart panel open and unscrolled.";
+        var (isSquare, next) = queue.Peek();
+        SweepInfo.Text = $"Press F9 in game \u2014 captures "
+                       + (isSquare ? $"square {next}'s board modifiers" : $"chart {next}")
+                       + $" ({done} of {_sweepTotal} done). Keep the Voyage screen open and unscrolled.";
         SweepPanel.Visibility = Visibility.Visible;
     }
 
@@ -630,7 +659,12 @@ public partial class VoyageView : UserControl, IDisposable
             FinishSweep();
             return;
         }
-        var index = _sweep.Peek();
+        var (isSquare, index) = _sweep.Peek();
+        if (isSquare)
+        {
+            await SweepSquare(index);
+            return;
+        }
         SweepInfo.Text = $"Copying chart {index}…";   // the press visibly landed
         var o = ChartPanelReader.Options.Load();
         var (row, col) = ((index - 1) / o.Cols, (index - 1) % o.Cols);
@@ -675,14 +709,60 @@ public partial class VoyageView : UserControl, IDisposable
         else SetStatus($"Chart {index} captured \u2014 {_sweep.Count} to go.");
     }
 
+    /// <summary>
+    /// One F9 press on a board square: hover it so the Area Modifiers panel shows its
+    /// aggregate, give the game a beat to draw it, then read the panel with OCR.
+    /// No input reaches the game beyond the hover itself.
+    /// </summary>
+    private async Task SweepSquare(int square)
+    {
+        if (_sweep is null || _capturing) return;
+        SweepInfo.Text = $"Reading square {square}…";
+        var o = AreaModifierPanel.Options.Load();
+        var boardCols = _session.Layout.Cols;
+        var (row, col) = ((square - 1) / boardCols, (square - 1) % boardCols);
+        GameInput.HoverAt(o.BoardOriginX + col * o.BoardPitch,
+                          o.BoardOriginY + row * o.BoardPitch);
+        await Task.Delay(220);   // the panel repaints on hover
+
+        _capturing = true;
+        try
+        {
+            if (!await ReadAreaPanelInto(square,
+                    hoverHint: $"Square {square}: the panel showed no square \u2014 "
+                               + "check Calibrate's board origin, or Skip."))
+            {
+                RefreshSweepPanel();
+                return;          // status explains; F9 retries, Skip moves on
+            }
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Could not read the panel: {ex.Message}", bad: true);
+            return;
+        }
+        finally
+        {
+            _capturing = false;
+        }
+
+        _sweep.Dequeue();
+        RefreshBoard();
+        RebuildModifiers();
+        RefreshProgress();
+        RefreshSweepPanel();
+        if (_sweep.Count == 0) FinishSweep();
+    }
+
     /// <summary>Move past a cell that will not copy (an empty tooltip, a mis-read).</summary>
     private void OnSweepSkip(object sender, RoutedEventArgs e)
     {
         if (_sweep is not { Count: > 0 }) return;
-        var skipped = _sweep.Dequeue();
+        var (wasSquare, skipped) = _sweep.Dequeue();
         RefreshSweepPanel();
         if (_sweep.Count == 0) FinishSweep();
-        else SetStatus($"Chart {skipped} skipped \u2014 it stays awaiting detail.");
+        else SetStatus((wasSquare ? $"Square {skipped}" : $"Chart {skipped}")
+                       + $" skipped \u2014 it stays unread.");
     }
 
     private void OnSweepStop(object sender, RoutedEventArgs e) => SweepBtn.IsChecked = false;
@@ -1046,6 +1126,20 @@ public partial class VoyageView : UserControl, IDisposable
         AlchNote.IsOpen = false;
     }
 
+    private void ShowBoardNote()
+    {
+        if (!IsLoaded) return;
+        BoardNote.IsOpen = true;
+        _boardNoteTimer.Stop();
+        _boardNoteTimer.Start();
+    }
+
+    private void OnBoardNoteClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        _boardNoteTimer.Stop();
+        BoardNote.IsOpen = false;
+    }
+
     /// <summary>Copy a stash search string that lights up the solved board's charts.</summary>
     private void OnCopyStashSearch(object sender, RoutedEventArgs e)
     {
@@ -1145,6 +1239,7 @@ public partial class VoyageView : UserControl, IDisposable
         SetStatus($"Voyage complete \u2014 {spent} charts spent"
                   + (kept > 0 ? $", {kept} preserved" : "") + ". "
                   + "The border has rerolled: hover each square and press Ctrl+Alt+C.");
+        ShowBoardNote();
     }
 
     private void OnReset(object sender, RoutedEventArgs e)

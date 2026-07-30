@@ -35,6 +35,16 @@ public sealed class AreaModifierPanel
         public double Bottom { get; init; } = 0.730;   // 1051 / 1440
 
         /// <summary>
+        /// Centre of board square 1 (top-left) in SCREEN PIXELS, and the spacing to
+        /// its neighbours -- the sweep hovers each square with these so the panel
+        /// shows that square's modifiers. Measured off the same 2560x1440 layout as
+        /// the panel bounds; recalibrate here if the sweep hovers between squares.
+        /// </summary>
+        public int BoardOriginX { get; init; } = 1057;
+        public int BoardOriginY { get; init; } = 534;
+        public int BoardPitch { get; init; } = 193;
+
+        /// <summary>
         /// Enlargement before recognition. The panel is dark text on light parchment,
         /// which the engine reads verbatim even at 1x -- measured on a real capture, 1x,
         /// 2x and 3x all returned the text exactly. 2x is a cheap margin for smaller
