@@ -96,20 +96,26 @@ internal static class VoyageOrnament
 
     private const string CoilEye = "M9.7,8.3 a1.1,1.1 0 1 0 0.01,0 Z";
 
-    // ---- the tentacle (upper and lower sides): an S-curl, suckers inward ---------
+    // ---- the tentacles (upper and lower sides): a PAIR reaching out of the frame,
+    // one hooking up and one hooking down, the way the game's flank carvings emerge
+    // sideways from the border. Drawn for the LEFT edge (base at the board side,
+    // reaching outward); the right edge is the mirror.
 
-    private const string TentacleBody =
-        "M28.4,27.6 C23.6,27.2 20.4,24.4 20,20.8 C19.6,17.4 21.6,14.4 24.8,12.2 "
-        + "C27.2,10.6 28.2,8.6 27.6,6.4 C27,4.4 25,3.2 22.8,3.6 "
-        + "C24.8,1.8 27.8,2.4 29.4,4.6 C31,6.9 30.4,10 28.1,12.2 "
-        + "C25.4,14.8 23.9,17.4 24.3,19.9 C24.7,22.6 26.2,24.6 28.9,25.4 Z";
+    private const string TentacleUpper =
+        "M39,13.5 C32,10.5 24,9 18,10.2 C13.5,11 10.5,9.5 9.5,6.2 "
+        + "C9,4 10.4,2.2 12.6,2.2 C10.1,0.8 7.2,2.4 6.8,5.2 "
+        + "C6.3,8.8 9.2,12.2 13.8,12.6 C20,13.2 28,14.2 36,16.5 Z";
 
-    private const string TentacleTip =
-        "M23.2,3.8 C21.2,4.4 20.2,5.9 20.4,7.8 C21.3,6.5 22.6,5.8 24.3,5.8 Z";
+    private const string TentacleLower =
+        "M39,16.5 C32,19.5 24,21 18,19.8 C13.5,19 10.5,20.5 9.5,23.8 "
+        + "C9,26 10.4,27.8 12.6,27.8 C10.1,29.2 7.2,27.6 6.8,24.8 "
+        + "C6.3,21.2 9.2,17.8 13.8,17.4 C20,16.8 28,15.8 36,13.5 Z";
 
     private const string TentacleSuckers =
-        "M22.9,19.7 a0.85,0.85 0 1 0 0.01,0 Z M23.2,16.4 a0.85,0.85 0 1 0 0.01,0 Z "
-        + "M24.7,13.5 a0.85,0.85 0 1 0 0.01,0 Z M26.4,10.6 a0.85,0.85 0 1 0 0.01,0 Z";
+        "M20.5,11.2 a0.8,0.8 0 1 0 0.01,0 Z M26.5,11.6 a0.8,0.8 0 1 0 0.01,0 Z "
+        + "M14.6,11 a0.8,0.8 0 1 0 0.01,0 Z "
+        + "M20.5,18.8 a0.8,0.8 0 1 0 0.01,0 Z M26.5,18.4 a0.8,0.8 0 1 0 0.01,0 Z "
+        + "M14.6,19 a0.8,0.8 0 1 0 0.01,0 Z";
 
     // ---- the lobster (bottom corners): claws raised, medallion as carapace ---------
 
@@ -175,11 +181,14 @@ internal static class VoyageOrnament
     /// </summary>
     private static bool MirrorOf(string edge, int label) => edge == "right";
 
+    // (The tentacle pair is drawn base-at-right for the LEFT edge; MirrorOf flips it
+    // for the right edge along with everything else, so the pairs stay symmetric.)
+
     private static string[] Parts(Kind kind) => kind switch
     {
         Kind.Kraken => [KrakenArms, KrakenCurls, KrakenHead, KrakenEyes],
         Kind.Dragon => [DragonBody, DragonSpikes, DragonHead, DragonHorns, DragonTail, DragonEye],
-        Kind.Tentacle => [TentacleBody, TentacleTip, TentacleSuckers],
+        Kind.Tentacle => [TentacleUpper, TentacleLower, TentacleSuckers],
         Kind.Coil => [CoilRing, CoilFins, CoilHead, CoilTail, CoilEye],
         Kind.Lobster => [LobsterClaws, LobsterArms, LobsterLegs, LobsterTail, LobsterAntennae],
         _ => [AnchorShape, AnchorFlukes],
@@ -195,7 +204,7 @@ internal static class VoyageOrnament
     {
         Kind.Kraken => (24, 23.2, 4.9),
         Kind.Coil => (24, 16, 5.6),
-        Kind.Tentacle => (24, 21.2, 4.9),
+        Kind.Tentacle => (40.2, 15, 4.9),
         Kind.Lobster => (24, 15.6, 5.6),
         Kind.Anchor => (24, 15.6, 5.2),
         _ => (24, 16.4, 6.2),
