@@ -14,7 +14,7 @@ namespace MindGoblin;
 /// fired only inside the user's own F9 press, which is the one-action-per-keypress line
 /// GGG's macro policy draws. Nothing anywhere runs input on a timer or in a loop.
 ///
-/// Pixels are read from a locked buffer rather than GetPixel: a 2560x1440 sweep through
+/// Pixels are read from a locked buffer rather than GetPixel: a 2560x1440 slurp through
 /// GetPixel takes seconds, which would make reading the board feel broken.
 /// </summary>
 [SupportedOSPlatform("windows")]

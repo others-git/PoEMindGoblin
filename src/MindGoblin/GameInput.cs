@@ -9,7 +9,7 @@ namespace MindGoblin;
 ///
 /// The policy line, decided deliberately after reading GGG's macro statements: one
 /// action per keypress. TradeMacro and Awakened PoE Trade are tolerated because a
-/// human press maps to one item interaction; scripted sweeps and anything on a timer
+/// human press maps to one item interaction; scripted slurps and anything on a timer
 /// are not. So this class exposes exactly one composite gesture (move the cursor,
 /// press Ctrl+C once), it is only ever called from a registered hotkey handler, and
 /// nothing in this codebase may call it in a loop or from a timer. The copy itself is

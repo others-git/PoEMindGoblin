@@ -421,8 +421,8 @@
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content="Identify Charts" Click="OnReadPanel"
                             ToolTip="Screenshot the game and decode every chart's shape and level"/>
-                    <ToggleButton x:Name="SweepBtn" Content="Sweep" Margin="8,0,0,0"
-                                  Checked="OnSweepChanged" Unchecked="OnSweepChanged"
+                    <ToggleButton x:Name="SlurpBtn" Content="Slurp" Margin="8,0,0,0"
+                                  Checked="OnSlurpChanged" Unchecked="OnSlurpChanged"
                                   ToolTip="Step-through import: arm this, then in PoE press F9 once per chart. Each press hovers one cell and copies it — one action per keypress."/>
                     <ToggleButton x:Name="ReadModeBtn" Content="Load Details" Margin="8,0,0,0"
                                   Checked="OnReadModeChanged" Unchecked="OnReadModeChanged"
@@ -617,10 +617,10 @@
                      nothing when there is nothing to say, and covers the board only while it
                      is being read. The accent bar carries the meaning: brass for a jackpot,
                      rust for something that reads like a reward and costs you. -->
-                <!-- The sweep coach: which chart the next F9 will capture, and how far
+                <!-- The slurp coach: which chart the next F9 will capture, and how far
                      along the pass is. Lives over the board so it is readable at a
                      glance from the game via alt-tab peek. -->
-                <Border x:Name="SweepPanel" Visibility="Collapsed" Panel.ZIndex="13"
+                <Border x:Name="SlurpPanel" Visibility="Collapsed" Panel.ZIndex="13"
                         VerticalAlignment="Top" Margin="0,24,0,0" Padding="14,10"
                         Width="380" HorizontalAlignment="Center"
                         Background="{StaticResource PanelFill}"
@@ -630,13 +630,13 @@
                                           Opacity="0.8"/>
                     </Border.Effect>
                     <StackPanel>
-                        <TextBlock Style="{StaticResource Eyebrow}" Text="S W E E P"/>
-                        <TextBlock x:Name="SweepInfo" Foreground="{StaticResource Bone}"
+                        <TextBlock Style="{StaticResource Eyebrow}" Text="S L U R P"/>
+                        <TextBlock x:Name="SlurpInfo" Foreground="{StaticResource Bone}"
                                    FontSize="13" TextWrapping="Wrap"/>
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                            <Button Content="Skip this chart" Click="OnSweepSkip"
+                            <Button Content="Skip this chart" Click="OnSlurpSkip"
                                     ToolTip="Move on without capturing it — it stays awaiting detail"/>
-                            <Button Content="Stop" Click="OnSweepStop" Margin="8,0,0,0"/>
+                            <Button Content="Stop" Click="OnSlurpStop" Margin="8,0,0,0"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>

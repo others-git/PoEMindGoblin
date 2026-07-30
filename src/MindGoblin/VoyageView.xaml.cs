@@ -67,10 +67,10 @@ public partial class VoyageView : UserControl, IDisposable
     private Target _target = Target.Chart;
     private int _targetIndex;
 
-    /// <summary>Steps still ahead of the sweep cursor: board squares first (hover +
+    /// <summary>Steps still ahead of the slurp cursor: board squares first (hover +
     /// panel OCR, no key injection at all), then charts (hover + one Ctrl+C).
-    /// Non-null while the Sweep toggle is armed.</summary>
-    private Queue<(bool IsSquare, int Index)>? _sweep;
+    /// Non-null while the Slurp toggle is armed.</summary>
+    private Queue<(bool IsSquare, int Index)>? _slurp;
     private string _lastClipboard = "";
 
     /// <summary>Items deliberately passed over, so the checklist cannot stall on one of them.</summary>
@@ -505,7 +505,7 @@ public partial class VoyageView : UserControl, IDisposable
 
     /// <summary>
     /// The OCR core both capture routes share: screenshot the Area Modifiers panel and
-    /// record what it says about ONE square. The hotkey route and the sweep must land
+    /// record what it says about ONE square. The hotkey route and the slurp must land
     /// in exactly the same place, or the checklist would track one and not the other.
     /// </summary>
     private async Task<bool> ReadAreaPanelInto(int square, string hoverHint)
@@ -570,23 +570,23 @@ public partial class VoyageView : UserControl, IDisposable
         var text = SafeClipboardText();
         if (text.Length == 0 || text == _lastClipboard) return;
         _lastClipboard = text;
-        if (_sweep is not null) return;   // the F9 handler owns the clipboard mid-sweep
+        if (_slurp is not null) return;   // the F9 handler owns the clipboard mid-slurp
         Capture(text, "copied");
     }
 
-    // ---- step-through sweep: F9 captures one chart per press -----------------------
+    // ---- step-through slurp: F9 captures one chart per press -----------------------
 
-    private int? _sweepHotkey;
+    private int? _slurpHotkey;
 
     /// <summary>
-    /// Arm or disarm the step-through sweep. Each F9 press -- pressed by the user, in
+    /// Arm or disarm the step-through slurp. Each F9 press -- pressed by the user, in
     /// the game -- performs ONE hover-and-copy on the next read cell: the TradeMacro
     /// shape, one action per keypress, nothing on a timer (see GameInput). The modal
     /// coaches which chart the next press will take and tracks the pass.
     /// </summary>
-    private void OnSweepChanged(object sender, RoutedEventArgs e)
+    private void OnSlurpChanged(object sender, RoutedEventArgs e)
     {
-        if (SweepBtn.IsChecked == true)
+        if (SlurpBtn.IsChecked == true)
         {
             // Squares lead, as in the guided pass: the border rerolls every voyage and
             // reading it costs one press per square. Charts follow, only the read ones.
@@ -601,62 +601,62 @@ public partial class VoyageView : UserControl, IDisposable
                     .Select(i => (true, i)));
             }
             // Only charts still AWAITING detail: after Dive Again the survivors keep
-            // their data, so a post-dive sweep is squares-only -- and re-arming after
+            // their data, so a post-dive slurp is squares-only -- and re-arming after
             // a partial pass resumes exactly the gaps. Re-read a changed chart by
             // clicking it and copying, as ever.
             pending.AddRange(_session.ChartsAwaitingDetail.Order().Select(i => (false, i)));
             if (pending.Count == 0)
             {
-                SweepBtn.IsChecked = false;
+                SlurpBtn.IsChecked = false;
                 SetStatus(_session.Charts.Count == 0
-                    ? "Identify Charts first \u2014 the sweep needs to know which cells hold charts."
-                    : "Nothing to sweep \u2014 every chart has its details already.", bad: true);
+                    ? "Identify Charts first \u2014 the slurp needs to know which cells hold charts."
+                    : "Nothing to slurp \u2014 every chart has its details already.", bad: true);
                 return;
             }
             if (Window.GetWindow(this) is not { } window)
             {
-                SweepBtn.IsChecked = false;
+                SlurpBtn.IsChecked = false;
                 return;
             }
             _hotkeys ??= new HotkeyService(window);
-            _sweepHotkey ??= _hotkeys.Register(
-                System.Windows.Input.Key.F9, HotkeyService.Mod.None, OnSweepKey);
-            if (_sweepHotkey is null)
+            _slurpHotkey ??= _hotkeys.Register(
+                System.Windows.Input.Key.F9, HotkeyService.Mod.None, OnSlurpKey);
+            if (_slurpHotkey is null)
             {
-                SweepBtn.IsChecked = false;
-                SetStatus("F9 is taken by another program \u2014 free it and arm the sweep again.", bad: true);
+                SlurpBtn.IsChecked = false;
+                SetStatus("F9 is taken by another program \u2014 free it and arm the slurp again.", bad: true);
                 return;
             }
-            _sweep = new Queue<(bool, int)>(pending);
-            _sweepTotal = pending.Count;
+            _slurp = new Queue<(bool, int)>(pending);
+            _slurpTotal = pending.Count;
             _lastClipboard = SafeClipboardText();     // ignore whatever is already there
-            RefreshSweepPanel();
-            SetStatus($"Sweep armed: {pending.Count(p => p.IsSquare)} squares, "
+            RefreshSlurpPanel();
+            SetStatus($"Slurp armed: {pending.Count(p => p.IsSquare)} squares, "
                       + $"{pending.Count(p => !p.IsSquare)} charts \u2014 switch to PoE and press F9."
                       + (ScreenOcr.IsAvailable ? "" : " (No OCR pack: squares skipped.)"));
         }
         else
         {
-            StopSweep("Sweep off.");
+            StopSlurp("Slurp off.");
         }
         UpdateCaptureHint();
     }
 
-    private int _sweepTotal;
+    private int _slurpTotal;
 
-    private void RefreshSweepPanel()
+    private void RefreshSlurpPanel()
     {
-        if (_sweep is not { } queue || queue.Count == 0)
+        if (_slurp is not { } queue || queue.Count == 0)
         {
-            SweepPanel.Visibility = Visibility.Collapsed;
+            SlurpPanel.Visibility = Visibility.Collapsed;
             return;
         }
-        var done = _sweepTotal - queue.Count;
+        var done = _slurpTotal - queue.Count;
         var (isSquare, next) = queue.Peek();
-        SweepInfo.Text = $"Press F9 in game \u2014 captures "
+        SlurpInfo.Text = $"Press F9 in game \u2014 captures "
                        + (isSquare ? $"square {next}'s board modifiers" : $"chart {next}")
-                       + $" ({done} of {_sweepTotal} done). Keep the Voyage screen open and unscrolled.";
-        SweepPanel.Visibility = Visibility.Visible;
+                       + $" ({done} of {_slurpTotal} done). Keep the Voyage screen open and unscrolled.";
+        SlurpPanel.Visibility = Visibility.Visible;
     }
 
     /// <summary>
@@ -664,20 +664,20 @@ public partial class VoyageView : UserControl, IDisposable
     /// the press, never from a timer; the delays only give the game time to draw the
     /// tooltip and fill the clipboard for THIS press's single copy.
     /// </summary>
-    private async void OnSweepKey()
+    private async void OnSlurpKey()
     {
-        if (_sweep is not { Count: > 0 })
+        if (_slurp is not { Count: > 0 })
         {
-            FinishSweep();
+            FinishSlurp();
             return;
         }
-        var (isSquare, index) = _sweep.Peek();
+        var (isSquare, index) = _slurp.Peek();
         if (isSquare)
         {
-            await SweepSquare(index);
+            await SlurpSquare(index);
             return;
         }
-        SweepInfo.Text = $"Copying chart {index}…";   // the press visibly landed
+        SlurpInfo.Text = $"Copying chart {index}…";   // the press visibly landed
         var o = ChartPanelReader.Options.Load();
         var (row, col) = ((index - 1) / o.Cols, (index - 1) % o.Cols);
         GameInput.HoverAt(o.OriginX + col * o.Pitch, o.OriginY + row * o.Pitch);
@@ -685,7 +685,7 @@ public partial class VoyageView : UserControl, IDisposable
         if (!GameInput.SendCopy())
         {
             SetStatus("Windows refused the Ctrl+C injection \u2014 is the game running elevated?", bad: true);
-            RefreshSweepPanel();
+            RefreshSlurpPanel();
             return;
         }
 
@@ -701,7 +701,7 @@ public partial class VoyageView : UserControl, IDisposable
         if (text.Length == 0)
         {
             SetStatus($"Chart {index}: nothing copied \u2014 F9 retries it, or Skip.", bad: true);
-            RefreshSweepPanel();
+            RefreshSlurpPanel();
             return;
         }
         _lastClipboard = text;
@@ -711,14 +711,14 @@ public partial class VoyageView : UserControl, IDisposable
             return;
         }
 
-        _sweep.Dequeue();
+        _slurp.Dequeue();
         _solution = null;
         Persist();
         RefreshPanel();
         RefreshProgress();
-        RefreshSweepPanel();
-        if (_sweep.Count == 0) FinishSweep();
-        else SetStatus($"Chart {index} captured \u2014 {_sweep.Count} to go.");
+        RefreshSlurpPanel();
+        if (_slurp.Count == 0) FinishSlurp();
+        else SetStatus($"Chart {index} captured \u2014 {_slurp.Count} to go.");
     }
 
     /// <summary>
@@ -726,10 +726,10 @@ public partial class VoyageView : UserControl, IDisposable
     /// aggregate, give the game a beat to draw it, then read the panel with OCR.
     /// No input reaches the game beyond the hover itself.
     /// </summary>
-    private async Task SweepSquare(int square)
+    private async Task SlurpSquare(int square)
     {
-        if (_sweep is null || _capturing) return;
-        SweepInfo.Text = $"Reading square {square}…";
+        if (_slurp is null || _capturing) return;
+        SlurpInfo.Text = $"Reading square {square}…";
         var o = AreaModifierPanel.Options.Load();
         var boardCols = _session.Layout.Cols;
         var (row, col) = ((square - 1) / boardCols, (square - 1) % boardCols);
@@ -744,7 +744,7 @@ public partial class VoyageView : UserControl, IDisposable
                     hoverHint: $"Square {square}: the panel showed no square \u2014 "
                                + "check Calibrate's board origin, or Skip."))
             {
-                RefreshSweepPanel();
+                RefreshSlurpPanel();
                 return;          // status explains; F9 retries, Skip moves on
             }
         }
@@ -758,39 +758,39 @@ public partial class VoyageView : UserControl, IDisposable
             _capturing = false;
         }
 
-        _sweep.Dequeue();
+        _slurp.Dequeue();
         RefreshBoard();
         RebuildModifiers();
         RefreshProgress();
-        RefreshSweepPanel();
-        if (_sweep.Count == 0) FinishSweep();
+        RefreshSlurpPanel();
+        if (_slurp.Count == 0) FinishSlurp();
     }
 
     /// <summary>Move past a cell that will not copy (an empty tooltip, a mis-read).</summary>
-    private void OnSweepSkip(object sender, RoutedEventArgs e)
+    private void OnSlurpSkip(object sender, RoutedEventArgs e)
     {
-        if (_sweep is not { Count: > 0 }) return;
-        var (wasSquare, skipped) = _sweep.Dequeue();
-        RefreshSweepPanel();
-        if (_sweep.Count == 0) FinishSweep();
+        if (_slurp is not { Count: > 0 }) return;
+        var (wasSquare, skipped) = _slurp.Dequeue();
+        RefreshSlurpPanel();
+        if (_slurp.Count == 0) FinishSlurp();
         else SetStatus((wasSquare ? $"Square {skipped}" : $"Chart {skipped}")
                        + $" skipped \u2014 it stays unread.");
     }
 
-    private void OnSweepStop(object sender, RoutedEventArgs e) => SweepBtn.IsChecked = false;
+    private void OnSlurpStop(object sender, RoutedEventArgs e) => SlurpBtn.IsChecked = false;
 
-    private void StopSweep(string status)
+    private void StopSlurp(string status)
     {
-        _sweep = null;
-        if (_sweepHotkey is { } id) { _hotkeys?.Unregister(id); _sweepHotkey = null; }
-        SweepPanel.Visibility = Visibility.Collapsed;
+        _slurp = null;
+        if (_slurpHotkey is { } id) { _hotkeys?.Unregister(id); _slurpHotkey = null; }
+        SlurpPanel.Visibility = Visibility.Collapsed;
         SetStatus(status);
     }
 
-    private async void FinishSweep()
+    private async void FinishSlurp()
     {
-        SweepBtn.IsChecked = false;      // routes through StopSweep via OnSweepChanged
-        StopSweep("Sweep complete \u2014 solving.");
+        SlurpBtn.IsChecked = false;      // routes through StopSlurp via OnSlurpChanged
+        StopSlurp("Slurp complete \u2014 solving.");
         RebuildModifiers();
         await SolveAsync();
     }
