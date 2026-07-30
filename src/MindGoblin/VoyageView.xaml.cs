@@ -1333,7 +1333,7 @@ public partial class VoyageView : UserControl, IDisposable
                 {
                     BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x32, 0x2A)),
                     BorderThickness = new Thickness(1),
-                    Background = new SolidColorBrush(Color.FromRgb(0x18, 0x15, 0x12)),
+                    Background = Face(0x18, 0x15, 0x12),
                     Margin = new Thickness(1),
                     Cursor = System.Windows.Input.Cursors.Hand,
                     Tag = r * cols + c + 1,
@@ -1446,10 +1446,10 @@ public partial class VoyageView : UserControl, IDisposable
                 var hasModifiers = _session.SquareModifiers.ContainsKey(square);
                 var cell = _boardCells[r, c];
 
-                cell.Background = new SolidColorBrush(step is null
-                    ? Color.FromRgb(0x0E, 0x0C, 0x0A)
-                    : isStranded ? Color.FromRgb(0x22, 0x13, 0x10)
-                    : Color.FromRgb(0x18, 0x14, 0x10));
+                cell.Background = step is null
+                    ? Face(0x0E, 0x0C, 0x0A)
+                    : isStranded ? Face(0x22, 0x13, 0x10)
+                    : Face(0x18, 0x14, 0x10);
                 cell.BorderBrush = new SolidColorBrush(isTarget
                     ? Color.FromRgb(0xC8, 0xAA, 0x6E)
                     : isStranded ? Color.FromRgb(0x6E, 0x2F, 0x25)
@@ -1562,6 +1562,16 @@ public partial class VoyageView : UserControl, IDisposable
     }
 
     /// <summary>A tooltip built the same way everywhere: title, subtitle, then lines.</summary>
+    /// <summary>A cell face lit faintly from above -- the difference between a flat
+    /// rectangle and something that reads as a carved tile.</summary>
+    private static Brush Face(Color top, Color bottom) =>
+        new LinearGradientBrush(top, bottom, 90);
+
+    private static Brush Face(byte r, byte g, byte b) =>
+        Face(Color.FromRgb((byte)Math.Min(255, r + 8), (byte)Math.Min(255, g + 7),
+                           (byte)Math.Min(255, b + 6)),
+             Color.FromRgb((byte)(r * 2 / 3), (byte)(g * 2 / 3), (byte)(b * 2 / 3)));
+
     private static UIElement Tip(string title, string? subtitle,
                                  IEnumerable<string> lines, bool haveDetail)
     {
@@ -1992,9 +2002,9 @@ public partial class VoyageView : UserControl, IDisposable
             var isTarget = _target == Target.Chart && _targetIndex == index;
             var hasDetail = HasCapturedDetail(chart);
 
-            cell.Background = new SolidColorBrush(isPlanned
-                ? Color.FromRgb(0x2A, 0x21, 0x0E)
-                : Color.FromRgb(0x16, 0x13, 0x11));
+            cell.Background = isPlanned
+                ? Face(0x2A, 0x21, 0x0E)
+                : Face(0x16, 0x13, 0x11);
             cell.BorderBrush = new SolidColorBrush(isTarget
                 ? Color.FromRgb(0xC8, 0xAA, 0x6E)
                 : isPlanned ? Color.FromRgb(0xA3, 0x8D, 0x6D)
