@@ -77,6 +77,24 @@ public sealed record Chart(
     /// (added packs, pack size), pre-scaled. Pays beside population-payout squares.</summary>
     public double AdjacentPackDensity { get; init; }
 
+    /// <summary>
+    /// The CONTAINER-gift part of the Adjacent Modifier's worth to one neighbour:
+    /// "Adjacent Areas contain # additional Messages in a Bottle" puts openables INTO
+    /// the neighbour, so what they pay scales with how much quantity the RECEIVING
+    /// tile has. The solver multiplies this by (1 + the neighbour's
+    /// <see cref="QuantityDensity"/>) when the pair meets.
+    /// </summary>
+    public double AdjacentPerQuantityValue { get; init; }
+
+    /// <summary>The tile's Item Quantity as a fraction (0.4 = +40%), pre-scaled by the
+    /// synergy knob. Multiplies every container payout that lands on it.</summary>
+    public double QuantityDensity { get; init; }
+
+    /// <summary>Quantity this chart's Adjacent Modifier GIVES each neighbour
+    /// ("#% increased Quantity ... in adjacent Areas"), pre-scaled. Realised wherever
+    /// a neighbouring square carries a container payout.</summary>
+    public double AdjacentQuantityDensity { get; init; }
+
     /// <summary>Which channel this chart's per-monster ADJACENT payout scales with:
     /// true for population payouts (x the neighbour's pack density), false for
     /// per-rare payouts (x the neighbour's rare density).</summary>

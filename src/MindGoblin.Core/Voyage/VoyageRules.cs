@@ -371,6 +371,32 @@ public sealed class VoyageProfile
     private static readonly Regex ImprisonedMonsters =
         new(@"(?:(\d+)|an)\s+additional Imprisoned Monsters?",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    /// <summary>
+    /// Adjacent/board lines that put OPENABLES into an area -- bottles, boxes, barrels,
+    /// cages, treasures. Their loot multiplies with the receiving tile's quantity, so
+    /// their value rides the quantity channel rather than scoring flat. Lanterns are
+    /// deliberately absent (their value IS quantity, not loot to multiply) and starfish
+    /// are monsters, priced on the rare channel.
+    /// </summary>
+    public static bool IsContainerGift(string line) => ContainerGift.IsMatch(line);
+
+    private static readonly Regex ContainerGift =
+        new(@"additional (?:\w+'s )?(?:Strongbox(?:es)?|Messages? in (?:a )?Bottles?|"
+            + @"Clusters? of Barrels|cages? of Tormented Spirits|Treasure)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>How much QUANTITY a line grants, as a fraction -- what container
+    /// payouts multiply with. Both spellings: GGG writes 'Qauntity' in the globals.</summary>
+    public static double QuantityDensityOf(string line)
+    {
+        var m = QuantityPct.Match(line);
+        return m.Success ? double.Parse(m.Groups[1].Value) / 100 : 0;
+    }
+
+    private static readonly Regex QuantityPct =
+        new(@"(\d+)%\s+increased Qu?au?ntity of Items",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
     private static readonly Regex AdditionalStrongboxes =
         new(@"(?:(\d+)|an)\s+additional (?:\w+'s )?Strongbox(?:es)?",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -755,7 +781,8 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Golden Lanterns?", Weight = 12,
                                  Comment = "3.29.0b also made these grant increased Quantity" },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional cages? of Tormented Spirits", Weight = 8 },
-                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Messages? in (?:a )?Bottles?", Weight = 5 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Messages? in (?:a )?Bottles?", Weight = 12,
+                                 Comment = "field report: the most profitable chase this league" },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Giant Starfish", Weight = 4 },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Treasure", Weight = 5,
                                  Comment = "Treasure Anchors" },
@@ -780,6 +807,43 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"Area: Anchorfield", Weight = 25,
                                  Comment = "observed: dense Sunken Loot chests" },
                 new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 0.3 },
+            ],
+        },
+
+        new VoyageProfile
+        {
+            Name = "bottles",
+            Description = "Chase Messages in a Bottle: gifts beside the highest-quantity tiles.",
+            BoardModifierWeight = 1.5,
+            Rules =
+            [
+                // Field-verified the most profitable chase this league. The engine
+                // multiplies every container gift by the RECEIVING tile's quantity, so
+                // this profile only has to say two things: bottles are the point, and
+                // quantity is what they multiply into.
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Messages? in (?:a )?Bottles?", Weight = 60 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Diviner's Strongbox(?:es)?", Weight = 14 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Operative's Strongbox(?:es)?", Weight = 12 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Strongbox(?:es)?", Weight = 5 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Treasure", Weight = 5,
+                                 Comment = "Treasure Anchors" },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional cages? of Tormented Spirits", Weight = 4 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Clusters? of Barrels", Weight = 2 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Golden Lanterns?", Weight = 8,
+                                 Comment = "quantity engines: collected lanterns buff every bottle after" },
+                new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 1.0,
+                                 Comment = "own-tile quantity is what arriving bottles multiply into" },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Quantity of Items(?!\s+found in all Voyage Areas)",
+                                 Weight = 1.2 },
+                new VoyageRule { Pattern = @"(\d+)%\s+increased Q(?:uantity|auntity) of Items found in all Voyage Areas",
+                                 Weight = 1.0, ScalesWithBoard = true },
+                new VoyageRule { Pattern = @"Item Rarity:\s*\+?(\d+)", Weight = 0.3 },
+                new VoyageRule { Pattern = @"(\d+)% chance (?:for Charts? )?to not be consumed", Weight = 3.0 },
+                new VoyageRule { Pattern = @"(\d+)%\s+reduced quantity of items found", Weight = -1.5 },
+                new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -40,
+                                 Comment = "unverified whether it guts bottle loot; assume it does" },
+                new VoyageRule { Pattern = @"Area: Anchorfield", Weight = 15,
+                                 Comment = "Sunken Loot density compounds the quantity stack" },
             ],
         },
 
@@ -1049,7 +1113,8 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Imprisoned Monsters?", Weight = -2 },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional cages? of Tormented Spirits", Weight = -5 },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Clusters? of Barrels", Weight = -1 },
-                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Messages? in (?:a )?Bottles?", Weight = -3 },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Messages? in (?:a )?Bottles?", Weight = -12,
+                                 Comment = "field report: bottles print; a keeper" },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Giant Starfish", Weight = -2 },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Treasure", Weight = -4 },
                 new VoyageRule { Pattern = @"Rare Monsters.*drop (?:(\d+)|an) additional", Weight = -8 * AreaPopulation.RaresPerArea },

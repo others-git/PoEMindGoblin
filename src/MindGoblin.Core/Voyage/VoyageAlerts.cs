@@ -89,6 +89,11 @@ public static class VoyageAlerts
             + "at zero, because player power is not loot. Right-click its chart twice to "
             + "require it."),
 
+        new(AlertKind.Jackpot, @"additional Messages? in (?:a )?Bottles?", "Messages in a Bottle",
+            "Field-verified: the most profitable chase right now. The gift pays into "
+            + "ADJACENT areas, so it belongs beside the highest-quantity tiles — the "
+            + "bottles profile plans exactly that."),
+
         new(AlertKind.Jackpot, @"drop Dead Man's Sulphur", "Sulphur off rares",
             "Every rare drops sulphur -- the currency that pays for board rerolls and "
             + "Allflame crafts. Pair it with anything adding rares; under a sulphur "

@@ -602,7 +602,8 @@ public sealed class VoyageSolver
         giver.AdjacentValue
         + giver.AdjacentPerMonsterValue
           * (1 + (giver.AdjacentPayoutOnPopulation
-                      ? receiver.PackDensity : receiver.MonsterDensity));
+                      ? receiver.PackDensity : receiver.MonsterDensity))
+        + giver.AdjacentPerQuantityValue * (1 + receiver.QuantityDensity);
 
     /// <summary>Per-chart score ceiling: the best this chart scores on ANY cell, floored
     /// at zero. Indexed like <see cref="_charts"/>; maintained as a running sum down the
@@ -660,9 +661,11 @@ public sealed class VoyageSolver
         // The adjacency ceiling has to allow for the per-monster pairing at its best:
         // the richest payout landing beside the densest tile in the panel.
         var maxDensity = _charts.Count == 0 ? 0
-            : Math.Max(0, _charts.Max(c => Math.Max(c.MonsterDensity, c.PackDensity)));
+            : Math.Max(0, _charts.Max(c => Math.Max(c.QuantityDensity,
+                  Math.Max(c.MonsterDensity, c.PackDensity))));
         var bestAdjacent = _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c =>
-            c.AdjacentValue + c.AdjacentPerMonsterValue * (1 + maxDensity)));
+            c.AdjacentValue + (c.AdjacentPerMonsterValue + c.AdjacentPerQuantityValue)
+                              * (1 + maxDensity)));
         var pairsRemaining = AdjacentPairsFrom();
 
         _cellSuffix = new double[n + 1];

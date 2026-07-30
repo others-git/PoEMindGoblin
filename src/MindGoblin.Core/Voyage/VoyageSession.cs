@@ -312,6 +312,8 @@ public sealed class VoyageSession
             var channel = c.AdjacentModifier is { } adj
                 ? VoyageProfile.PayoutChannelOf(adj) : VoyageProfile.PayoutChannel.None;
             var payoutAdj = channel != VoyageProfile.PayoutChannel.None;
+            var containerAdj = !payoutAdj && c.AdjacentModifier is { } gift
+                               && VoyageProfile.IsContainerGift(gift);
             return c with
             {
                 // Required is a value, not a constraint: the bonus makes any board that
@@ -320,8 +322,9 @@ public sealed class VoyageSession
                 // square" rule, since the layout that loses least is the optimum.
                 Value = profile.ScoreChart(c, boardEstimate)
                         + (_required.Contains(kv.Key) ? RequiredBonus : 0),
-                AdjacentValue = payoutAdj ? 0 : adjacent,
+                AdjacentValue = payoutAdj || containerAdj ? 0 : adjacent,
                 AdjacentPerMonsterValue = payoutAdj ? adjacent : 0,
+                AdjacentPerQuantityValue = containerAdj ? adjacent : 0,
                 AdjacentPayoutOnPopulation = channel == VoyageProfile.PayoutChannel.Population,
                 MonsterDensity = syn * (c.MonsterPackSize / 100
                                         + AreaPopulation.RoomRareBonus(c)),
@@ -330,6 +333,9 @@ public sealed class VoyageSession
                     ? syn * VoyageProfile.MonsterDensityOf(line) : 0,
                 AdjacentPackDensity = c.AdjacentModifier is { } packLine
                     ? syn * VoyageProfile.PackDensityOf(packLine) : 0,
+                QuantityDensity = syn * c.ItemQuantity / 100,
+                AdjacentQuantityDensity = c.AdjacentModifier is { } qtyLine
+                    ? syn * VoyageProfile.QuantityDensityOf(qtyLine) : 0,
             };
         }).ToList();
 
@@ -345,7 +351,7 @@ public sealed class VoyageSession
         // constant over every layout and steers nothing. Per-monster payouts multiply
         // with the tile's pack size instead, which is what lets a Divine Orb square pull
         // the monster-dense chart onto itself. See VoyageProfile.MonsterPayoutSynergy.
-        var (flat, perRare, perPack) = BoardValueByCell(profile);
+        var (flat, perRare, perPack, perQty) = BoardValueByCell(profile);
 
         // Per-cell constants for BOTH channels, precomputed so scoring stays
         // arithmetic: the density the border itself grants a square, and the payout
@@ -353,19 +359,23 @@ public sealed class VoyageSession
         // are worth from this cell, channel by channel.
         var borderRare = new Dictionary<Cell, double>();
         var borderPack = new Dictionary<Cell, double>();
+        var borderQty = new Dictionary<Cell, double>();
         foreach (var modifier in BoardModifiers())
         {
             var r = syn * VoyageProfile.MonsterDensityOf(modifier.Description);
             var k = syn * VoyageProfile.PackDensityOf(modifier.Description);
+            var q = syn * VoyageProfile.QuantityDensityOf(modifier.Description);
             foreach (var cell in modifier.AffectedCells)
             {
                 if (r != 0) borderRare[cell] = borderRare.GetValueOrDefault(cell) + r;
                 if (k != 0) borderPack[cell] = borderPack.GetValueOrDefault(cell) + k;
+                if (q != 0) borderQty[cell] = borderQty.GetValueOrDefault(cell) + q;
             }
         }
         var nbrRare = new Dictionary<Cell, double>();
         var nbrPack = new Dictionary<Cell, double>();
-        foreach (var (dict, into) in new[] { (perRare, nbrRare), (perPack, nbrPack) })
+        var nbrQty = new Dictionary<Cell, double>();
+        foreach (var (dict, into) in new[] { (perRare, nbrRare), (perPack, nbrPack), (perQty, nbrQty) })
             foreach (var (cell, worth) in dict)
                 foreach (var side in Enum.GetValues<Side>())
                 {
@@ -381,8 +391,11 @@ public sealed class VoyageSession
               * (1 + chart.MonsterDensity + borderRare.GetValueOrDefault(cell))
             + perPack.GetValueOrDefault(cell)
               * (1 + chart.PackDensity + borderPack.GetValueOrDefault(cell))
+            + perQty.GetValueOrDefault(cell)
+              * (1 + chart.QuantityDensity + borderQty.GetValueOrDefault(cell))
             + chart.AdjacentMonsterDensity * nbrRare.GetValueOrDefault(cell)
-            + chart.AdjacentPackDensity * nbrPack.GetValueOrDefault(cell);
+            + chart.AdjacentPackDensity * nbrPack.GetValueOrDefault(cell)
+            + chart.AdjacentQuantityDensity * nbrQty.GetValueOrDefault(cell);
 
         var solution = new VoyageSolver(Layout.Rows, Layout.Cols, scored, score,
                                         strandedPenalty: profile.StrandedSquarePenalty,
@@ -412,12 +425,13 @@ public sealed class VoyageSession
     /// the flat half is position money regardless of the tile.
     /// </summary>
     private (Dictionary<Cell, double> Flat, Dictionary<Cell, double> PerRare,
-             Dictionary<Cell, double> PerPack)
+             Dictionary<Cell, double> PerPack, Dictionary<Cell, double> PerQty)
         BoardValueByCell(VoyageProfile profile)
     {
         var flat = new Dictionary<Cell, double>();
         var perRare = new Dictionary<Cell, double>();
         var perPack = new Dictionary<Cell, double>();
+        var perQty = new Dictionary<Cell, double>();
         foreach (var modifier in BoardModifiers())
         {
             var worth = profile.ScoreText([modifier.Description]) * profile.BoardModifierWeight;
@@ -426,12 +440,13 @@ public sealed class VoyageSession
             {
                 VoyageProfile.PayoutChannel.Rares => perRare,
                 VoyageProfile.PayoutChannel.Population => perPack,
+                _ when VoyageProfile.IsContainerGift(modifier.Description) => perQty,
                 _ => flat,
             };
             foreach (var cell in modifier.AffectedCells)
                 into[cell] = into.GetValueOrDefault(cell) + worth;
         }
-        return (flat, perRare, perPack);
+        return (flat, perRare, perPack, perQty);
     }
 
     /// <summary>
@@ -449,7 +464,7 @@ public sealed class VoyageSession
         var board = new VoyageBoard(Layout.Rows, Layout.Cols);
         foreach (var placement in solution.Placements) board.Place(placement);
 
-        var (flat, perRare, perPack) = BoardValueByCell(profile);
+        var (flat, perRare, perPack, perQty) = BoardValueByCell(profile);
         var syn = profile.MonsterPayoutSynergy;
 
         // Golden Lanterns granted TO each square, from the board and from neighbours'
@@ -479,10 +494,12 @@ public sealed class VoyageSession
             var rareDensity = syn * (placement.Chart.MonsterPackSize / 100
                                      + AreaPopulation.RoomRareBonus(placement.Chart));
             var packDensity = syn * placement.Chart.MonsterPackSize / 100;
+            var qtyDensity = syn * placement.Chart.ItemQuantity / 100;
             var worth = profile.ScoreChart(placement.Chart)
                         + flat.GetValueOrDefault(placement.Cell)
                         + perRare.GetValueOrDefault(placement.Cell) * (1 + rareDensity)
-                        + perPack.GetValueOrDefault(placement.Cell) * (1 + packDensity);
+                        + perPack.GetValueOrDefault(placement.Cell) * (1 + packDensity)
+                        + perQty.GetValueOrDefault(placement.Cell) * (1 + qtyDensity);
 
             // What the neighbours push in. Received only -- what this chart gives THEM
             // is counted when they are visited, not here. A neighbour's per-monster
@@ -496,6 +513,7 @@ public sealed class VoyageSession
                         {
                             VoyageProfile.PayoutChannel.Rares => 1 + rareDensity,
                             VoyageProfile.PayoutChannel.Population => 1 + packDensity,
+                            _ when VoyageProfile.IsContainerGift(adj) => 1 + qtyDensity,
                             _ => 1,
                         };
                     worth += received;

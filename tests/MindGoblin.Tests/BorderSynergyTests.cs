@@ -55,6 +55,73 @@ public class BorderSynergyTests
     public void RareDensityCountsEveryRareSource(string line, double expected) =>
         Assert.Equal(expected, VoyageProfile.MonsterDensityOf(line), 3);
 
+    /// <summary>The container-gift classifier and the quantity it multiplies with.</summary>
+    [Theory]
+    [InlineData("Adjacent Areas contain 3 additional Messages in a Bottle", true)]
+    [InlineData("Adjacent Areas contain an additional Message in a Bottle", true)]
+    [InlineData("Adjacent Areas contain 5 additional Diviner's Strongboxes", true)]
+    [InlineData("Adjacent Areas contain an additional Cluster of Barrels", true)]
+    [InlineData("Adjacent Areas contain an additional Golden Lantern", false)]   // its value IS quantity
+    [InlineData("Adjacent Areas contain 5 additional Giant Starfish", false)]    // monsters, rare channel
+    [InlineData("30% increased number of Rare Monsters in adjacent Areas", false)]
+    public void ContainerGiftsAreKnownByName(string line, bool expected) =>
+        Assert.Equal(expected, VoyageProfile.IsContainerGift(line));
+
+    [Theory]
+    [InlineData("45% increased Quantity of Items found in adjacent Areas", 0.45)]
+    [InlineData("8% increased Qauntity of Items found in all Voyage Areas", 0.08)]
+    [InlineData("50% increased Pack Size", 0.0)]
+    public void QuantityDensityReadsBothSpellings(string line, double expected) =>
+        Assert.Equal(expected, VoyageProfile.QuantityDensityOf(line), 3);
+
+    /// <summary>
+    /// The bottle play, end to end: a bottle gift pays into its NEIGHBOURS, multiplied
+    /// by their quantity -- so the solver must seat the bottle chart beside the
+    /// highest-quantity tile in the panel, not wherever its flat value lands.
+    /// </summary>
+    [Fact]
+    public void ABottleGiftSitsBesideTheQuantityTile()
+    {
+        var session = Session(out _, out _);
+        var gift = 11;
+        var quantity = 3;
+        session.ApplyChartText(gift,
+            "Kelp Forest\nAnchorfield\nAdjacent Modifier: "
+            + "Adjacent Areas contain 4 additional Messages in a Bottle");
+        session.ApplyChartText(quantity,
+            "Drowned Shelf\nAnchorfield\nItem Quantity: +120%");
+
+        var bottles = VoyageRules.Defaults().Single(p => p.Name == "bottles");
+        var plan = session.Plan(session.Solve(bottles, TimeSpan.FromSeconds(3)));
+
+        var giftSquare = Assert.Single(plan, s => s.ChartNumber == gift).Square;
+        var qtySquare = Assert.Single(plan, s => s.ChartNumber == quantity).Square;
+        var neighbours = qtySquare switch
+        {
+            1 => new[] { 2, 4 }, 2 => new[] { 1, 3, 5 }, 3 => new[] { 2, 6 },
+            4 => new[] { 1, 5, 7 }, 5 => new[] { 2, 4, 6, 8 }, 6 => new[] { 3, 5, 9 },
+            7 => new[] { 4, 8 }, 8 => new[] { 5, 7, 9 }, _ => new[] { 6, 8 },
+        };
+        Assert.Contains(giftSquare, neighbours);
+    }
+
+    /// <summary>A container BOARD modifier is a per-quantity payout: its square must
+    /// pull the highest-quantity chart onto itself, the Milky speedrun placement.</summary>
+    [Fact]
+    public void ABottleSquareTakesTheQuantityChart()
+    {
+        var session = Session(out _, out _);
+        var quantity = 3;
+        session.ApplyChartText(quantity,
+            "Drowned Shelf\nAnchorfield\nItem Quantity: +120%");
+        session.ApplySquareModifiers(1, ["Area contains 3 additional Messages in a Bottle"]);
+
+        var bottles = VoyageRules.Defaults().Single(p => p.Name == "bottles");
+        var plan = session.Plan(session.Solve(bottles, TimeSpan.FromSeconds(3)));
+
+        Assert.Equal(1, Assert.Single(plan, s => s.ChartNumber == quantity).Square);
+    }
+
     /// <summary>Filthscrabble is a ~4,000-sulphur boss (community-sourced): the
     /// sulphur profile must price his square above even the per-rare sulphur square,
     /// and the dump profile must refuse to burn the chart.</summary>
