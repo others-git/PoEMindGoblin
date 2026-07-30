@@ -56,3 +56,55 @@ public class PreserveAndSearchTests
     public void UnnamedChartsProduceNoSearchString() =>
         Assert.Equal("", Session().StashSearch([1, 2]));
 }
+
+/// <summary>
+/// Figurine tooltips are the authoritative border text (field-confirmed: the Area
+/// Modifiers panel never lists a figurine's adjacent-scope lines), and the slurp
+/// reads them with OCR over a generous region -- so the filter must keep mods and
+/// drop whatever chrome sat behind the tooltip.
+/// </summary>
+public class FigurineTooltipTests
+{
+    [Fact]
+    public void ChromeIsDroppedAndModifiersSurvive()
+    {
+        var lines = AreaModifierPanel.TooltipLines(
+        [
+            "Area Modifiers",
+            "50% reduced quantity of items found in adjacent Areas per connection",
+            "120% increased Quantity of Items found in adjacent Areas",
+            "Hover a square of the Voyage",
+            "Board to see the relevant Area",
+        ]);
+        Assert.Equal(2, lines.Count);
+        Assert.Contains(lines, l => l.Contains("per connection"));
+        Assert.Contains(lines, l => l.Contains("120% increased Quantity"));
+    }
+
+    [Fact]
+    public void WrappedTooltipLinesAreStitched()
+    {
+        var lines = AreaModifierPanel.TooltipLines(
+        [
+            "Adjacent Areas contain 3 additional",
+            "Messages in a Bottle",
+        ]);
+        Assert.Contains("Adjacent Areas contain 3 additional Messages in a Bottle",
+                        Assert.Single(lines));
+    }
+
+    /// <summary>A figurine carrying two mods must bind as TWO board modifiers -- the
+    /// channel classifiers anchor at line start, and squares already bind per line.</summary>
+    [Fact]
+    public void AMultiModFigurineBindsPerLine()
+    {
+        var session = new VoyageSession();
+        session.ApplyFigurineText(1,
+            "50% reduced quantity of items found in adjacent Areas per connection\n"
+            + "120% increased Quantity of Items found in adjacent Areas");
+
+        var bound = session.BoardModifiers();
+        Assert.Equal(2, bound.Count);
+        Assert.All(bound, m => Assert.Single(m.AffectedCells));
+    }
+}

@@ -45,6 +45,14 @@ public sealed class AreaModifierPanel
         public int BoardPitch { get; init; } = 193;
 
         /// <summary>
+        /// How far OUTWARD from a border square's centre its figurine sits, in pixels.
+        /// The slurp hovers figurines rather than squares: the figurine tooltip is the
+        /// authoritative modifier text (adjacent-scope lines never reach the Area
+        /// Modifiers panel for the tile they hang on).
+        /// </summary>
+        public int FigurineInset { get; init; } = 136;
+
+        /// <summary>
         /// Enlargement before recognition. The panel is dark text on light parchment,
         /// which the engine reads verbatim even at 1x -- measured on a real capture, 1x,
         /// 2x and 3x all returned the text exactly. 2x is a cheap margin for smaller
@@ -214,6 +222,29 @@ public sealed class AreaModifierPanel
     /// holds for stored data exactly as for fresh reads, so old sessions heal on load.
     /// </summary>
     public static IReadOnlyList<string> Restitch(IReadOnlyList<string> lines) => Join(lines);
+
+    /// <summary>
+    /// Modifier lines out of a FIGURINE TOOLTIP's OCR. The capture region is generous
+    /// (tooltips anchor wherever they fit), so the raw text carries chrome from
+    /// whatever sat behind it -- the panel heading, its hover hint, the board title.
+    /// Chrome is finite and known; modifier text is anything that survives it, wrapped
+    /// fragments stitched the same way the panel's are.
+    /// </summary>
+    public static IReadOnlyList<string> TooltipLines(IEnumerable<string>? lines)
+    {
+        if (lines is null) return [];
+        var kept = lines
+            .Select(l => l.Trim())
+            .Where(l => l.Length > 2)
+            .Where(l => !Chrome.IsMatch(l))
+            .ToList();
+        return Join(kept);
+    }
+
+    private static readonly Regex Chrome = new(
+        @"Area Modifiers|Hover a square|of the Voyage|relevant Area|Plan your Voyage|"
+        + @"Begin Voyage|Clear Board|Type keywords|^Voyage\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>
     /// Rejoin modifier text that OCR split across lines.

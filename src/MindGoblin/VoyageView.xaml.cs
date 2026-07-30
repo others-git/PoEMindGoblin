@@ -67,10 +67,10 @@ public partial class VoyageView : UserControl, IDisposable
     private Target _target = Target.Chart;
     private int _targetIndex;
 
-    /// <summary>Steps still ahead of the slurp cursor: board squares first (hover +
-    /// panel OCR, no key injection at all), then charts (hover + one Ctrl+C).
+    /// <summary>Steps still ahead of the slurp cursor: border FIGURINES first (hover +
+    /// tooltip OCR, no key injection at all), then charts (hover + one Ctrl+C).
     /// Non-null while the Slurp toggle is armed.</summary>
-    private Queue<(bool IsSquare, int Index)>? _slurp;
+    private Queue<(bool IsFigurine, int Index)>? _slurp;
     private string _lastClipboard = "";
 
     /// <summary>Items deliberately passed over, so the checklist cannot stall on one of them.</summary>
@@ -588,18 +588,13 @@ public partial class VoyageView : UserControl, IDisposable
     {
         if (SlurpBtn.IsChecked == true)
         {
-            // Squares lead, as in the guided pass: the border rerolls every voyage and
-            // reading it costs one press per square. Charts follow, only the read ones.
-            // Squares no figurine reaches (the centre) are skipped outright -- they
-            // never have board modifiers, and a press spent proving that is wasted.
-            var pending = new List<(bool IsSquare, int Index)>();
+            // Figurines lead: the border rerolls every voyage, and the figurine
+            // TOOLTIP is the authoritative text -- hovering the tile misses its
+            // adjacent-scope lines entirely (field-confirmed). Only unread ones,
+            // so a partial pass resumes and a post-dive slurp is the fresh ring.
+            var pending = new List<(bool IsFigurine, int Index)>();
             if (ScreenOcr.IsAvailable)
-            {
-                var unreachable = _session.SquaresWithoutFigurines.ToHashSet();
-                pending.AddRange(Enumerable.Range(1, _session.Layout.Rows * _session.Layout.Cols)
-                    .Where(i => !unreachable.Contains(i))
-                    .Select(i => (true, i)));
-            }
+                pending.AddRange(_session.FigurinesAwaitingDetail.Select(f => (true, f.Index)));
             // Only charts still AWAITING detail: after Dive Again the survivors keep
             // their data, so a post-dive slurp is squares-only -- and re-arming after
             // a partial pass resumes exactly the gaps. Re-read a changed chart by
@@ -631,9 +626,9 @@ public partial class VoyageView : UserControl, IDisposable
             _slurpTotal = pending.Count;
             _lastClipboard = SafeClipboardText();     // ignore whatever is already there
             RefreshSlurpPanel();
-            SetStatus($"Slurp armed: {pending.Count(p => p.IsSquare)} squares, "
-                      + $"{pending.Count(p => !p.IsSquare)} charts \u2014 switch to PoE and press F9."
-                      + (ScreenOcr.IsAvailable ? "" : " (No OCR pack: squares skipped.)"));
+            SetStatus($"Slurp armed: {pending.Count(p => p.IsFigurine)} figurines, "
+                      + $"{pending.Count(p => !p.IsFigurine)} charts \u2014 switch to PoE and press F9."
+                      + (ScreenOcr.IsAvailable ? "" : " (No OCR pack: figurines skipped.)"));
         }
         else
         {
@@ -652,9 +647,9 @@ public partial class VoyageView : UserControl, IDisposable
             return;
         }
         var done = _slurpTotal - queue.Count;
-        var (isSquare, next) = queue.Peek();
+        var (isFigurine, next) = queue.Peek();
         SlurpInfo.Text = $"Press F9 in game \u2014 captures "
-                       + (isSquare ? $"square {next}'s board modifiers" : $"chart {next}")
+                       + (isFigurine ? $"figurine {next} ({FigurineEdge(next)})" : $"chart {next}")
                        + $" ({done} of {_slurpTotal} done). Keep the Voyage screen open and unscrolled.";
         SlurpPanel.Visibility = Visibility.Visible;
     }
@@ -671,10 +666,10 @@ public partial class VoyageView : UserControl, IDisposable
             FinishSlurp();
             return;
         }
-        var (isSquare, index) = _slurp.Peek();
-        if (isSquare)
+        var (isFigurine, index) = _slurp.Peek();
+        if (isFigurine)
         {
-            await SlurpSquare(index);
+            await SlurpFigurine(index);
             return;
         }
         SlurpInfo.Text = $"Copying chart {index}…";   // the press visibly landed
@@ -721,36 +716,71 @@ public partial class VoyageView : UserControl, IDisposable
         else SetStatus($"Chart {index} captured \u2014 {_slurp.Count} to go.");
     }
 
+    /// <summary>Where a figurine's Edge and cell put it on screen: the border square's
+    /// centre pushed OUTWARD past the frame by the calibrated inset.</summary>
+    private static (int X, int Y) FigurinePosition(
+        BoardLayout.FigurineSlot slot, AreaModifierPanel.Options o)
+    {
+        var cell = slot.Adjacent[0];
+        var x = o.BoardOriginX + cell.Col * o.BoardPitch;
+        var y = o.BoardOriginY + cell.Row * o.BoardPitch;
+        return slot.Edge switch
+        {
+            "top" => (x, y - o.FigurineInset),
+            "bottom" => (x, y + o.FigurineInset),
+            "left" => (x - o.FigurineInset, y),
+            _ => (x + o.FigurineInset, y),
+        };
+    }
+
+    private string FigurineEdge(int index) =>
+        _session.Layout.Figurines.FirstOrDefault(f => f.Index == index)?.Edge ?? "?";
+
     /// <summary>
-    /// One F9 press on a board square: hover it so the Area Modifiers panel shows its
-    /// aggregate, give the game a beat to draw it, then read the panel with OCR.
+    /// One F9 press on a border figurine: hover the carving so its tooltip shows --
+    /// the authoritative modifier text; the Area Modifiers panel never lists a
+    /// figurine's adjacent-scope lines -- then OCR a generous region around the
+    /// hover point and keep what survives the chrome filter.
     /// No input reaches the game beyond the hover itself.
     /// </summary>
-    private async Task SlurpSquare(int square)
+    private async Task SlurpFigurine(int index)
     {
         if (_slurp is null || _capturing) return;
-        SlurpInfo.Text = $"Reading square {square}…";
+        var slot = _session.Layout.Figurines.FirstOrDefault(f => f.Index == index);
+        if (slot is null) { OnSlurpSkip(this, new RoutedEventArgs()); return; }
+
+        SlurpInfo.Text = $"Reading figurine {index} ({slot.Edge})…";
         var o = AreaModifierPanel.Options.Load();
-        var boardCols = _session.Layout.Cols;
-        var (row, col) = ((square - 1) / boardCols, (square - 1) % boardCols);
-        GameInput.HoverAt(o.BoardOriginX + col * o.BoardPitch,
-                          o.BoardOriginY + row * o.BoardPitch);
-        await Task.Delay(220);   // the panel repaints on hover
+        var (hx, hy) = FigurinePosition(slot, o);
+        GameInput.HoverAt(hx, hy);
+        await Task.Delay(240);   // the tooltip fades in
 
         _capturing = true;
         try
         {
-            if (!await ReadAreaPanelInto(square,
-                    hoverHint: $"Square {square}: the panel showed no square \u2014 "
-                               + "check Calibrate's board origin, or Skip."))
+            // Tooltips anchor wherever they fit, mostly up and to the left of the
+            // cursor; the region is wide enough to catch them anywhere they land.
+            var screen = ScreenCapture.PrimaryScreenBounds();
+            var rect = System.Drawing.Rectangle.Intersect(screen,
+                new System.Drawing.Rectangle(hx - 1000, hy - 340, 1340, 500));
+            var raw = await ScreenOcr.ReadRegionAsync(rect, upscale: 2);
+            var mods = AreaModifierPanel.TooltipLines(raw);
+            if (mods.Count == 0)
             {
+                SetStatus($"Figurine {index}: no tooltip read \u2014 F9 retries it "
+                          + "(check Calibrate's figurine inset), or Skip.", bad: true);
                 RefreshSlurpPanel();
-                return;          // status explains; F9 retries, Skip moves on
+                return;
             }
+            _session.ApplyFigurineText(index, string.Join("\n", mods));
+            _solution = null;
+            Persist();
+            SetStatus($"Figurine {index} ({slot.Edge}): read {mods.Count} "
+                      + (mods.Count == 1 ? "modifier." : "modifiers."));
         }
         catch (Exception ex)
         {
-            SetStatus($"Could not read the panel: {ex.Message}", bad: true);
+            SetStatus($"Could not read the tooltip: {ex.Message}", bad: true);
             return;
         }
         finally
@@ -770,10 +800,10 @@ public partial class VoyageView : UserControl, IDisposable
     private void OnSlurpSkip(object sender, RoutedEventArgs e)
     {
         if (_slurp is not { Count: > 0 }) return;
-        var (wasSquare, skipped) = _slurp.Dequeue();
+        var (wasFigurine, skipped) = _slurp.Dequeue();
         RefreshSlurpPanel();
         if (_slurp.Count == 0) FinishSlurp();
-        else SetStatus((wasSquare ? $"Square {skipped}" : $"Chart {skipped}")
+        else SetStatus((wasFigurine ? $"Figurine {skipped}" : $"Chart {skipped}")
                        + $" skipped \u2014 it stays unread.");
     }
 

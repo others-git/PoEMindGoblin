@@ -76,7 +76,13 @@ public sealed class BoardLayout
         {
             if (!descriptions.TryGetValue(slot.Index, out var text) || string.IsNullOrWhiteSpace(text))
                 continue;
-            result.Add(new BoardModifier(text, slot.Adjacent.Select(a => a.ToCell()).ToList()));
+            var cells = slot.Adjacent.Select(a => a.ToCell()).ToList();
+            // One modifier PER LINE, matching how squares bind: a figurine can carry
+            // several mods, and the channel classifiers anchor at line start -- bound
+            // as one blob, every line after the first would silently lose its channel.
+            foreach (var line in text.Split('\n',
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                result.Add(new BoardModifier(line, cells));
         }
         return result;
     }
