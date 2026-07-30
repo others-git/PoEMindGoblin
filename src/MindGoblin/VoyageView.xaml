@@ -453,7 +453,7 @@
                             Style="{StaticResource Primary}"/>
                     <!-- The pre-dive ritual, floated over the toolbar after every solve:
                          boxes get juiced BEFORE they are opened, and the orbs cannot be
-                         fetched once you are on the seafloor. Non-modal -- it steals no
+                         fetched once you are on the seafloor. Non-modal: it steals no
                          focus, dies on its own, and a click dismisses it early. -->
                     <Popup x:Name="AlchNote" AllowsTransparency="True" Placement="Top"
                            PlacementTarget="{Binding ElementName=SolveBtn}"
