@@ -733,6 +733,39 @@ public partial class VoyageView : UserControl, IDisposable
         };
     }
 
+    /// <summary>
+    /// Bounding box of the magic-blue tooltip text inside a captured region, padded and
+    /// returned in SCREEN coordinates. Blue this saturated appears nowhere else on the
+    /// Voyage screen, which makes it a better tooltip detector than any dark-box
+    /// heuristic -- the chart stash is dark too.
+    /// </summary>
+    private static System.Drawing.Rectangle? BlueTextBounds(
+        BitmapPixels pixels, System.Drawing.Rectangle region)
+    {
+        int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1, count = 0;
+        for (var y = 0; y < pixels.Height; y += 2)
+            for (var x = 0; x < pixels.Width; x += 2)
+            {
+                var (r, g, b) = pixels.At(x, y);
+                if (b > 130 && b > r + 40 && b > g + 30)
+                {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                    count++;
+                }
+            }
+        // A real mod line is hundreds of samples; a stray blue pixel is not a tooltip.
+        if (count < 40) return null;
+        var box = new System.Drawing.Rectangle(
+            region.X + minX - 14, region.Y + minY - 10,
+            maxX - minX + 28, maxY - minY + 20);
+        return System.Drawing.Rectangle.Intersect(
+            new System.Drawing.Rectangle(0, 0, int.MaxValue, int.MaxValue), box) is var _
+            ? box : box;
+    }
+
     private string FigurineEdge(int index) =>
         _session.Layout.Figurines.FirstOrDefault(f => f.Index == index)?.Edge ?? "?";
 
@@ -758,12 +791,27 @@ public partial class VoyageView : UserControl, IDisposable
         _capturing = true;
         try
         {
-            // Tooltips anchor wherever they fit, mostly up and to the left of the
-            // cursor; the region is wide enough to catch them anywhere they land.
+            // Tooltips anchor wherever they fit, so the search region is generous --
+            // but OCRing all of it swept up chart captions, the HUD, whatever sat
+            // behind the tooltip, and clipped long mods at the region edge. The mod
+            // text is MAGIC BLUE, unique on this screen: find its bounding box first
+            // and read only that.
             var screen = ScreenCapture.PrimaryScreenBounds();
-            var rect = System.Drawing.Rectangle.Intersect(screen,
-                new System.Drawing.Rectangle(hx - 1000, hy - 340, 1340, 500));
-            var raw = await ScreenOcr.ReadRegionAsync(rect, upscale: 2);
+            var region = System.Drawing.Rectangle.Intersect(screen,
+                new System.Drawing.Rectangle(hx - 1000, hy - 380, 1760, 600));
+            System.Drawing.Rectangle? tooltip;
+            using (var shot = ScreenCapture.CaptureRegion(region))
+            using (var pixels = new BitmapPixels(shot))
+                tooltip = BlueTextBounds(pixels, region);
+            if (tooltip is not { } found)
+            {
+                SetStatus($"Figurine {index}: no tooltip found \u2014 F9 retries it "
+                          + "(check Calibrate's figurine inset), or Skip.", bad: true);
+                RefreshSlurpPanel();
+                return;
+            }
+            var box = System.Drawing.Rectangle.Intersect(screen, found);
+            var raw = await ScreenOcr.ReadRegionAsync(box, upscale: 3);
             var mods = AreaModifierPanel.TooltipLines(raw);
             if (mods.Count == 0)
             {
@@ -1641,7 +1689,7 @@ public partial class VoyageView : UserControl, IDisposable
                 var step = _steps.FirstOrDefault(s => s.Square == square);
                 var isStranded = stranded.Contains(new Cell(r, c));
                 var isTarget = _target == Target.Square && _targetIndex == square;
-                var hasModifiers = _session.SquareModifiers.ContainsKey(square);
+                var hasModifiers = _session.SquareBoardKnown(square);
                 var cell = _boardCells[r, c];
 
                 cell.Background = step is null
@@ -1684,8 +1732,11 @@ public partial class VoyageView : UserControl, IDisposable
         lines.Add(step is null ? "" : "— board —");
         lines.RemoveAll(string.IsNullOrEmpty);
 
-        if (_session.SquareModifiers.TryGetValue(square, out var mods))
+        if (_session.SquareBoardKnown(square))
+        {
+            var mods = _session.EffectiveSquareModifiers(square);
             lines.AddRange(mods.Count == 0 ? ["No board modifiers on this square."] : mods);
+        }
         else if (_session.SquaresWithoutFigurines.Contains(square))
             lines.Add("No figurine reaches this square, so it never has board modifiers.");
         else
@@ -2364,14 +2415,15 @@ public partial class VoyageView : UserControl, IDisposable
         var unreachable = _session.SquaresWithoutFigurines.ToHashSet();
         for (var square = 1; square <= _session.Layout.Rows * _session.Layout.Cols; square++)
         {
-            var read = _session.SquareModifiers.TryGetValue(square, out var lines);
+            var read = _session.SquareBoardKnown(square);
+            var lines = read ? _session.EffectiveSquareModifiers(square) : [];
 
             // Three states, not two: unreachable squares are not work left to do, so they
             // must not read as "Not read" and sit there looking unfinished.
             var text = unreachable.Contains(square) ? "No figurine reaches this square"
                 : !read ? "Not read"
-                : lines!.Count == 0 ? "No modifiers"
-                : string.Join("\n", lines!);
+                : lines.Count == 0 ? "No modifiers"
+                : string.Join("\n", lines);
 
             _modifiers.Add(new ModifierRow(
                 ModifierRow.Sort.Square, square,

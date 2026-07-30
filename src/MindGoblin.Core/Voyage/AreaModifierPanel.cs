@@ -233,17 +233,38 @@ public sealed class AreaModifierPanel
     public static IReadOnlyList<string> TooltipLines(IEnumerable<string>? lines)
     {
         if (lines is null) return [];
-        var kept = lines
+        var cleaned = lines
+            // Chart-level captions ("L:83", "L..79") from the stash behind the tooltip
+            // OCR as tokens INSIDE otherwise-good lines; scrub them, then the edges.
+            .Select(l => LevelCaption.Replace(l, " "))
+            .Select(l => LeadingJunk.Replace(l.Trim(), ""))
             .Select(l => l.Trim())
             .Where(l => l.Length > 2)
-            .Where(l => !Chrome.IsMatch(l))
             .ToList();
-        return Join(kept);
+        // Stitch BEFORE judging: a wrapped continuation ("Messages in a Bottle") has
+        // no anchor of its own and would die in the filter before rejoining its line.
+        return [.. Join(cleaned)
+            .Where(l => !Chrome.IsMatch(l))
+            // A modifier always carries words plus a number or a known verb; screen
+            // furniture ("WAYPOINT", an HP readout, a mangled heading) never has both.
+            .Where(l => ModShaped.IsMatch(l) && Regex.IsMatch(l, "[A-Za-z]{3}"))];
     }
 
     private static readonly Regex Chrome = new(
         @"Area Modifiers|Hover a square|of the Voyage|relevant Area|Plan your Voyage|"
-        + @"Begin Voyage|Clear Board|Type keywords|^Voyage\b",
+        + @"Begin Voyage|Clear Board|Type keywords|^Voyage\b|WAYPOI|^\d+:\d+\b|"
+        + @"^Life\b|^Shield\b|CLEAR B|^Plaw\b|^Mana\b|Reserved",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex LevelCaption = new(
+        @"\bL[.:•]{1,2}\s?\d+\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex LeadingJunk = new(
+        @"^[^0-9A-Za-z+]+", RegexOptions.CultureInvariant);
+
+    private static readonly Regex ModShaped = new(
+        @"\d|contains?|Placing|Soul Eater|Monsters|Players|Adjacent|Charts",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>

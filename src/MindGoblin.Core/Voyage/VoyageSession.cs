@@ -104,8 +104,7 @@ public sealed class VoyageSession
         {
             var unreachable = SquaresWithoutFigurines.ToHashSet();
             return Enumerable.Range(1, Layout.Rows * Layout.Cols)
-                             .Where(sq => !_squareModifiers.ContainsKey(sq)
-                                          && !unreachable.Contains(sq))
+                             .Where(sq => !SquareBoardKnown(sq) && !unreachable.Contains(sq))
                              .ToList();
         }
     }
@@ -250,21 +249,51 @@ public sealed class VoyageSession
     {
         var result = new List<BoardModifier>();
 
+        // FIGURINES are the authoritative border source: their tooltip is the game's
+        // own per-figurine text, where the Area Modifiers panel is an aggregate VIEW
+        // of the same figurines. A square read therefore only stands in for cells
+        // whose figurines have not been read. The reverse once held, and one stale
+        // panel read silently muted every figurine behind it -- the board showed old
+        // mods while twelve fresh reads sat ignored.
+        var figurineCovered = Layout.Figurines
+            .Where(f => _figurines.TryGetValue(f.Index, out var t)
+                        && !string.IsNullOrWhiteSpace(t))
+            .SelectMany(f => f.Adjacent.Select(a => a.ToCell()))
+            .ToHashSet();
+
         foreach (var (square, lines) in _squareModifiers)
         {
             var cell = CellOf(square);
+            if (figurineCovered.Contains(cell)) continue;
             result.AddRange(lines.Select(l => new BoardModifier(l, [cell])));
         }
 
-        var covered = _squareModifiers.Keys.Select(CellOf).ToHashSet();
-        foreach (var modifier in Layout.Bind(_figurines))
-        {
-            var cells = modifier.AffectedCells.Where(c => !covered.Contains(c)).ToList();
-            if (cells.Count > 0) result.Add(modifier with { AffectedCells = cells });
-        }
-
+        result.AddRange(Layout.Bind(_figurines));
         return result;
     }
+
+    /// <summary>
+    /// What the board grants ONE square, from whichever source is authoritative for
+    /// it. This is the view every square-shaped UI shows: the checklist row, the
+    /// square tooltip, the read-state colour -- so a figurine read lights its square
+    /// up exactly like a panel read used to.
+    /// </summary>
+    public IReadOnlyList<string> EffectiveSquareModifiers(int square)
+    {
+        var cell = CellOf(square);
+        return [.. BoardModifiers()
+            .Where(m => m.AffectedCells.Contains(cell))
+            .Select(m => m.Description)];
+    }
+
+    /// <summary>Is the board's contribution to this square known -- a panel read, or
+    /// at least one of its figurines read?</summary>
+    public bool SquareBoardKnown(int square) =>
+        _squareModifiers.ContainsKey(square)
+        || Layout.Figurines.Any(f =>
+            f.Adjacent.Any(a => a.ToCell() == CellOf(square))
+            && _figurines.TryGetValue(f.Index, out var t)
+            && !string.IsNullOrWhiteSpace(t));
 
     /// <summary>
     /// Score every chart against a profile and hand the result to the solver.
