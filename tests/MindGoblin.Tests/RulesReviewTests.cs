@@ -35,7 +35,6 @@ public class RulesReviewTests
     [InlineData("containers", "Adjacent Areas contain an additional cage of Tormented Spirits")]
     [InlineData("containers", "Adjacent Areas contain an additional Message in a Bottle")]
     [InlineData("containers", "Adjacent Areas contain an additional Treasure Anchor")]
-    [InlineData("quantity", "Adjacent Areas contain an additional Golden Lantern")]
     [InlineData("pack size", "Adjacent Areas contain an additional pack of Sea Beasts")]
     [InlineData("gold", "Adjacent Areas contain an additional pack of Crabs")]
     [InlineData("magic monsters", "Adjacent Areas contain an additional pack of the Drowned")]

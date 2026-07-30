@@ -31,19 +31,20 @@ public class PolishTests
     }
 
     [Fact]
-    public void PolishRespectsThePin()
+    public void PolishKeepsARequiredChart()
     {
-        // The pinned chart is worthless and pinned to a corner; the polish must not
-        // swap it away for something better.
+        // A required chart arrives at the solver as an enormous Value (the session's
+        // inclusion bonus). The polish evaluates with the same scores the search used,
+        // so swapping it out for a "better" ordinary chart must never look like an
+        // improvement.
         var charts = Enumerable.Range(1, 12)
             .Select(i => new Chart($"c{i}", $"c{i}", ChartShape.Crossing, 80, []) { Value = i })
-            .Append(new Chart("junk", "junk", ChartShape.Corner, 80, []) { Value = 0 })
+            .Append(new Chart("starred", "starred", ChartShape.Corner, 80, []) { Value = 1e7 })
             .ToList();
 
-        var solution = new VoyageSolver(3, 3, charts, strandedPenalty: 40,
-                                        pin: ("junk", new Cell(0, 0)))
+        var solution = new VoyageSolver(3, 3, charts, strandedPenalty: 40)
             .Solve(TimeSpan.FromSeconds(2));
 
-        Assert.Contains(solution.Placements, p => p.Chart.Id == "junk" && p.Cell == new Cell(0, 0));
+        Assert.Contains(solution.Placements, p => p.Chart.Id == "starred");
     }
 }

@@ -18,10 +18,24 @@ namespace MindGoblin.Core.Voyage;
 /// pass 2 is OPTIONAL: with no hover text at all the solver still returns a valid layout,
 /// scored on area level alone. Detail improves the plan; its absence does not block one.
 /// </summary>
+/// <summary>What the user has said the planner may do with a chart.</summary>
+public enum ChartMark
+{
+    /// <summary>No opinion: the rules decide.</summary>
+    None,
+
+    /// <summary>The veto: never place it.</summary>
+    Excluded,
+
+    /// <summary>The mandate: place it on any board where doing so is legal.</summary>
+    Required,
+}
+
 public sealed class VoyageSession
 {
     private readonly Dictionary<int, Chart> _charts = new();
     private readonly HashSet<int> _excluded = new();
+    private readonly HashSet<int> _required = new();
     private readonly Dictionary<int, string> _figurines = new();
     private readonly Dictionary<int, List<string>> _squareModifiers = new();
 
@@ -257,17 +271,8 @@ public sealed class VoyageSession
     /// they depend on the PROFILE: the same chart is worth a lot under a sulphur profile
     /// and nothing under a pack-size one, so scoring cannot be baked into the chart.
     /// </summary>
-    /// <param name="pinChart">
-    /// Panel index of a chart to force onto the board, at the square with least to offer.
-    ///
-    /// For modifiers worth taking that no profile can price -- Soul Eater grants player
-    /// power rather than loot, so it scores zero and the planner drops the chart entirely.
-    /// Since a voyage-wide modifier pays the same from anywhere, the square it occupies is
-    /// pure opportunity cost, and the cheapest square is the right one to spend.
-    /// </param>
     public VoyageSolver.Solution Solve(
-        VoyageProfile profile, TimeSpan? budget = null, CancellationToken ct = default,
-        int? pinChart = null)
+        VoyageProfile profile, TimeSpan? budget = null, CancellationToken ct = default)
     {
         // ScoreChart already folds in area level; adding it again here would weight it
         // twice as heavily as the profile asked for.
@@ -288,25 +293,31 @@ public sealed class VoyageSession
         // value it actually is.
         var eligible = ByPanelIndex
             .Where(kv => !_excluded.Contains(kv.Key))
-            .Select(kv => kv.Value)
+            .OrderBy(kv => kv.Key)
             .ToList();
 
         var boardEstimate = eligible
-            .Select(c => profile.ScoreChart(c))
+            .Select(kv => profile.ScoreChart(kv.Value))
             .OrderByDescending(v => v)
             .Take(Layout.Rows * Layout.Cols)
             .Where(v => v > 0)
             .Sum();
 
-        var scored = eligible.Select(c =>
+        var scored = eligible.Select(kv =>
         {
+            var c = kv.Value;
             var adjacent = profile.ScoreAdjacent(c);
             var channel = c.AdjacentModifier is { } adj
                 ? VoyageProfile.PayoutChannelOf(adj) : VoyageProfile.PayoutChannel.None;
             var payoutAdj = channel != VoyageProfile.PayoutChannel.None;
             return c with
             {
-                Value = profile.ScoreChart(c, boardEstimate),
+                // Required is a value, not a constraint: the bonus makes any board that
+                // seats the chart beat every board that does not, while the search still
+                // chooses WHERE it goes -- which quietly subsumes the old "cheapest
+                // square" rule, since the layout that loses least is the optimum.
+                Value = profile.ScoreChart(c, boardEstimate)
+                        + (_required.Contains(kv.Key) ? RequiredBonus : 0),
                 AdjacentValue = payoutAdj ? 0 : adjacent,
                 AdjacentPerMonsterValue = payoutAdj ? adjacent : 0,
                 AdjacentPayoutOnPopulation = channel == VoyageProfile.PayoutChannel.Population,
@@ -371,33 +382,28 @@ public sealed class VoyageSession
             + chart.AdjacentMonsterDensity * nbrRare.GetValueOrDefault(cell)
             + chart.AdjacentPackDensity * nbrPack.GetValueOrDefault(cell);
 
-        (string, Cell)? pin = null;
-        if (pinChart is { } index && !_excluded.Contains(index)
-            && _charts.TryGetValue(index, out var pinned)
-            && CheapestCellFor(pinned, CombinedBoardValue(profile, pinned)) is { } where)
-            pin = (pinned.Id, where);
-
-        return new VoyageSolver(Layout.Rows, Layout.Cols, scored, score,
-                                strandedPenalty: profile.StrandedSquarePenalty,
-                                maxPlacements: profile.MaxCharts,
-                                pin: pin)
+        var solution = new VoyageSolver(Layout.Rows, Layout.Cols, scored, score,
+                                        strandedPenalty: profile.StrandedSquarePenalty,
+                                        maxPlacements: profile.MaxCharts)
             .Solve(budget, ct);
+
+        // The bonus buys inclusion, not points. Reporting it would claim ten million
+        // where the board earned six hundred, so peel it back off for every required
+        // chart the solver actually seated.
+        var requiredIds = _required.Where(_charts.ContainsKey)
+            .Select(i => _charts[i].Id).ToHashSet(StringComparer.Ordinal);
+        var seated = solution.Placements.Count(p => requiredIds.Contains(p.Chart.Id));
+        return seated == 0 ? solution
+            : solution with { Value = solution.Value - seated * RequiredBonus };
     }
 
     /// <summary>
-    /// The square with least to offer that this chart can actually occupy.
-    ///
-    /// Two things make a square valuable and both are known before the search: what the
-    /// board grants it, and how many neighbours it has to trade adjacency with. A corner
-    /// touches two squares, an edge three, the centre four -- so among squares the board
-    /// treats alike, the corner is the cheapest thing to spend.
-    ///
-    /// Shape is why this is a search rather than a minimum. Every open edge has to face
-    /// another square, so a Crossing cannot sit in a corner at any rotation and a chart
-    /// pinned there would make the whole board unsolvable. Cells are therefore taken
-    /// cheapest-first and the first one the chart FITS wins -- a necessary condition, not
-    /// a sufficient one, but it rules out exactly the case that has no answer.
+    /// Added to a Required chart's value. Larger than any real board can score, so
+    /// "seats the chart" always outranks "does not" -- and identical across layouts
+    /// that seat it, so it steers nothing else.
     /// </summary>
+    private const double RequiredBonus = 1e7;
+
     /// <summary>
     /// What each square grants, split into flat value and per-monster payouts. The
     /// per-monster half multiplies with the pack size of whatever chart stands there;
@@ -424,52 +430,6 @@ public sealed class VoyageSession
                 into[cell] = into.GetValueOrDefault(cell) + worth;
         }
         return (flat, perRare, perPack);
-    }
-
-    /// <summary>The channels combined for ONE known chart, for the pin's cell choice.</summary>
-    private Dictionary<Cell, double> CombinedBoardValue(VoyageProfile profile, Chart chart)
-    {
-        var (flat, perRare, perPack) = BoardValueByCell(profile);
-        var rareFactor = 1 + profile.MonsterPayoutSynergy
-                             * (chart.MonsterPackSize / 100 + AreaPopulation.RoomRareBonus(chart));
-        var packFactor = 1 + profile.MonsterPayoutSynergy * chart.MonsterPackSize / 100;
-        var combined = new Dictionary<Cell, double>(flat);
-        foreach (var (cell, worth) in perRare)
-            combined[cell] = combined.GetValueOrDefault(cell) + worth * rareFactor;
-        foreach (var (cell, worth) in perPack)
-            combined[cell] = combined.GetValueOrDefault(cell) + worth * packFactor;
-        return combined;
-    }
-
-    private Cell? CheapestCellFor(Chart chart, IReadOnlyDictionary<Cell, double> boardValue)
-    {
-        var board = new VoyageBoard(Layout.Rows, Layout.Cols);
-
-        bool Fits(Cell cell) =>
-            ChartFace.DistinctRotations(chart.Shape).Any(rotation =>
-            {
-                var face = new ChartFace(chart.Shape, rotation);
-                return Enum.GetValues<Side>().All(side =>
-                    !face.IsOpen(side) || board.InBounds(VoyageBoard.Neighbour(cell, side)));
-            });
-
-        int Neighbours(Cell cell) =>
-            Enum.GetValues<Side>().Count(s => board.InBounds(VoyageBoard.Neighbour(cell, s)));
-
-        return AllCells()
-            .Where(Fits)
-            .OrderBy(c => boardValue.GetValueOrDefault(c))
-            .ThenBy(Neighbours)
-            .ThenBy(c => VoyagePlan.SquareNumber(c, Layout.Cols))
-            .Cast<Cell?>()
-            .FirstOrDefault();
-    }
-
-    private IEnumerable<Cell> AllCells()
-    {
-        for (var r = 0; r < Layout.Rows; r++)
-            for (var c = 0; c < Layout.Cols; c++)
-                yield return new Cell(r, c);
     }
 
     /// <summary>
@@ -688,12 +648,25 @@ public sealed class VoyageSession
 
     public bool IsExcluded(int panelIndex) => _excluded.Contains(panelIndex);
 
-    /// <summary>Toggle the X. Returns the new state: true when now excluded.</summary>
-    public bool ToggleExcluded(int panelIndex)
+    /// <summary>Panel indices the solver must place. The X's opposite: the rules price
+    /// Soul Eater at zero, and the star says "take it anyway".</summary>
+    public IReadOnlyCollection<int> Required => _required;
+
+    public bool IsRequired(int panelIndex) => _required.Contains(panelIndex);
+
+    /// <summary>
+    /// Advance a chart's mark one step: none -> excluded -> required -> none.
+    ///
+    /// One cycle on one gesture because it is ONE question -- what may the planner do
+    /// with this chart -- and the three answers are mutually exclusive. Two independent
+    /// toggles would invite the meaningless fourth state, excluded-and-required.
+    /// </summary>
+    public ChartMark CycleMark(int panelIndex)
     {
-        if (_excluded.Remove(panelIndex)) return false;
+        if (_excluded.Remove(panelIndex)) { _required.Add(panelIndex); return ChartMark.Required; }
+        if (_required.Remove(panelIndex)) return ChartMark.None;
         _excluded.Add(panelIndex);
-        return true;
+        return ChartMark.Excluded;
     }
 
     /// <summary>
@@ -710,7 +683,7 @@ public sealed class VoyageSession
     {
         var spent = 0;
         foreach (var index in placedCharts)
-            if (_charts.Remove(index)) { _excluded.Remove(index); spent++; }
+            if (_charts.Remove(index)) { _excluded.Remove(index); _required.Remove(index); spent++; }
 
         _squareModifiers.Clear();
         _figurines.Clear();
@@ -718,14 +691,14 @@ public sealed class VoyageSession
     }
 
     /// <summary>Capture everything read so far, for writing to disk.</summary>
-    public VoyageSessionState ToState(string? profile = null, bool useSoulEater = false) => new()
+    public VoyageSessionState ToState(string? profile = null) => new()
     {
         Version = VoyageSessionState.CurrentVersion,
-        UseSoulEater = useSoulEater,
         Rows = Layout.Rows,
         Cols = Layout.Cols,
         Profile = profile,
         Excluded = _excluded.Order().ToList(),
+        Required = _required.Order().ToList(),
         Charts = _charts.OrderBy(kv => kv.Key).Select(kv => new VoyageSessionState.ChartState
         {
             PanelIndex = kv.Key,
@@ -791,13 +764,15 @@ public sealed class VoyageSession
             if (int.TryParse(key, out var index)) session._figurines[index] = text;
 
         session._excluded.UnionWith(state.Excluded);
+        session._required.UnionWith(state.Required);
+        session._required.ExceptWith(session._excluded);   // a hand-edited file cannot make both true
         return session;
     }
 
     /// <summary>Write to disk. Cheap enough to call after every capture.</summary>
-    public void Save(string? path = null, string? profile = null, bool useSoulEater = false)
+    public void Save(string? path = null, string? profile = null)
     {
-        var state = ToState(profile, useSoulEater);
+        var state = ToState(profile);
         state.SavedAt = DateTimeOffset.Now;
         state.Save(path);
     }

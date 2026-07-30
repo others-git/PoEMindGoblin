@@ -38,15 +38,6 @@ public partial class VoyageView : UserControl, IDisposable
     private readonly ObservableCollection<SummaryRow> _summary = new();
     private readonly ObservableCollection<AlertRow> _alerts = new();
 
-    /// <summary>
-    /// Whether to force the Soul Eater chart onto the board.
-    ///
-    /// Off by default, because forcing a chart the rules score at zero costs a square
-    /// that something profitable would otherwise have. It is a judgement about how much
-    /// player power is worth to you, which is not a thing the planner can weigh.
-    /// </summary>
-    private bool _useSoulEater;
-
     /// <summary>Whether the alert banner is dropped down over the board.</summary>
     private bool _alertsOpen;
     private readonly DispatcherTimer _clipboardPoll =
@@ -90,7 +81,6 @@ public partial class VoyageView : UserControl, IDisposable
         var (restored, state) = VoyageSession.Restore();
         _session = restored;
         _restoredProfile = state?.Profile;
-        _useSoulEater = state?.UseSoulEater ?? false;
 
         _rules.WriteDefaultsIfMissing();
 
@@ -159,7 +149,7 @@ public partial class VoyageView : UserControl, IDisposable
         if (!_persistenceEnabled) return;
         try
         {
-            _session.Save(profile: Profile?.Name, useSoulEater: _useSoulEater);
+            _session.Save(profile: Profile?.Name);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -689,13 +679,12 @@ public partial class VoyageView : UserControl, IDisposable
         SolveBusy.Visibility = Visibility.Visible;
         SetStatus("Solving \u2014 up to 3 s\u2026");
 
-        var pin = _useSoulEater ? VoyageAlerts.SoulEaterChart(_session) : null;
         var snapshot = VoyageSession.FromState(_session.ToState());
         VoyageSolver.Solution solution;
         try
         {
             solution = await Task.Run(
-                () => snapshot.Solve(profile, TimeSpan.FromSeconds(3), cts.Token, pin),
+                () => snapshot.Solve(profile, TimeSpan.FromSeconds(3), cts.Token),
                 CancellationToken.None);
         }
         catch (OperationCanceledException)
@@ -718,8 +707,7 @@ public partial class VoyageView : UserControl, IDisposable
     private void SolveNow()
     {
         if (Profile is not { } profile) return;
-        var pin = _useSoulEater ? VoyageAlerts.SoulEaterChart(_session) : null;
-        ApplySolution(_session.Solve(profile, TimeSpan.FromSeconds(3), pinChart: pin), profile);
+        ApplySolution(_session.Solve(profile, TimeSpan.FromSeconds(3)), profile);
     }
 
     private void ApplySolution(VoyageSolver.Solution solution, VoyageProfile profile)
@@ -757,7 +745,18 @@ public partial class VoyageView : UserControl, IDisposable
         SolveInfo.Foreground = new SolidColorBrush(_solution.StrandedCells.Count == 0
             ? Color.FromRgb(0x6B, 0x5F, 0x4E)
             : Color.FromRgb(0xB8, 0x50, 0x3E));
-        SetStatus($"Placed {_solution.Placements.Count} charts for \"{profile.Name}\".");
+        // A star the solver could not honour must be said out loud: the bonus prefers
+        // any board that seats the chart, so an unseated one means NO legal layout has
+        // room for it -- not that the planner ignored the mark.
+        var unseated = _session.Required
+            .Where(r => _session.ByPanelIndex.ContainsKey(r))
+            .Where(r => _steps.All(st => st.ChartNumber != r))
+            .Order().ToList();
+        if (unseated.Count > 0)
+            SetStatus("No legal layout can seat required chart"
+                      + (unseated.Count == 1 ? " " : "s ") + string.Join(", ", unseated)
+                      + " \u2014 the rest were placed.", bad: true);
+        else SetStatus($"Placed {_solution.Placements.Count} charts for \"{profile.Name}\".");
     }
 
     /// <summary>
@@ -889,14 +888,8 @@ public partial class VoyageView : UserControl, IDisposable
     {
         _alerts.Clear();
 
-        var soulEater = VoyageAlerts.SoulEaterChart(_session);
         foreach (var alert in VoyageAlerts.Scan(_session))
-        {
-            // The button belongs on the row that explains it. A control somewhere else
-            // labelled "Use Soul Eater" would be a second thing to find and connect up.
-            var offersButton = soulEater is not null && alert.ChartIndex == soulEater;
-            _alerts.Add(new AlertRow(alert, offersButton, _useSoulEater));
-        }
+            _alerts.Add(new AlertRow(alert));
 
         // The toggle NAMES what it is hiding. A chevron reading "2 modifiers" would make
         // finding out whether they matter cost a click every time; "Divine Orbs · Soul
@@ -931,34 +924,6 @@ public partial class VoyageView : UserControl, IDisposable
     {
         _alertsOpen = !_alertsOpen;
         RefreshAlerts();
-    }
-
-    /// <summary>
-    /// Take Soul Eater, or stop taking it.
-    ///
-    /// Solving again immediately is the point: the board is the answer to "given what I
-    /// am willing to spend a square on", and having changed that, the old board answers a
-    /// question no longer being asked.
-    /// </summary>
-    private async void OnToggleSoulEater(object sender, RoutedEventArgs e)
-    {
-        _useSoulEater = !_useSoulEater;
-        RefreshAlerts();
-
-        if (_steps.Count == 0)
-        {
-            SetStatus(_useSoulEater
-                ? "Soul Eater will be placed on the cheapest square. Solve to see where."
-                : "Soul Eater is no longer forced onto the board.");
-            return;
-        }
-
-        // Awaited: the answer about WHERE it landed reads the new plan, which does not
-        // exist until the background solve finishes.
-        if (!await SolveAsync() || !_useSoulEater) return;
-        var square = _steps.FirstOrDefault(st => st.ChartNumber == VoyageAlerts.SoulEaterChart(_session));
-        if (square is not null) SetStatus($"Soul Eater forced onto square {square.Square}.");
-        else SetStatus("Soul Eater could not be placed on this board.", bad: true);
     }
 
     /// <summary>
@@ -1669,7 +1634,7 @@ public partial class VoyageView : UserControl, IDisposable
             // Clickable so the pass is not strictly sequential: one chart that will not
             // copy should not force the other 59 to wait behind it.
             cell.MouseLeftButtonUp += OnPanelCellClicked;
-            cell.MouseRightButtonUp += OnPanelCellExcluded;
+            cell.MouseRightButtonUp += OnPanelCellMarked;
             _panelCells[i] = cell;
             PanelGrid.Children.Add(cell);
         }
@@ -1677,22 +1642,27 @@ public partial class VoyageView : UserControl, IDisposable
     }
 
     /// <summary>
-    /// Right-click vetoes a chart: an X the planner must respect, toggled off the same
-    /// way. The rules say what a chart is WORTH; the X says "not this one anyway" --
-    /// saving it for a friend, distrusting a read, or just not wanting to run it.
+    /// Right-click cycles a chart's mark: X (never place it), then star (always place
+    /// it), then clear. The rules say what a chart is WORTH; the marks are the user
+    /// overruling them in either direction -- an X for a chart being saved or sold, a
+    /// star for the Soul Eater problem, where the payoff is player power and no profile
+    /// can price it.
     /// </summary>
-    private void OnPanelCellExcluded(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void OnPanelCellMarked(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (sender is not Border { Tag: int index }) return;
         if (!_session.ByPanelIndex.ContainsKey(index)) return;
         e.Handled = true;
 
-        var excluded = _session.ToggleExcluded(index);
+        var mark = _session.CycleMark(index);
         Persist();
         RefreshPanel();
-        SetStatus(excluded
-            ? $"Chart {index} excluded \u2014 Solve to replan without it."
-            : $"Chart {index} back in the pool \u2014 Solve to replan.");
+        SetStatus(mark switch
+        {
+            ChartMark.Excluded => $"Chart {index} excluded \u2014 Solve to replan without it.",
+            ChartMark.Required => $"Chart {index} required \u2014 Solve to force it onto the board.",
+            _ => $"Chart {index} back in the pool \u2014 Solve to replan.",
+        });
     }
 
     private void RefreshPanel()
@@ -1716,6 +1686,7 @@ public partial class VoyageView : UserControl, IDisposable
             }
 
             var isExcluded = _session.IsExcluded(index);
+            var isRequired = _session.IsRequired(index);
             var isPlanned = used.ContainsKey(index);
             // Not gated on read mode: manual entry works without it, and the highlight is
             // what tells you which chart the box below applies to.
@@ -1792,13 +1763,31 @@ public partial class VoyageView : UserControl, IDisposable
                 });
                 cell.Child = host;
             }
+            else if (isRequired)
+            {
+                // The star sits in the corner rather than over the face: a required
+                // chart still has a shape and a destination worth reading.
+                var host = new Grid();
+                host.Children.Add(stack);
+                host.Children.Add(new TextBlock
+                {
+                    Text = "\u2605",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xA2, 0x27)),
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Top,
+                    Margin = new Thickness(0, 0, 2, 0),
+                });
+                cell.Child = host;
+            }
             else
             {
                 cell.Child = stack;
             }
             cell.ToolTip = Tip(
                 string.IsNullOrWhiteSpace(chart.Name) ? $"Chart {index}" : $"Chart {index} · {chart.Name}",
-                isExcluded ? "Excluded \u2014 right-click to bring it back"
+                isExcluded ? "Excluded \u2014 right-click again to require it, twice to clear"
+                    : isRequired ? "Required \u2014 the solver must place it; right-click to clear"
                     : isPlanned ? $"Goes on square {used[index]}" : "Not in the plan",
                 DescribeChart(chart), hasDetail);
         }
@@ -2034,7 +2023,7 @@ public partial class VoyageView : UserControl, IDisposable
     /// <summary>One banner row. Colour carries the kind, so the label never has to.</summary>
     public sealed class AlertRow
     {
-        public AlertRow(VoyageAlert alert, bool offersButton, bool inUse)
+        public AlertRow(VoyageAlert alert)
         {
             Headline = alert.Headline;
             Detail = alert.Detail;
@@ -2042,16 +2031,12 @@ public partial class VoyageView : UserControl, IDisposable
             Accent = alert.Kind == AlertKind.Jackpot
                 ? new SolidColorBrush(Color.FromRgb(0xC9, 0xA2, 0x27))    // brass
                 : new SolidColorBrush(Color.FromRgb(0xB8, 0x50, 0x3E));   // rust
-            ActionVisibility = offersButton ? Visibility.Visible : Visibility.Collapsed;
-            ActionLabel = inUse ? "Drop Soul Eater" : "Use Soul Eater";
         }
 
         public string Headline { get; }
         public string Detail { get; }
         public string Where { get; }
         public Brush Accent { get; }
-        public string ActionLabel { get; }
-        public Visibility ActionVisibility { get; }
     }
 
     public sealed class SummaryRow

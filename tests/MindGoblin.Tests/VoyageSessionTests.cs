@@ -283,7 +283,6 @@ public class VoyageScoringTests
     [Theory]
     [InlineData("sulphur", "A\nDead Man's Sulphur: +9")]
     [InlineData("pack size", "A\nMonster Pack Size: +12%")]
-    [InlineData("quantity", "A\nItem Quantity: +42%")]
     public void ShippedProfilesScoreTheStatTheyAreNamedFor(string profileName, string text)
     {
         // A profile called "sulphur" that cannot see the sulphur stat is decorative.

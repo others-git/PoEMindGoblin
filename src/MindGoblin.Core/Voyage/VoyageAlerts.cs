@@ -63,12 +63,6 @@ public sealed record VoyageAlert(AlertKind Kind, string Headline, string Detail)
 
 public static class VoyageAlerts
 {
-    /// <summary>
-    /// The wording that identifies Soul Eater. Its own constant because the UI offers a
-    /// button for it, so two places have to agree on what counts.
-    /// </summary>
-    public const string SoulEaterPattern = @"have Soul Eater";
-
     private sealed record Rule(AlertKind Kind, string Pattern, string Headline, string Detail);
 
     /// <summary>
@@ -90,9 +84,10 @@ public static class VoyageAlerts
             "The biggest per-rare payout on the board. Pair it with anything adding rare "
             + "monsters, and run that square early."),
 
-        new(AlertKind.Jackpot, SoulEaterPattern, "Soul Eater",
-            "Voyage-wide, so it pays the same from any square. Take it for the implicit "
-            + "alone \u2014 it does not need a good one."),
+        new(AlertKind.Jackpot, @"have Soul Eater", "Soul Eater",
+            "Voyage-wide, so it pays the same from any square \u2014 and priced "
+            + "at zero, because player power is not loot. Right-click its chart twice to "
+            + "require it."),
 
         new(AlertKind.Jackpot, @"drop Dead Man's Sulphur", "Sulphur off rares",
             "Every rare drops sulphur -- the currency that pays for board rerolls and "
@@ -185,22 +180,6 @@ public static class VoyageAlerts
         if (!string.IsNullOrWhiteSpace(chart.VoyageModifier)) yield return chart.VoyageModifier!;
         if (!string.IsNullOrWhiteSpace(chart.AdjacentModifier)) yield return chart.AdjacentModifier!;
         foreach (var line in chart.Modifiers) yield return line;
-    }
-
-    /// <summary>
-    /// The chart carrying Soul Eater, if the panel has one.
-    ///
-    /// Soul Eater is voyage-wide, so it pays the same from any square -- and no rule
-    /// profile scores it, because what it is worth is player power rather than loot. Left
-    /// alone the planner therefore never places it. That is what the button is for, and
-    /// this is how the button knows whether to appear.
-    /// </summary>
-    public static int? SoulEaterChart(VoyageSession session)
-    {
-        var pattern = Compile(SoulEaterPattern);
-        foreach (var (index, chart) in session.ByPanelIndex.OrderBy(kv => kv.Key))
-            if (ChartLines(chart).Any(pattern.IsMatch)) return index;
-        return null;
     }
 
     /// <summary>Every rule pattern, so a test can hold them against the generated corpus.</summary>

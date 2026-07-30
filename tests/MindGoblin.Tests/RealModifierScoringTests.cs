@@ -28,19 +28,21 @@ public class RealModifierScoringTests
 
     [Theory]
     // GGG spells it "Qauntity" in the GLOBAL lines only. A rule matching "Quantity"
-    // scores the adjacent rolls and silently misses every global one.
+    // scores the adjacent rolls and silently misses every global one. The dedicated
+    // quantity profile is retired, but "dump" still has to see these to know the
+    // chart is a keeper -- the typo knowledge must not retire with it.
     [InlineData("8% increased Qauntity of Items found in all Voyage Areas")]
     [InlineData("10% increased Qauntity of Items found in all Voyage Areas")]
     [InlineData("45% increased Quantity of Items found in adjacent Areas")]
     [InlineData("20% increased Quantity of Items found in adjacent Areas")]
     public void BothSpellingsOfQuantityScore(string line) =>
-        Assert.True(ScoreLine("quantity", line) > 0, line);
+        Assert.True(ScoreLine("dump", line) < 0, line);
 
     [Fact]
     public void TheTypoAndTheCorrectSpellingScoreTheSame()
     {
-        Assert.Equal(ScoreLine("quantity", "10% increased Quantity of Items found in all Voyage Areas"),
-                     ScoreLine("quantity", "10% increased Qauntity of Items found in all Voyage Areas"));
+        Assert.Equal(ScoreLine("dump", "10% increased Quantity of Items found in all Voyage Areas"),
+                     ScoreLine("dump", "10% increased Qauntity of Items found in all Voyage Areas"));
     }
 
     [Theory]
@@ -138,7 +140,6 @@ public class RealModifierScoringTests
         Assert.Equal(90, chart.Sulphur);
         Assert.Equal(96, chart.ItemQuantity);
         Assert.Equal(450, Profile("sulphur").ScoreChart(chart));      // 90 x 5, counted once
-        Assert.Equal(96, Profile("quantity").ScoreChart(chart));
         Assert.Equal(25.5, Profile("containers").ScoreAdjacent(chart)); // 17 barrels x 1.5
         Assert.True(Profile("high tier").ScoreChart(chart) < 78);          // level, less the danger
     }

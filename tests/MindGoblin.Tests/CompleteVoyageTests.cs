@@ -65,8 +65,8 @@ public class SquareBadgeTests
         session.ApplySquareModifiers(1, ["Area contains 4 additional Golden Lanterns"]);
         session.ApplySquareModifiers(5, ["Area contains Filthscrabble"]);
 
-        var quantity = VoyageRules.Defaults().Single(p => p.Name == "quantity");
-        var solution = session.Solve(quantity, TimeSpan.FromSeconds(3));
+        var sulphur = VoyageRules.Defaults().Single(p => p.Name == "sulphur");
+        var solution = session.Solve(sulphur, TimeSpan.FromSeconds(3));
         var badges = session.Badges(solution);
 
         Assert.Equal(4, badges[1].GoldenLanterns);
@@ -83,12 +83,14 @@ public class SquareBadgeTests
             { Level = 80 }).ToList());
         session.ApplySquareModifiers(1, ["Rare Monsters in Area drop Dead Man's Sulphur"]);
         session.ApplySquareModifiers(3, ["Area contains 2 additional Diviner's Strongboxes"]);
+        // The sulphur stat guarantees chart 2 outranks the blank charts and is placed,
+        // which the danger-badge assertion below depends on.
         session.ApplyChartText(2,
-            "Reach\nAnchorfield\nItem Quantity: +40%\n"
+            "Reach\nAnchorfield\nDead Man's Sulphur: +40\n"
             + "Players have -8% to all maximum Resistances");
 
-        var quantity = VoyageRules.Defaults().Single(p => p.Name == "quantity");
-        var solution = session.Solve(quantity, TimeSpan.FromSeconds(3));
+        var sulphur = VoyageRules.Defaults().Single(p => p.Name == "sulphur");
+        var solution = session.Solve(sulphur, TimeSpan.FromSeconds(3));
         var badges = session.Badges(solution);
         var plan = session.Plan(solution);
 

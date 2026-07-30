@@ -31,7 +31,7 @@ public class RulesUpgradeTests : IDisposable
     [Fact]
     public void ANewProfileIsAddedToAnExistingFile()
     {
-        WriteOldFile("sulphur", "quantity", "high tier");
+        WriteOldFile("sulphur", "currency", "high tier");
 
         using var rules = new VoyageRules(_path);
         Assert.DoesNotContain(rules.Profiles, p => p.Name == "strongbox");
@@ -74,15 +74,15 @@ public class RulesUpgradeTests : IDisposable
     public void ATunedProfileIsReportedAsDifferingFromTheShippedOne()
     {
         // The user cannot otherwise tell that a rule fix exists but is not in effect.
-        WriteOldFile("sulphur", "quantity");
+        WriteOldFile("sulphur", "gold");
         using var rules = new VoyageRules(_path);
-        rules.Profiles.Single(p => p.Name == "quantity").Rules.Clear();
+        rules.Profiles.Single(p => p.Name == "gold").Rules.Clear();
         rules.Save();
 
         using var reopened = new VoyageRules(_path);
         var status = reopened.CompareWithDefaults();
 
-        Assert.Contains("quantity", status.Outdated);
+        Assert.Contains("gold", status.Outdated);
         Assert.DoesNotContain("sulphur", status.Outdated);
         Assert.True(status.AnythingToDo);
     }
@@ -130,7 +130,7 @@ public class RulesUpgradeTests : IDisposable
     public void TheFourOriginalProfilesGainTheEverythingElse()
     {
         // Exactly the situation on disk: a file written when there were four.
-        WriteOldFile("sulphur", "pack size", "quantity", "high tier");
+        WriteOldFile("sulphur", "pack size", "high tier");
         using var rules = new VoyageRules(_path);
 
         var added = rules.AddMissingDefaults();

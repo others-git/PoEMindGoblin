@@ -631,50 +631,6 @@ public sealed class VoyageRules : IDisposable
 
         new VoyageProfile
         {
-            Name = "quantity",
-            Description = "Maximise item quantity and rarity.",
-            Rules =
-            [
-                new VoyageRule { Pattern = @"Item Quantity:\s*\+?(\d+)", Weight = 1.0 },
-                new VoyageRule { Pattern = @"Item Rarity:\s*\+?(\d+)", Weight = 0.5 },
-                new VoyageRule { Pattern = @"(\d+)%\s+increased Quantity of Items(?!\s+found in all Voyage Areas)",
-                                 Weight = 1.5,
-                                 Comment = "adjacent, in-area and panel-resolved wordings; global scales below" },
-                new VoyageRule { Pattern = @"(\d+)%\s+increased Q(?:uantity|auntity) of Items found in all Voyage Areas",
-                                 Weight = 1.0, ScalesWithBoard = true,
-                                 Comment = "GGG spells it 'Qauntity' here; multiplies the whole board's loot" },
-                new VoyageRule { Pattern = @"(\d+)%\s+increased Rarity of Items(?!\s+found in all Voyage Areas)", Weight = 0.75 },
-                new VoyageRule { Pattern = @"(\d+)%\s+increased Rarity of Items found in all Voyage Areas",
-                                 Weight = 0.3, ScalesWithBoard = true,
-                                 Comment = "rarity multiplies part of the board's loot value" },
-                new VoyageRule { Pattern = @"Flasks found.*chance to have (\d+)% Quality", Weight = 0.4,
-                                 Comment = "a quality flask is a better item, so it belongs here" },
-                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Golden Lanterns?", Weight = 6,
-                                 Comment = "3.29.0b: these now grant increased Quantity too" },
-                new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -60,
-                                 Comment = "a global roll that deletes most of the loot" },
-                // Board modifiers, off the figurines rather than the charts.
-                new VoyageRule { Pattern = @"(\d+)%\s+increased explicit modifier magnitudes", Weight = 2.0,
-                                 Comment = "multiplies the affected chart's entire rolled mods: worth "
-                                           + "roughly that fraction of a chart, not a token" },
-                
-                new VoyageRule { Pattern = @"(\d+)% more Rarity of Items found", Weight = 1.0 },
-                new VoyageRule { Pattern = @"(\d+)% chance (?:for Charts? )?to not be consumed", Weight = 3.0,
-                                 Comment = "a refunded adjacent chart is ~its own value x the chance" },
-                new VoyageRule { Pattern = @"(\d+)% reduced quantity of items found", Weight = -1.5 },
-                new VoyageRule { Pattern = @"gain (\d+)% increased Experience", Weight = 0.1 },
-                new VoyageRule { Pattern = @"Area: Anchorfield", Weight = 20,
-                                 Comment = "observed dense with Sunken Loot chests: more lootables "
-                                           + "for every quantity boost to multiply" },
-                new VoyageRule { Pattern = @"Area: (?:Hazardous Depths|Kishara's Rest)", Weight = 15,
-                                 Comment = "market-backed: both charts trade expensive between "
-                                           + "players; mechanism unconfirmed (Rotmother loot box / "
-                                           + "a boss), so priced modestly on the community's word" },
-            ],
-        },
-
-        new VoyageProfile
-        {
             Name = "pack size",
             Description = "Maximise monsters, including what neighbours receive.",
             BoardModifierWeight = 1.5,
@@ -848,9 +804,10 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(\d+)% more Rarity of Items found", Weight = 1.5,
                                  Comment = "MORE, not increased: the stronger multiplier, and this profile "
                                            + "somehow scored it zero while quantity scored it" },
-                new VoyageRule { Pattern = @"Area: Hazardous Depths", Weight = 15,
-                                 Comment = "market-backed with a unique-shaped rumour: the Rotmother "
-                                           + "loot box may drop uniques" },
+                new VoyageRule { Pattern = @"Area: (?:Hazardous Depths|Kishara's Rest)", Weight = 15,
+                                 Comment = "market-backed: both charts trade expensive between "
+                                           + "players, and the rumours are unique-shaped -- the "
+                                           + "Rotmother loot box, a boss at Kishara's Rest" },
                 new VoyageRule { Pattern = @"cannot drop Equipment, Flasks or Tinctures", Weight = -60,
                                  Comment = "jewellery included, so this guts the profile" },
             ],

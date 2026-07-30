@@ -30,15 +30,6 @@ public sealed class VoyageSessionState
     /// <summary>The rule profile in use, so the app reopens where it was left.</summary>
     public string? Profile { get; set; }
 
-    /// <summary>
-    /// Whether the Soul Eater chart is being forced onto the board.
-    ///
-    /// A decision about THIS voyage rather than a setting: it only means anything while
-    /// the panel that has a Soul Eater chart is the one on screen. It rides with the
-    /// session so that reopening the app does not quietly undo it.
-    /// </summary>
-    public bool UseSoulEater { get; set; }
-
     public List<ChartState> Charts { get; set; } = [];
 
     /// <summary>Keyed by square number as a string, because JSON object keys are strings.</summary>
@@ -48,6 +39,9 @@ public sealed class VoyageSessionState
 
     /// <summary>Panel indices the user has X'd out of planning.</summary>
     public List<int> Excluded { get; set; } = [];
+
+    /// <summary>Panel indices the solver must place -- the star, the X's opposite.</summary>
+    public List<int> Required { get; set; } = [];
 
     /// <summary>
     /// One chart as read.

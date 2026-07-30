@@ -110,14 +110,8 @@ public class VoyageAlertsTests
             "Tempest Reach\nAnchorfield\nItem Quantity: +30%\n"
             + "Voyage Modifier: Players in all Voyage Areas have Soul Eater"));
 
-        Assert.Equal(7, VoyageAlerts.SoulEaterChart(session));
-        Assert.Contains(VoyageAlerts.Scan(session), a => a.Headline == "Soul Eater");
-    }
-
-    [Fact]
-    public void NoSoulEaterChartMeansNoButton()
-    {
-        Assert.Null(VoyageAlerts.SoulEaterChart(SessionWith((1, "Salt Barrens\nAbyssal Plain"))));
+        var alert = Assert.Single(VoyageAlerts.Scan(session), a => a.Headline == "Soul Eater");
+        Assert.Equal(7, alert.ChartIndex);
     }
 
     /// <summary>

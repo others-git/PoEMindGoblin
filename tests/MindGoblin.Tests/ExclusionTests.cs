@@ -3,8 +3,9 @@ using MindGoblin.Core.Voyage;
 namespace MindGoblin.Tests;
 
 /// <summary>
-/// The X is the user's veto: the rules say what a chart is worth, the X says "not this
-/// one anyway" -- saved for a friend, a distrusted read, a chart being sold.
+/// The right-click cycle: none -> excluded -> required -> none. The rules say what a
+/// chart is WORTH; the marks are the user overruling them in either direction -- an X
+/// for a chart being saved or sold, a star for a chart no profile can price.
 /// </summary>
 public class ExclusionTests
 {
@@ -17,66 +18,81 @@ public class ExclusionTests
         return session;
     }
 
-    private static VoyageProfile Quantity =>
-        VoyageRules.Defaults().Single(p => p.Name == "quantity");
+    private static VoyageProfile Sulphur =>
+        VoyageRules.Defaults().Single(p => p.Name == "sulphur");
 
     [Fact]
     public void AnExcludedChartIsNeverPlanned()
     {
         var session = Session();
         // The best chart in the panel, by a mile -- and vetoed.
-        session.ApplyChartText(5, "Reach\nAnchorfield\nItem Quantity: +110%");
-        Assert.True(session.ToggleExcluded(5));
+        session.ApplyChartText(5, "Reach\nAnchorfield\nDead Man's Sulphur: +90");
+        Assert.Equal(ChartMark.Excluded, session.CycleMark(5));
 
-        var plan = session.Plan(session.Solve(Quantity, TimeSpan.FromSeconds(3)));
+        var plan = session.Plan(session.Solve(Sulphur, TimeSpan.FromSeconds(3)));
         Assert.Equal(9, plan.Count);
         Assert.DoesNotContain(plan, s => s.ChartNumber == 5);
     }
 
-    /// <summary>The veto beats the pin: an X'd Soul Eater chart stays off the board
-    /// even with the pin asked for, rather than the pin quietly resurrecting it.</summary>
+    /// <summary>One cycle on one gesture because it is ONE question -- what may the
+    /// planner do with this chart -- and the three answers are mutually exclusive.
+    /// Excluded-and-required must stay unrepresentable.</summary>
     [Fact]
-    public void AnExcludedChartCannotBePinned()
+    public void TheCycleRunsExcludedRequiredNone()
     {
         var session = Session();
-        session.ApplyChartText(4,
-            "Reach\nAnchorfield\nVoyage Modifier: Players in all Voyage Areas have Soul Eater");
-        session.ToggleExcluded(4);
 
-        var solution = session.Solve(Quantity, TimeSpan.FromSeconds(3), pinChart: 4);
-        Assert.DoesNotContain(session.Plan(solution), s => s.ChartNumber == 4);
-    }
+        Assert.Equal(ChartMark.Excluded, session.CycleMark(5));
+        Assert.True(session.IsExcluded(5));
+        Assert.False(session.IsRequired(5));
 
-    [Fact]
-    public void TheSecondToggleLiftsTheVeto()
-    {
-        var session = Session();
-        session.ToggleExcluded(5);
-        Assert.False(session.ToggleExcluded(5));
+        Assert.Equal(ChartMark.Required, session.CycleMark(5));
+        Assert.False(session.IsExcluded(5));
+        Assert.True(session.IsRequired(5));
+
+        Assert.Equal(ChartMark.None, session.CycleMark(5));
         Assert.Empty(session.Excluded);
+        Assert.Empty(session.Required);
     }
 
     [Fact]
-    public void TheVetoSurvivesARestart()
+    public void BothMarksSurviveARestart()
     {
         var session = Session();
-        session.ToggleExcluded(3);
-        session.ToggleExcluded(8);
+        session.CycleMark(3);                       // excluded
+        session.CycleMark(8); session.CycleMark(8); // required
 
         var restored = VoyageSession.FromState(session.ToState());
         Assert.True(restored.IsExcluded(3));
-        Assert.True(restored.IsExcluded(8));
+        Assert.True(restored.IsRequired(8));
         Assert.False(restored.IsExcluded(5));
     }
 
+    /// <summary>A hand-edited session file can claim a chart is both. The X wins:
+    /// resurrecting a chart the user vetoed costs a voyage; dropping a star costs
+    /// a re-click.</summary>
     [Fact]
-    public void SpendingAVoyageDoesNotLeaveStaleVetoes()
+    public void ACorruptFileCannotMakeAChartBothMarks()
+    {
+        var state = Session().ToState();
+        state.Excluded = [4];
+        state.Required = [4];
+
+        var restored = VoyageSession.FromState(state);
+        Assert.True(restored.IsExcluded(4));
+        Assert.False(restored.IsRequired(4));
+    }
+
+    [Fact]
+    public void SpendingAVoyageDoesNotLeaveStaleMarks()
     {
         var session = Session();
-        session.ToggleExcluded(2);
-        // Chart 2 cannot be spent while excluded in practice, but a stale X on a
+        session.CycleMark(2);                       // excluded
+        session.CycleMark(6); session.CycleMark(6); // required
+        // Neither can be spent while marked in practice, but a stale mark on a
         // vanished chart must not linger either way.
-        session.CompleteVoyage([2]);
+        session.CompleteVoyage([2, 6]);
         Assert.Empty(session.Excluded);
+        Assert.Empty(session.Required);
     }
 }
