@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
@@ -858,11 +859,32 @@ public partial class VoyageView : UserControl, IDisposable
         else SetStatus($"Placed {_solution.Placements.Count} charts for \"{profile.Name}\".");
     }
 
+    /// <summary>Copy a stash search string that lights up the solved board's charts.</summary>
+    private void OnCopyStashSearch(object sender, RoutedEventArgs e)
+    {
+        if (_steps.Count == 0)
+        {
+            SetStatus("Nothing to search for \u2014 solve a board first.", bad: true);
+            return;
+        }
+        var search = _session.StashSearch(_steps.Select(st => st.ChartNumber));
+        if (search.Length == 0)
+        {
+            SetStatus("No chart names captured \u2014 the search string would be empty.", bad: true);
+            return;
+        }
+        try { Clipboard.SetText(search); } catch (System.Runtime.InteropServices.COMException) { }
+        SetStatus($"Copied {search} \u2014 paste it into the chart stash search box.");
+    }
+
     /// <summary>
     /// The voyage was run. Spend the placed charts, clear the board, and point the user
     /// at the one thing that must happen before the next plan: re-reading the border,
     /// which rerolls every voyage. Unplaced charts keep their panel numbers -- those
     /// point at physical panel positions.
+    ///
+    /// With a chart-refund chance in play the spend is not a foregone conclusion, so
+    /// the panel asks which charts came back first; otherwise all nine go.
     /// </summary>
     private void OnNextVoyage(object sender, RoutedEventArgs e)
     {
@@ -874,7 +896,50 @@ public partial class VoyageView : UserControl, IDisposable
             return;
         }
 
-        var spent = _session.CompleteVoyage(_steps.Select(st => st.ChartNumber));
+        if (_session.PreserveChanceInPlay(_steps.Select(st => st.ChartNumber)))
+        {
+            ShowPreservePanel();
+            return;
+        }
+        FinishVoyage(_steps.Select(st => st.ChartNumber));
+    }
+
+    private void ShowPreservePanel()
+    {
+        PreserveList.Children.Clear();
+        foreach (var step in _steps.OrderBy(st => st.ChartNumber))
+        {
+            var chart = _session.ByPanelIndex.GetValueOrDefault(step.ChartNumber);
+            var name = chart is { Name.Length: > 0 } ? chart.Name : $"chart {step.ChartNumber}";
+            PreserveList.Children.Add(new ToggleButton
+            {
+                Content = $"{step.ChartNumber} · {name}",
+                Tag = step.ChartNumber,
+                Margin = new Thickness(0, 0, 6, 6),
+                Padding = new Thickness(8, 3, 8, 3),
+                ToolTip = "Toggled = it came back to the panel; untoggled = consumed",
+            });
+        }
+        PreservePanel.Visibility = Visibility.Visible;
+    }
+
+    private void OnPreserveCancel(object sender, RoutedEventArgs e) =>
+        PreservePanel.Visibility = Visibility.Collapsed;
+
+    private void OnPreserveConfirm(object sender, RoutedEventArgs e)
+    {
+        var survived = PreserveList.Children.OfType<ToggleButton>()
+            .Where(t => t.IsChecked == true)
+            .Select(t => (int)t.Tag)
+            .ToHashSet();
+        PreservePanel.Visibility = Visibility.Collapsed;
+        FinishVoyage(_steps.Select(st => st.ChartNumber).Where(i => !survived.Contains(i)),
+                     kept: survived.Count);
+    }
+
+    private void FinishVoyage(IEnumerable<int> toSpend, int kept = 0)
+    {
+        var spent = _session.CompleteVoyage(toSpend);
         _solution = null;
         _steps = [];
         _summary.Clear();
@@ -890,7 +955,8 @@ public partial class VoyageView : UserControl, IDisposable
         RefreshProgress();
         Persist();
 
-        SetStatus($"Voyage complete \u2014 {spent} charts spent. "
+        SetStatus($"Voyage complete \u2014 {spent} charts spent"
+                  + (kept > 0 ? $", {kept} preserved" : "") + ". "
                   + "The border has rerolled: hover each square and press Ctrl+Alt+C.");
     }
 

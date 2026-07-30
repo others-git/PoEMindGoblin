@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace MindGoblin.Core.Voyage;
 
 /// <summary>
@@ -667,6 +669,52 @@ public sealed class VoyageSession
         if (_required.Remove(panelIndex)) return ChartMark.None;
         _excluded.Add(panelIndex);
         return ChartMark.Excluded;
+    }
+
+    private static readonly Regex NotConsumed =
+        new(@"chance (?:for Charts? )?to not be consumed",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Is a "Charts aren't consumed" chance in play for this board -- on any placed
+    /// chart's own lines, or on any square modifier? When it is, spending all nine
+    /// on completion would silently discard the refund the mod just paid for.
+    /// </summary>
+    public bool PreserveChanceInPlay(IEnumerable<int> placedCharts)
+    {
+        foreach (var index in placedCharts)
+            if (_charts.TryGetValue(index, out var chart) && ChartLines(chart).Any(NotConsumed.IsMatch))
+                return true;
+        return _squareModifiers.Values.Any(lines => lines.Any(NotConsumed.IsMatch));
+    }
+
+    private static IEnumerable<string> ChartLines(Chart chart)
+    {
+        if (!string.IsNullOrWhiteSpace(chart.VoyageModifier)) yield return chart.VoyageModifier!;
+        if (!string.IsNullOrWhiteSpace(chart.AdjacentModifier)) yield return chart.AdjacentModifier!;
+        foreach (var line in chart.Modifiers) yield return line;
+    }
+
+    /// <summary>
+    /// An in-game chart-stash search string that highlights exactly these charts: the
+    /// most distinctive word of each name, deduplicated, quoted the way the game's
+    /// search box expects ("armoured|pelagic|brine"). Charts read without a name
+    /// contribute nothing -- the string covers what it can and stays honest about it.
+    /// </summary>
+    public string StashSearch(IEnumerable<int> placedCharts)
+    {
+        var tokens = placedCharts
+            .Select(i => _charts.GetValueOrDefault(i))
+            .Where(c => c is not null && !string.IsNullOrWhiteSpace(c.Name))
+            .Select(c => c!.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Where(w => w.Length >= 4 && !w.Equals("Chart", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(w => w.Length)
+                .FirstOrDefault())
+            .Where(t => t is not null)
+            .Select(t => t!.ToLowerInvariant())
+            .Distinct()
+            .ToList();
+        return tokens.Count == 0 ? "" : $"\"{string.Join("|", tokens)}\"";
     }
 
     /// <summary>

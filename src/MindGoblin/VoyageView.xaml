@@ -287,6 +287,8 @@
                             Style="{StaticResource Primary}"/>
                     <Button Content="Dive again" Click="OnNextVoyage" Margin="8,0,0,0"
                             ToolTip="Voyage complete: spend the placed charts, clear the board, and re-read the rerolled border"/>
+                    <Button Content="Stash search" Click="OnCopyStashSearch" Margin="8,0,0,0"
+                            ToolTip="Copy an in-game search string that highlights the solved board's charts in your chart stash"/>
                     <!-- The solve runs on a worker for up to 3 s; this is the sign that
                          the silence is work, not a hang. -->
                     <ProgressBar x:Name="SolveBusy" Width="88" Height="5" IsIndeterminate="True"
@@ -401,6 +403,32 @@
                      tuning is occasional, and a strip that reserves height for it would
                      tax the board permanently. Rows are built in code, one per category
                      the active profile has rules in. -->
+                <!-- After a voyage with a "Charts aren't consumed" chance in play:
+                     which of the nine came back? Spending all would discard the refund. -->
+                <Border x:Name="PreservePanel" Visibility="Collapsed" Panel.ZIndex="12"
+                        VerticalAlignment="Top" Margin="0,24,0,0" Padding="14,10"
+                        MaxWidth="440" HorizontalAlignment="Center"
+                        Background="{StaticResource Abyss}" BorderBrush="{StaticResource Silt}"
+                        BorderThickness="1">
+                    <Border.Effect>
+                        <DropShadowEffect Color="#000000" BlurRadius="20" ShadowDepth="5"
+                                          Opacity="0.8"/>
+                    </Border.Effect>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Eyebrow}"
+                                   Text="W H I C H   C H A R T S   S U R V I V E D ?"/>
+                        <TextBlock Foreground="{StaticResource Shade}" FontSize="12"
+                                   TextWrapping="Wrap" Margin="0,4,0,8"
+                                   Text="A chart-refund chance was in play. Toggle the charts that came back; the rest are spent."/>
+                        <WrapPanel x:Name="PreserveList"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button Content="Spend the rest" Click="OnPreserveConfirm"
+                                    Style="{StaticResource Primary}"/>
+                            <Button Content="Cancel" Click="OnPreserveCancel" Margin="8,0,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
                 <Border x:Name="WeightsPanel" Visibility="Collapsed" Panel.ZIndex="11"
                         VerticalAlignment="Top" Margin="0,24,0,0" Padding="14,10"
                         MaxWidth="480" HorizontalAlignment="Center"
