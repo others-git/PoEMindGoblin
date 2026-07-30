@@ -7,9 +7,9 @@ namespace MindGoblin;
 
 /// <summary>
 /// The carved figurine cartouches, matched position-for-position to the game's frame:
-/// krakens at the top corners with a sea-dragon between them, then fish-dragon, coiled
-/// serpent and seahorse down each side, lobsters at the bottom corners and an anchor
-/// at bottom centre. The frame is SYMMETRIC, so each right-side creature is the mirror
+/// squids at the top corners with a sea-dragon between them, then curled tentacles
+/// around a mid-side coiled serpent down each flank, lobsters at the bottom corners
+/// and an anchor at bottom centre. The frame is SYMMETRIC, so each right-side creature is the mirror
 /// of its left-side twin -- one geometry, flipped, never two drawings drifting apart.
 ///
 /// Every cartouche carries a number medallion, because WHERE a figurine is carries as
@@ -24,30 +24,29 @@ internal static class VoyageOrnament
 
     internal enum State { Unread, Captured, Selected, Skipped }
 
-    private enum Kind { Kraken, Dragon, FishDragon, Coil, Seahorse, Lobster, Anchor }
+    private enum Kind { Kraken, Dragon, Tentacle, Coil, Lobster, Anchor }
 
-    // ---- the kraken (top corners): dome head over the medallion, tentacles up ------
+    // ---- the squid (top corners): pointed mantle with fins, tentacles trailing ----
 
     private const string KrakenHead =
-        "M24,2.6 C28.8,2.6 32,6.2 32,10.8 C32,14.4 28.8,16.8 24,16.8 "
-        + "C19.2,16.8 16,14.4 16,10.8 C16,6.2 19.2,2.6 24,2.6 Z";
+        "M24,0.8 C26.9,3.8 28.6,8.2 28.2,12.8 C28.7,14.8 28.3,16.4 27,17.4 "
+        + "L21,17.4 C19.7,16.4 19.3,14.8 19.8,12.8 C19.4,8.2 21.1,3.8 24,0.8 Z "
+        + "M21.9,4.4 L17.6,6.6 L21.1,7.9 Z M26.1,4.4 L30.4,6.6 L26.9,7.9 Z";
 
     private const string KrakenArms =
-        "M16.8,11.6 C12,10.6 8.4,7.4 8,3 C10.6,5.8 13.4,7.2 16.6,7 "
-        + "C15.4,8.6 15.4,10.2 16.8,11.6 Z "
-        + "M31.2,11.6 C36,10.6 39.6,7.4 40,3 C37.4,5.8 34.6,7.2 31.4,7 "
-        + "C32.6,8.6 32.6,10.2 31.2,11.6 Z";
+        "M20.6,17 C16.4,18.6 13.9,21.8 14.1,25.8 C15.5,23 17.8,21.2 20.9,20.6 "
+        + "C19.8,19.4 19.7,18.2 20.6,17 Z "
+        + "M27.4,17 C31.6,18.6 34.1,21.8 33.9,25.8 C32.5,23 30.2,21.2 27.1,20.6 "
+        + "C28.2,19.4 28.3,18.2 27.4,17 Z";
 
     private const string KrakenCurls =
-        "M16.4,15.8 C12.8,17.2 11.2,20.2 12.2,23.8 C13,21.2 14.8,19.4 17.4,18.8 "
-        + "C16.2,17.9 15.9,16.9 16.4,15.8 Z "
-        + "M31.6,15.8 C35.2,17.2 36.8,20.2 35.8,23.8 C35,21.2 33.2,19.4 30.6,18.8 "
-        + "C31.8,17.9 32.1,16.9 31.6,15.8 Z "
-        + "M19.6,26.4 C18.2,28.6 16,29.4 14,28.4 C16,27.9 17.4,26.9 18.2,25.2 Z "
-        + "M28.4,26.4 C29.8,28.6 32,29.4 34,28.4 C32,27.9 30.6,26.9 29.8,25.2 Z";
+        "M15.2,25 C13.6,27.4 11.4,28.2 9.4,27.2 C11.4,26.7 12.9,25.6 13.8,23.8 Z "
+        + "M32.8,25 C34.4,27.4 36.6,28.2 38.6,27.2 C36.6,26.7 35.1,25.6 34.2,23.8 Z "
+        + "M22.3,17.8 C21.5,20.4 21.6,22.8 22.6,25 C22.9,22.6 22.9,20.2 22.3,17.8 Z "
+        + "M25.7,17.8 C26.5,20.4 26.4,22.8 25.4,25 C25.1,22.6 25.1,20.2 25.7,17.8 Z";
 
     private const string KrakenEyes =
-        "M20.2,10.2 a0.95,0.95 0 1 0 0.01,0 Z M26.9,10.2 a0.95,0.95 0 1 0 0.01,0 Z";
+        "M21.4,14.4 a0.95,0.95 0 1 0 0.01,0 Z M25.7,14.4 a0.95,0.95 0 1 0 0.01,0 Z";
 
     // ---- the sea-dragon (top centre): horned head, spiked arch, curled tail --------
 
@@ -74,34 +73,6 @@ internal static class VoyageOrnament
 
     private const string DragonEye = "M3.6,13.6 a1.1,1.1 0 1 0 0.01,0 Z";
 
-    // ---- the fish-dragon (upper sides): whiskered koi arcing over the medallion ----
-
-    private const string FishBody =
-        "M5.5,18 C7,11.5 11.5,8.6 16,10 C20,11.2 21.5,8.6 25,8.2 "
-        + "C28.5,8.6 30.5,11.2 34,10.4 C37,9.7 39.5,11.5 41,15 "
-        + "C39,12.8 36.5,12.2 33.5,13.2 C29.5,14.4 27.5,11.4 25,11 "
-        + "C21.5,11.4 20,14.2 15.5,13.2 C11.5,12.3 9,14.5 7,19 Z";
-
-    private const string FishHead =
-        "M1.6,18.8 C0.6,14.8 3,11.8 6.6,12.6 C9.2,13.2 10.4,15.8 9.4,18.2 "
-        + "C8.6,20 6.4,20.8 4.4,20.4 C3.2,20.2 2,19.6 1.6,18.8 Z";
-
-    private const string FishWhiskers =
-        "M2,15.4 C0.6,14.2 0.4,12.6 1.4,11.4 C1.2,12.8 1.8,13.8 3.2,14.4 Z "
-        + "M4.6,13.2 C3.8,11.6 4.2,10 5.6,9.2 C4.9,10.6 5.1,11.8 6.2,12.8 Z";
-
-    private const string FishFins =
-        "M14,11 L16,6.6 L18.4,10.2 Z M22,9.2 L24.4,5.2 L26.4,9 Z "
-        + "M30.4,10.2 L32.8,6.8 L34.4,10.6 Z "
-        + "M8,19.6 C9.6,21.8 9.4,24 7.8,25.4 C8.2,23.4 7.6,21.8 6.2,20.6 Z";
-
-    private const string FishTail =
-        "M41,15 C43.4,12.4 46,11.8 47.4,13 C45.8,13.4 44.6,14.4 44,15.8 "
-        + "C45.4,15.6 46.8,16 47.6,17.2 C45.9,17.2 44.3,17.9 43.4,19.2 "
-        + "C43,17.6 41.8,16 41,15 Z";
-
-    private const string FishEye = "M4.0,15.2 a1.1,1.1 0 1 0 0.01,0 Z";
-
     // ---- the coiled serpent (mid sides): wrapped round its medallion ---------------
 
     private const string CoilRing =
@@ -125,28 +96,20 @@ internal static class VoyageOrnament
 
     private const string CoilEye = "M9.7,8.3 a1.1,1.1 0 1 0 0.01,0 Z";
 
-    // ---- the seahorse (lower sides): coronet, tube snout, coiled tail --------------
+    // ---- the tentacle (upper and lower sides): an S-curl, suckers inward ---------
 
-    private const string SeahorseBody =
-        "M25.6,3.6 C28.8,4 30.8,6.4 30.2,9.2 C29.8,11.2 28.6,12.6 26.8,13.4 "
-        + "C29.4,15.2 30.6,17.8 30,20.8 C29.4,23.8 27,26 23.8,26.6 "
-        + "C25.8,24.8 26.8,22.6 26.6,20.2 C26.4,18 25.2,16.2 23,14.8 "
-        + "C20.8,13.4 19.8,11.4 20.2,9 C20.6,6.4 22.6,4.2 25.6,3.6 Z";
+    private const string TentacleBody =
+        "M28.4,27.6 C23.6,27.2 20.4,24.4 20,20.8 C19.6,17.4 21.6,14.4 24.8,12.2 "
+        + "C27.2,10.6 28.2,8.6 27.6,6.4 C27,4.4 25,3.2 22.8,3.6 "
+        + "C24.8,1.8 27.8,2.4 29.4,4.6 C31,6.9 30.4,10 28.1,12.2 "
+        + "C25.4,14.8 23.9,17.4 24.3,19.9 C24.7,22.6 26.2,24.6 28.9,25.4 Z";
 
-    private const string SeahorseSnout =
-        "M21.2,6.6 L15.4,5.4 L20.4,9 Z";
+    private const string TentacleTip =
+        "M23.2,3.8 C21.2,4.4 20.2,5.9 20.4,7.8 C21.3,6.5 22.6,5.8 24.3,5.8 Z";
 
-    private const string SeahorseCoronet =
-        "M25,3.4 L25.2,0.6 L27,3 Z M27.4,3.4 L28.8,1.2 L29,3.8 Z";
-
-    private const string SeahorseFin =
-        "M29.2,16.6 C31.6,16.2 33.4,17.2 34.2,19.2 C32.6,18.6 31,18.7 29.6,19.6 Z";
-
-    private const string SeahorseTail =
-        "M24.2,26.2 C21,27.8 17.6,26.8 16.2,24.2 C15.2,22.2 16,20.2 17.9,19.6 "
-        + "C17.2,21.3 17.8,23 19.4,23.8 C21.1,24.7 23,24.2 24.4,22.8 Z";
-
-    private const string SeahorseEye = "M23.5,6.0 a1.05,1.05 0 1 0 0.01,0 Z";
+    private const string TentacleSuckers =
+        "M22.9,19.7 a0.85,0.85 0 1 0 0.01,0 Z M23.2,16.4 a0.85,0.85 0 1 0 0.01,0 Z "
+        + "M24.7,13.5 a0.85,0.85 0 1 0 0.01,0 Z M26.4,10.6 a0.85,0.85 0 1 0 0.01,0 Z";
 
     // ---- the lobster (bottom corners): claws raised, medallion as carapace ---------
 
@@ -200,8 +163,8 @@ internal static class VoyageOrnament
     private static Kind KindOf(string edge, int label) => edge switch
     {
         "top" => label == 2 ? Kind.Dragon : Kind.Kraken,
-        "right" => label switch { 4 => Kind.FishDragon, 5 => Kind.Coil, _ => Kind.Seahorse },
-        "left" => label switch { 12 => Kind.FishDragon, 11 => Kind.Coil, _ => Kind.Seahorse },
+        "right" => label == 5 ? Kind.Coil : Kind.Tentacle,
+        "left" => label == 11 ? Kind.Coil : Kind.Tentacle,
         _ => label == 8 ? Kind.Anchor : Kind.Lobster,
     };
 
@@ -216,25 +179,23 @@ internal static class VoyageOrnament
     {
         Kind.Kraken => [KrakenArms, KrakenCurls, KrakenHead, KrakenEyes],
         Kind.Dragon => [DragonBody, DragonSpikes, DragonHead, DragonHorns, DragonTail, DragonEye],
-        Kind.FishDragon => [FishBody, FishFins, FishHead, FishWhiskers, FishTail, FishEye],
+        Kind.Tentacle => [TentacleBody, TentacleTip, TentacleSuckers],
         Kind.Coil => [CoilRing, CoilFins, CoilHead, CoilTail, CoilEye],
-        Kind.Seahorse => [SeahorseBody, SeahorseFin, SeahorseTail, SeahorseSnout,
-                          SeahorseCoronet, SeahorseEye],
         Kind.Lobster => [LobsterClaws, LobsterArms, LobsterLegs, LobsterTail, LobsterAntennae],
         _ => [AnchorShape, AnchorFlukes],
     };
 
     /// <summary>Eyes render in shadow ink over the fill, so they are listed apart.</summary>
     private static readonly string[] InkParts =
-        [KrakenEyes, DragonEye, FishEye, CoilEye, SeahorseEye];
+        [KrakenEyes, DragonEye, CoilEye, TentacleSuckers];
 
     /// <summary>Medallion centres differ per creature so the number never fights art.
     /// All on the centreline, so mirroring cannot displace the label.</summary>
     private static (double X, double Y, double R) Medallion(Kind kind) => kind switch
     {
-        Kind.Kraken => (24, 22.4, 5.4),
+        Kind.Kraken => (24, 23.2, 4.9),
         Kind.Coil => (24, 16, 5.6),
-        Kind.Seahorse => (23.4, 17.4, 5.0),
+        Kind.Tentacle => (24, 21.2, 4.9),
         Kind.Lobster => (24, 15.6, 5.6),
         Kind.Anchor => (24, 15.6, 5.2),
         _ => (24, 16.4, 6.2),
@@ -288,9 +249,9 @@ internal static class VoyageOrnament
         };
 
         // Left and right figurines are turned to run along their edge, the way the
-        // carving follows the frame in game -- except the seahorse, which stands
+        // carving follows the frame in game -- except the tentacle, which stands
         // upright against the frame in the game art too.
-        var quarter = kind == Kind.Seahorse
+        var quarter = kind == Kind.Tentacle
             ? 0.0
             : edge switch { "left" => 90.0, "right" => -90.0, _ => 0.0 };
         FrameworkElement rotated = quarter == 0
@@ -320,9 +281,9 @@ internal static class VoyageOrnament
     {
         var (mx, my, _) = Medallion(kind);
         var dy = (my - DesignHeight / 2.0) * 2 * scale;
-        // The seahorse never rotates, so its medallion offset stays vertical -- and
+        // The tentacle never rotates, so its medallion offset stays vertical -- and
         // mirroring flips its x offset.
-        if (kind == Kind.Seahorse)
+        if (kind == Kind.Tentacle)
         {
             var dx = (mx - DesignWidth / 2.0) * 2 * scale * (edge == "right" ? -1 : 1);
             return new Thickness(dx, dy, 0, 0);
