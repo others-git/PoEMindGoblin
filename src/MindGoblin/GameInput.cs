@@ -29,15 +29,30 @@ public static class GameInput
     private const ushort VK_CONTROL = 0x11;
     private const ushort VK_C = 0x43;
 
+    // The union must be EXACT: SendInput validates cbSize and silently rejects the
+    // whole batch on any mismatch (hand-padding it wrong is precisely how the first
+    // version of this file sent nothing at all). Explicit layout with a real
+    // MOUSEINPUT arm reproduces the Win32 sizes on both architectures.
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT
     {
-        public int type;
-        public KEYBDINPUT ki;
-        // KEYBDINPUT is the only arm used, but the Win32 union must be sized for
-        // MOUSEINPUT or SendInput rejects the struct on 64-bit.
-        private readonly long _pad1;
-        private readonly long _pad2;
+        public uint type;
+        public InputUnion u;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct InputUnion
+    {
+        [FieldOffset(0)] public MOUSEINPUT mi;
+        [FieldOffset(0)] public KEYBDINPUT ki;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MOUSEINPUT
+    {
+        public int dx, dy;
+        public uint mouseData, dwFlags, time;
+        public IntPtr dwExtraInfo;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -53,16 +68,18 @@ public static class GameInput
     /// <summary>Move the cursor to a screen position: the hover half of the gesture.</summary>
     public static void HoverAt(int x, int y) => SetCursorPos(x, y);
 
-    /// <summary>One Ctrl+C to the focused window: the copy half.</summary>
-    public static void SendCopy()
+    /// <summary>One Ctrl+C to the focused window: the copy half. True when Windows
+    /// accepted all four key events -- false is a real failure worth reporting.</summary>
+    public static bool SendCopy()
     {
         var inputs = new INPUT[4];
-        inputs[0].type = INPUT_KEYBOARD; inputs[0].ki.wVk = VK_CONTROL;
-        inputs[1].type = INPUT_KEYBOARD; inputs[1].ki.wVk = VK_C;
-        inputs[2].type = INPUT_KEYBOARD; inputs[2].ki.wVk = VK_C;
-        inputs[2].ki.dwFlags = KEYEVENTF_KEYUP;
-        inputs[3].type = INPUT_KEYBOARD; inputs[3].ki.wVk = VK_CONTROL;
-        inputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
-        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+        inputs[0].type = INPUT_KEYBOARD; inputs[0].u.ki.wVk = VK_CONTROL;
+        inputs[1].type = INPUT_KEYBOARD; inputs[1].u.ki.wVk = VK_C;
+        inputs[2].type = INPUT_KEYBOARD; inputs[2].u.ki.wVk = VK_C;
+        inputs[2].u.ki.dwFlags = KEYEVENTF_KEYUP;
+        inputs[3].type = INPUT_KEYBOARD; inputs[3].u.ki.wVk = VK_CONTROL;
+        inputs[3].u.ki.dwFlags = KEYEVENTF_KEYUP;
+        return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>())
+               == inputs.Length;
     }
 }

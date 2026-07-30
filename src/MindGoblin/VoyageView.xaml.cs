@@ -631,17 +631,31 @@ public partial class VoyageView : UserControl, IDisposable
             return;
         }
         var index = _sweep.Peek();
+        SweepInfo.Text = $"Copying chart {index}…";   // the press visibly landed
         var o = ChartPanelReader.Options.Load();
         var (row, col) = ((index - 1) / o.Cols, (index - 1) % o.Cols);
         GameInput.HoverAt(o.OriginX + col * o.Pitch, o.OriginY + row * o.Pitch);
         await Task.Delay(140);
-        GameInput.SendCopy();
-        await Task.Delay(110);
+        if (!GameInput.SendCopy())
+        {
+            SetStatus("Windows refused the Ctrl+C injection \u2014 is the game running elevated?", bad: true);
+            RefreshSweepPanel();
+            return;
+        }
 
-        var text = SafeClipboardText();
-        if (text.Length == 0 || text == _lastClipboard)
+        // The game fills the clipboard asynchronously; poll briefly rather than betting
+        // one fixed delay covers every frame-rate. Still ONE copy for this ONE press.
+        var text = "";
+        for (var wait = 0; wait < 5 && text.Length == 0; wait++)
+        {
+            await Task.Delay(80);
+            var read = SafeClipboardText();
+            if (read.Length > 0 && read != _lastClipboard) text = read;
+        }
+        if (text.Length == 0)
         {
             SetStatus($"Chart {index}: nothing copied \u2014 F9 retries it, or Skip.", bad: true);
+            RefreshSweepPanel();
             return;
         }
         _lastClipboard = text;
