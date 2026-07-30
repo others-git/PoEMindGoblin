@@ -120,6 +120,22 @@ public static class AreaPopulation
     /// OBSERVED in game at 250-350 per rare across several sightings -- the
     /// best-sourced constant in this model, where the rest are still estimates.</summary>
     public const double SulphurPerRareDrop = 300;
+
+    /// <summary>
+    /// What the Filthscrabble boss pays, in raw sulphur. Community-sourced
+    /// (Milkybk_'s strategy video, encoded by the one-more-map solver as "a
+    /// ~4,000-sulphur boss") -- unverified by us, so trim it when a run says
+    /// otherwise.
+    /// </summary>
+    public const double SulphurPerFilthscrabble = 4000;
+
+    /// <summary>
+    /// Rares one additional Strongbox yields when rolled before opening.
+    /// Community numbers (Milky/Zac): "Stream of Monsters" +4 and "of Rarity"
+    /// +3 make a box worth ~7 rares -- the whole Divine-border feeder strategy
+    /// rests on this. Priced at 3 because not every box rolls both.
+    /// </summary>
+    public const double RaresPerRolledStrongbox = 3;
 }
 
 public sealed class VoyageRule
@@ -291,6 +307,25 @@ public sealed class VoyageProfile
             density += n * AreaPopulation.RareChancePerAddedPack / AreaPopulation.RaresPerArea;
         }
 
+        var boxes = AdditionalStrongboxes.Match(line);
+        if (boxes.Success)
+        {
+            // A box is rares-on-demand: rolled before opening it pours monsters out,
+            // and every one of them collects the square's per-rare payouts. This is
+            // the community's Divine-border feeder -- "+5 Strongboxes" beside a
+            // Divine square is worth more than any percent roll.
+            var n = boxes.Groups[1].Success ? double.Parse(boxes.Groups[1].Value) : 1;
+            density += n * AreaPopulation.RaresPerRolledStrongbox / AreaPopulation.RaresPerArea;
+        }
+
+        var starfish = AdditionalStarfish.Match(line);
+        if (starfish.Success)
+        {
+            // Observed at Sea Pillars: the starfish are always-rare. Each is a rare.
+            var n = starfish.Groups[1].Success ? double.Parse(starfish.Groups[1].Value) : 1;
+            density += n / AreaPopulation.RaresPerArea;
+        }
+
         var imprisoned = ImprisonedMonsters.Match(line);
         if (imprisoned.Success)
         {
@@ -335,6 +370,12 @@ public sealed class VoyageProfile
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex ImprisonedMonsters =
         new(@"(?:(\d+)|an)\s+additional Imprisoned Monsters?",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex AdditionalStrongboxes =
+        new(@"(?:(\d+)|an)\s+additional (?:\w+'s )?Strongbox(?:es)?",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex AdditionalStarfish =
+        new(@"(?:(\d+)|an)\s+additional Giant Starfish",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>
@@ -617,6 +658,11 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(\d+)%\s+increased Dead Man's Sulphur found in all Voyage Areas",
                                  Weight = 1.0, ScalesWithBoard = true,
                                  Comment = "multiplies the WHOLE board's sulphur: scored as that fraction" },
+                new VoyageRule { Pattern = @"contains? Filthscrabble",
+                                 Weight = AreaPopulation.SulphurPerFilthscrabble * 5.0,
+                                 Comment = "community-sourced ~4000-sulphur boss: under this "
+                                           + "profile his square outranks even the per-rare "
+                                           + "sulphur square" },
                 new VoyageRule { Pattern = @"drop Dead Man's Sulphur",
                                  Weight = AreaPopulation.RaresPerArea
                                           * AreaPopulation.SulphurPerRareDrop * 5.0,
@@ -783,6 +829,12 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional packs? of", Weight = 1.5 },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Imprisoned Monsters?", Weight = 2.0,
                                  Comment = "an imprisoned monster is a rare" },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Giant Starfish", Weight = 2.0,
+                                 Comment = "observed always-rare: each starfish is a rare" },
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional (?:\w+'s )?Strongbox(?:es)?",
+                                 Weight = 2.0 * AreaPopulation.RaresPerRolledStrongbox,
+                                 Comment = "a rolled box pours out ~3 rares (community: up to 7 "
+                                           + "with Stream of Monsters + of Rarity)" },
             ],
         },
 
@@ -1023,7 +1075,9 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"contain a Brinerot raiding party", Weight = -10 },
                 new VoyageRule { Pattern = @"highly prized and exotic Fish", Weight = -6 },
                 new VoyageRule { Pattern = @"contain Friendly Jellyfish", Weight = -4 },
-                new VoyageRule { Pattern = @"contains? Filthscrabble", Weight = -5 },
+                new VoyageRule { Pattern = @"contains? Filthscrabble",
+                                 Weight = -(AreaPopulation.SulphurPerFilthscrabble * 5.0) / 2,
+                                 Comment = "half the boss's sulphur price: emphatically a keeper" },
                 new VoyageRule { Pattern = @"(?:(\d+)|an) Altars? to the Goddess", Weight = -10 },
                 new VoyageRule { Pattern = @"(\d+)% chance (?:for Charts? )?to not be consumed", Weight = -3,
                                  Comment = "a chart that refunds its neighbours is a keeper, not a dump" },

@@ -46,8 +46,30 @@ public class BorderSynergyTests
     [InlineData("30% increased number of Rare Monsters in adjacent Areas", 0.3)]
     [InlineData("12 additional packs of Crabs", 0.12)]
     [InlineData("50% increased Pack Size", 0.0)]   // population channel, not rares
+    // The community's Divine-border feeders: a rolled Strongbox pours out ~3 rares,
+    // and Sea-Pillar starfish are always-rare. Both wordings (template and resolved).
+    [InlineData("Adjacent Areas contain 5 additional Diviner's Strongboxes", 1.5)]
+    [InlineData("Area contains an additional Strongbox", 0.3)]
+    [InlineData("Adjacent Areas contain 5 additional Giant Starfish", 0.5)]
+    [InlineData("Area contains an additional Giant Starfish", 0.1)]
     public void RareDensityCountsEveryRareSource(string line, double expected) =>
         Assert.Equal(expected, VoyageProfile.MonsterDensityOf(line), 3);
+
+    /// <summary>Filthscrabble is a ~4,000-sulphur boss (community-sourced): the
+    /// sulphur profile must price his square above even the per-rare sulphur square,
+    /// and the dump profile must refuse to burn the chart.</summary>
+    [Fact]
+    public void FilthscrabbleIsASulphurJackpot()
+    {
+        var sulphur = VoyageRules.Defaults().Single(p => p.Name == "sulphur");
+        var boss = sulphur.ScoreText(["Area contains Filthscrabble"]);
+        var perRare = sulphur.ScoreText(["Rare Monsters in Area drop Dead Man's Sulphur"]);
+        Assert.True(boss > perRare, $"boss {boss} should outrank the per-rare square {perRare}");
+
+        var dump = VoyageRules.Defaults().Single(p => p.Name == "dump");
+        Assert.True(dump.ScoreText(["Area contains Filthscrabble"]) < -5000,
+                    "dump must treat the Filthscrabble chart as a keeper");
+    }
 
     /// <summary>The population channel: pack size and added packs, at full weight --
     /// an at-least-Magic upgrade converts added packs wholesale.</summary>
