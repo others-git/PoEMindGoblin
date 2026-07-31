@@ -122,6 +122,30 @@ public class BorderSynergyTests
         Assert.Equal(1, Assert.Single(plan, s => s.ChartNumber == quantity).Square);
     }
 
+    /// <summary>
+    /// Straight from a live board that solved suspiciously fast: a FIGURINE carrying
+    /// the per-rare sulphur payout must dominate the sulphur solve exactly like a
+    /// square read of the same line would.
+    /// </summary>
+    [Fact]
+    public void AFigurineSulphurPayoutDominatesTheSolve()
+    {
+        var session = Session(out _, out _);
+        session.ApplyFigurineText(10, "Rare Monsters in adjacent Areas drop Dead Man's Sulphur");
+
+        var sulphur = VoyageRules.Defaults().Single(p => p.Name == "sulphur");
+        var solution = session.Solve(sulphur, TimeSpan.FromSeconds(3));
+        Assert.True(solution.Value > 10_000,
+                    $"the sulphur square is worth ~15k and the solve saw {solution.Value:0.#}");
+
+        // ...and identically after a save/load round-trip, which is how the app and
+        // probe actually run every solve.
+        var restored = VoyageSession.FromState(session.ToState());
+        var again = restored.Solve(sulphur, TimeSpan.FromSeconds(3));
+        Assert.True(again.Value > 10_000,
+                    $"restore lost the figurine payout: {again.Value:0.#}");
+    }
+
     /// <summary>Filthscrabble is a ~4,000-sulphur boss (community-sourced): the
     /// sulphur profile must price his square above even the per-rare sulphur square,
     /// and the dump profile must refuse to burn the chart.</summary>

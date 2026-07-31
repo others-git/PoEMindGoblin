@@ -405,6 +405,10 @@ public partial class VoyageView : UserControl, IDisposable
         try
         {
             using var bmp = ScreenCapture.CapturePrimaryScreen();
+            // Always keep the last capture: when a read goes wrong, the pixels ARE the
+            // bug report -- VoyageProbe decodes this file offline, overlay and all.
+            try { bmp.Save(MindGoblin.Core.SettingsFolder.FileIn("last-identify.png")); }
+            catch (System.Runtime.InteropServices.ExternalException) { }
             using var pixels = new BitmapPixels(bmp);
             var cells = new ChartPanelReader(
                 ChartPanelReader.Options.Load(), LevelReader.LoadWithUserTemplates()).Read(pixels);
