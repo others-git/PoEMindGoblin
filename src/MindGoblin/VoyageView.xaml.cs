@@ -2099,7 +2099,7 @@ public partial class VoyageView : UserControl, IDisposable
         // The icon row: what the square CONTAINS, at a glance. A golden lantern to
         // grab, a named boss to expect. Sourced from the same lines the scoring uses,
         // so an icon never promises something the plan did not price.
-        if (badges is { } b && (b.GoldenLanterns > 0 || b.Bosses.Count > 0
+        if (badges is { } b && (b.GoldenLanterns > 0 || b.FreeLanterns || b.Bosses.Count > 0
                                 || b.Payouts.Count > 0 || b.Strongboxes.Count > 0
                                 || b.Dangers.Count > 0))
         {
@@ -2126,6 +2126,25 @@ public partial class VoyageView : UserControl, IDisposable
                     });
                 lantern.ToolTip = $"{b.GoldenLanterns:0} Golden Lantern{(b.GoldenLanterns > 1 ? "s" : "")} \u2014 grab early, the quantity buff pays for the rest of the run";
                 row.Children.Add(lantern);
+            }
+            if (b.FreeLanterns)
+            {
+                // The lantern with an infinity beside it: placing FROM here is free.
+                var free = new StackPanel
+                    { Orientation = Orientation.Horizontal, Margin = new Thickness(3, 0, 3, 0) };
+                free.Children.Add(LanternIcon());
+                free.Children.Add(new TextBlock
+                {
+                    Text = "∞",
+                    FontFamily = new FontFamily("Segoe UI Symbol"),
+                    FontSize = 11,
+                    Foreground = Brush(0xF0, 0xD2, 0x64),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(1, 0, 0, 0),
+                });
+                free.ToolTip = "Placing Lanterns does not reduce your Lantern count here "
+                             + "\u2014 place every lantern this square offers, they are free";
+                row.Children.Add(free);
             }
             foreach (var boss in b.Bosses)
             {

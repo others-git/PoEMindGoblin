@@ -72,6 +72,7 @@ public class SquareBadgeTests
         Assert.Equal(4, badges[1].GoldenLanterns);
         Assert.Contains("Filthscrabble", badges[5].Bosses);
         Assert.False(badges.ContainsKey(9));   // nothing there, no icon
+        Assert.False(badges[1].FreeLanterns);
     }
 
     [Fact]
@@ -83,6 +84,8 @@ public class SquareBadgeTests
             { Level = 80 }).ToList());
         session.ApplySquareModifiers(1, ["Rare Monsters in Area drop Dead Man's Sulphur"]);
         session.ApplySquareModifiers(3, ["Area contains 2 additional Diviner's Strongboxes"]);
+        session.ApplySquareModifiers(6,
+            ["Placing Lanterns does not reduce your Lantern count in adjacent Areas"]);
         // The sulphur stat guarantees chart 2 outranks the blank charts and is placed,
         // which the danger-badge assertion below depends on.
         session.ApplyChartText(2,
@@ -96,6 +99,7 @@ public class SquareBadgeTests
 
         Assert.Contains("Dead Man's Sulphur", badges[1].Payouts);
         Assert.Contains("Diviner's Strongboxes", badges[3].Strongboxes);
+        Assert.True(badges[6].FreeLanterns);
         var dangerSquare = Assert.Single(plan, s => s.ChartNumber == 2).Square;
         Assert.NotEmpty(badges[dangerSquare].Dangers);
     }

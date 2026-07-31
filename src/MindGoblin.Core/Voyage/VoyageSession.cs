@@ -644,7 +644,12 @@ public sealed class VoyageSession
         IReadOnlyList<string> Bosses,
         IReadOnlyList<string> Payouts,
         IReadOnlyList<string> Strongboxes,
-        IReadOnlyList<string> Dangers);
+        IReadOnlyList<string> Dangers)
+    {
+        /// <summary>"Placing Lanterns does not reduce your Lantern count" applies
+        /// here: place lanterns FROM this square for free.</summary>
+        public bool FreeLanterns { get; init; }
+    }
 
     public IReadOnlyDictionary<int, SquareBadges> Badges(VoyageSolver.Solution solution)
     {
@@ -669,6 +674,7 @@ public sealed class VoyageSession
                     lines.Add(gift);
 
             var lanterns = lines.Sum(GoldenLanternCount);
+            var freeLanterns = lines.Any(l => FreeLanternLine.IsMatch(l));
             var bosses = lines
                 .Select(l => NamedBoss.Match(l))
                 .Where(m => m.Success)
@@ -698,10 +704,11 @@ public sealed class VoyageSession
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            if (lanterns > 0 || bosses.Count > 0 || payouts.Count > 0
+            if (lanterns > 0 || freeLanterns || bosses.Count > 0 || payouts.Count > 0
                 || boxes.Count > 0 || dangers.Count > 0)
                 result[VoyagePlan.SquareNumber(placement.Cell, Layout.Cols)] =
-                    new SquareBadges(lanterns, bosses, payouts, boxes, dangers);
+                    new SquareBadges(lanterns, bosses, payouts, boxes, dangers)
+                    { FreeLanterns = freeLanterns };
         }
         return result;
     }
@@ -734,6 +741,10 @@ public sealed class VoyageSession
 
     /// <summary>The named creatures the tables can put in a square. Weird names on
     /// purpose -- that is how you know they are bosses.</summary>
+    private static readonly System.Text.RegularExpressions.Regex FreeLanternLine =
+        new(@"Placing Lanterns does not reduce",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     private static readonly System.Text.RegularExpressions.Regex NamedBoss =
         new(@"contains?\s+(Captainsbane|Filthscrabble)",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase
