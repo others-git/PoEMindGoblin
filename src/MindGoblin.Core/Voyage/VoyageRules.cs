@@ -839,6 +839,11 @@ public sealed class VoyageRules : IDisposable
             Name = "bottles",
             Description = "Chase Messages in a Bottle: gifts beside the highest-quantity tiles.",
             BoardModifierWeight = 1.5,
+            // Researched (poedb + community, 2026-07-31): the ONLY guaranteed source is
+            // the chart suffix, ilvl 68+, tiers +1 and +2 -- no figurine or tileset
+            // grants them. They also spawn naturally, observed only on level-68+
+            // charts, so on ties prefer the higher-level chart everywhere.
+            AreaLevelWeight = 0.3,
             Rules =
             [
                 // Field-verified the most profitable chase this league. The engine
@@ -960,6 +965,9 @@ public sealed class VoyageRules : IDisposable
             BoardModifierWeight = 1.5,
             Rules =
             [
+                new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Messages? in (?:a )?Bottles?", Weight = 39,
+                                 Comment = "market-backed: bottles sell UNOPENED for ~39c each "
+                                           + "(researched 2026-07-31) -- a liquid payout, not a gamble" },
                 // These are figurine modifiers, so they decide which SQUARE is worth
                 // standing a chart on rather than which chart to pick. Weights are IN
                 // CHAOS ORBS per drop, from poe.watch means (Allflame league,
