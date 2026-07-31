@@ -143,6 +143,24 @@ public class BorderSynergyTests
         Assert.Equal(9, solution.Placements.Count);
     }
 
+    /// <summary>
+    /// An adjacent gift buffs the NEIGHBOURS and never the tile it stands on: the
+    /// chart's own value must be identical with and without the gift line, under
+    /// every profile. Asked directly from the field ("do gives-adjacent tiles buff
+    /// the tile they're on disproportionally?") -- the answer must stay no.
+    /// </summary>
+    [Fact]
+    public void AnAdjacentGiftAddsNothingToItsOwnTile()
+    {
+        var bare = new Chart("a", "a", ChartShape.Crossing, 80, [])
+        { MonsterPackSize = 36, ItemQuantity = 55, Sulphur = 30 };
+        var gifted = bare with
+        { AdjacentModifier = "Adjacent Areas contains 7 additional Giant Starfish" };
+
+        foreach (var profile in VoyageRules.Defaults())
+            Assert.Equal(profile.ScoreChart(bare), profile.ScoreChart(gifted));
+    }
+
     /// <summary>The tile-side view of adjacency: a square beside a payout gift lists
     /// what arrives and from where, channel-scaled like the solver prices it.</summary>
     [Fact]
