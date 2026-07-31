@@ -85,7 +85,6 @@ public class RealModifierScoringTests
     }
 
     [Theory]
-    [InlineData("Players have -8% to all maximum Resistances")]
     [InlineData("Monsters are Hexproof")]
     [InlineData("50% less effect of Curses on Monsters")]
     [InlineData("Monsters cannot be Taunted")]

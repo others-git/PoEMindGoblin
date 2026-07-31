@@ -48,8 +48,8 @@ public class BorderSynergyTests
     [InlineData("50% increased Pack Size", 0.0)]   // population channel, not rares
     // The community's Divine-border feeders: a rolled Strongbox pours out ~3 rares,
     // and Sea-Pillar starfish are always-rare. Both wordings (template and resolved).
-    [InlineData("Adjacent Areas contain 5 additional Diviner's Strongboxes", 1.5)]
-    [InlineData("Area contains an additional Strongbox", 0.3)]
+    [InlineData("Adjacent Areas contain 5 additional Diviner's Strongboxes", 2.0)]
+    [InlineData("Area contains an additional Strongbox", 0.4)]
     [InlineData("Adjacent Areas contain 5 additional Giant Starfish", 0.5)]
     [InlineData("Area contains an additional Giant Starfish", 0.1)]
     public void RareDensityCountsEveryRareSource(string line, double expected) =>

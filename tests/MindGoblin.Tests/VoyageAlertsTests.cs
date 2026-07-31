@@ -144,16 +144,17 @@ public class VoyageAlertsTests
         Assert.Equal(AlertKind.Trap, alerts[1].Kind);
     }
 
-    /// <summary>A death forfeits every square not yet reached, so this is the lethal one.</summary>
+    /// <summary>3.29.1 disclosed the modifier never functioned: a chart still carrying
+    /// it keeps its juiced upsides for free, so it flags as a jackpot now.</summary>
     [Fact]
-    public void NegativeMaximumResistancesAreFlagged()
+    public void TheDisabledMaxResRollIsFreeUpside()
     {
         var session = SessionWith();
         session.ApplySquareModifiers(1, ["Players have -8% to all maximum Resistances"]);
 
         var alert = Assert.Single(VoyageAlerts.Scan(session));
-        Assert.Equal(AlertKind.Trap, alert.Kind);
-        Assert.Equal("Lowered maximum resistances", alert.Headline);
+        Assert.Equal(AlertKind.Jackpot, alert.Kind);
+        Assert.Equal("Free difficulty roll", alert.Headline);
     }
 
     [Fact]

@@ -120,10 +120,10 @@ public static class VoyageAlerts
             "This gets worse the better the board is joined \u2014 the one thing the planner "
             + "is trying to maximise. Give it few connections."),
 
-        new(AlertKind.Trap, @"Players have -?#% to all maximum Resistances",
-            "Lowered maximum resistances",
-            "A death ends the voyage and forfeits every square you had not reached. This is "
-            + "the modifier most likely to cause one."),
+        new(AlertKind.Jackpot, @"Players have -?#% to all maximum Resistances",
+            "Free difficulty roll",
+            "3.29.1: this modifier never functioned and no longer generates. A chart still "
+            + "carrying it keeps the juiced upsides and pays NO downside — run it."),
     ];
 
     /// <summary>

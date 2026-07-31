@@ -645,7 +645,9 @@ public sealed class VoyageSession
 
     /// <summary>The run-enders: a death forfeits every square not yet reached.</summary>
     private static readonly System.Text.RegularExpressions.Regex DangerLine =
-        new(@"Players have -?\d+% to all maximum Resistances|Monster Damage Penetrates",
+        // Max-res left this list in 3.29.1: it never functioned and no longer rolls.
+        // Grasping Vines is its replacement wording ("same upsides").
+        new(@"Grasping Vines|Monster Damage Penetrates",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase
             | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 

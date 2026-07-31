@@ -87,7 +87,7 @@ public class SquareBadgeTests
         // which the danger-badge assertion below depends on.
         session.ApplyChartText(2,
             "Reach\nAnchorfield\nDead Man's Sulphur: +40\n"
-            + "Players have -8% to all maximum Resistances");
+            + "Monsters apply Grasping Vines on Hit");
 
         var sulphur = VoyageRules.Defaults().Single(p => p.Name == "sulphur");
         var solution = session.Solve(sulphur, TimeSpan.FromSeconds(3));

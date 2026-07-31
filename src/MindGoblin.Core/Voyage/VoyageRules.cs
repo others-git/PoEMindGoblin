@@ -102,6 +102,9 @@ public static class AreaPopulation
             // not name it. The market signal lives in Area rules (quantity, and uniques
             // for Depths), not in this map; promote here the moment a run shows rares.
             ["Hazardous Depths"] = 0.0,
+
+            // 3.29.1 added this chart variant; unmeasured -- field-log a number when run.
+            ["Eldritch Depths"] = 0.0,
             ["Kishara's Rest"] = 0.0,
         };
 
@@ -132,10 +135,11 @@ public static class AreaPopulation
     /// <summary>
     /// Rares one additional Strongbox yields when rolled before opening.
     /// Community numbers (Milky/Zac): "Stream of Monsters" +4 and "of Rarity"
-    /// +3 make a box worth ~7 rares -- the whole Divine-border feeder strategy
-    /// rests on this. Priced at 3 because not every box rolls both.
+    /// +3 make a box worth ~7 rares. Priced below the ceiling because not every
+    /// box rolls both -- raised from 3 in 3.29.1, which let DREDGED currency
+    /// roll boxes mid-voyage, so the "did I bring currency" discount shrank.
     /// </summary>
-    public const double RaresPerRolledStrongbox = 3;
+    public const double RaresPerRolledStrongbox = 4;
 }
 
 public sealed class VoyageRule
@@ -1045,8 +1049,6 @@ public sealed class VoyageRules : IDisposable
             [
                 // Weighted by what genuinely kills, not by what sounds bad. Every wording
                 // is present in the generated table.
-                new VoyageRule { Pattern = @"Players have -?(\d+)% to all maximum Resistances", Weight = -3,
-                                 Comment = "the roll is negative; match the digits either way" },
                 new VoyageRule { Pattern = @"Monsters are Hexproof", Weight = -10 },
                 new VoyageRule { Pattern = @"less effect of Curses on Monsters", Weight = -6 },
                 new VoyageRule { Pattern = @"Monsters cannot be Stunned", Weight = -4 },
