@@ -189,6 +189,36 @@ public sealed class VoyageSession
         else _figurines[figurineIndex] = text.Trim();
     }
 
+    // ---- targeted removal: erase ONE reading without touching the rest -------------
+
+    /// <summary>Forget a square's panel read entirely -- back to "not read", which is
+    /// different from recording it as having no modifiers.</summary>
+    public bool RemoveSquareModifiers(int square) => _squareModifiers.Remove(square);
+
+    /// <summary>Forget a figurine's reading. True when there was one.</summary>
+    public bool RemoveFigurine(int figurineIndex) => _figurines.Remove(figurineIndex);
+
+    /// <summary>
+    /// Strip a chart back to what the panel screenshot knew -- shape and level -- so a
+    /// bad hover read can be re-captured without re-identifying the whole panel. The
+    /// chart keeps its identity and any mark; only the hover detail goes.
+    /// </summary>
+    public bool RemoveChartDetail(int panelIndex)
+    {
+        if (!_charts.TryGetValue(panelIndex, out var chart)) return false;
+        _charts[panelIndex] = new Chart(chart.Id, "", chart.Shape, chart.AreaLevel, []);
+        return true;
+    }
+
+    /// <summary>Remove a chart from the panel entirely, marks and all.</summary>
+    public bool RemoveChart(int panelIndex)
+    {
+        if (!_charts.Remove(panelIndex)) return false;
+        _excluded.Remove(panelIndex);
+        _required.Remove(panelIndex);
+        return true;
+    }
+
     /// <summary>Charts read from the panel but not yet hovered.</summary>
     public IReadOnlyList<int> ChartsAwaitingDetail =>
         _charts.Where(kv => !HasDetail(kv.Value)).Select(kv => kv.Key).Order().ToList();

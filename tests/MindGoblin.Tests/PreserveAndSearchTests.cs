@@ -191,6 +191,51 @@ public class FigurineTooltipTests
         Assert.Equal(line, AreaModifierPanel.Canonicalize(line));
     }
 
+    /// <summary>
+    /// Targeted removal: one bad reading goes, everything else stays -- the reason
+    /// the Remove button exists instead of Clear-and-start-over.
+    /// </summary>
+    [Fact]
+    public void RemovingOneReadingLeavesTheRest()
+    {
+        var session = new VoyageSession();
+        session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
+            { Level = 80 }).ToList());
+        session.ApplyChartText(3, "Reach\nAnchorfield\nItem Quantity: +40%");
+        session.ApplyFigurineText(1, "120% increased Quantity of Items found in adjacent Areas");
+        session.ApplyFigurineText(2, "50% more Rarity of Items found in adjacent Areas");
+        session.ApplySquareModifiers(4, ["Area contains 8 additional packs of Crabs"]);
+
+        Assert.True(session.RemoveFigurine(1));
+        Assert.False(session.Figurines.ContainsKey(1));
+        Assert.True(session.Figurines.ContainsKey(2));            // its neighbour stands
+        Assert.True(session.SquareModifiers.ContainsKey(4));
+
+        Assert.True(session.RemoveSquareModifiers(4));
+        Assert.False(session.SquareModifiers.ContainsKey(4));
+        Assert.False(session.RemoveSquareModifiers(4));           // already gone
+
+        // Chart removal has two gears: detail first, then the chart itself.
+        Assert.True(session.RemoveChartDetail(3));
+        Assert.Contains(3, session.ChartsAwaitingDetail);          // back to shape-and-level
+        Assert.Equal(80, session.ByPanelIndex[3].AreaLevel);
+        Assert.True(session.RemoveChart(3));
+        Assert.False(session.ByPanelIndex.ContainsKey(3));
+    }
+
+    [Fact]
+    public void RemovingAChartClearsItsMark()
+    {
+        var session = new VoyageSession();
+        session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
+            { Level = 80 }).ToList());
+        session.CycleMark(5); session.CycleMark(5);               // required
+        Assert.True(session.RemoveChart(5));
+        Assert.Empty(session.Required);
+    }
+
     /// <summary>A figurine carrying two mods must bind as TWO board modifiers -- the
     /// channel classifiers anchor at line start, and squares already bind per line.</summary>
     [Fact]

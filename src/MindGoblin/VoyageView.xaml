@@ -502,6 +502,9 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <Button Content="Calibrate" Click="OnCalibrate" Margin="0,0,8,0"
                             ToolTip="Panel coordinates. Edit if the read misses charts at your resolution."/>
+                    <ToggleButton x:Name="RemoveBtn" Content="Remove" Margin="0,0,8,0"
+                                  Checked="OnRemoveModeChanged" Unchecked="OnRemoveModeChanged"
+                                  ToolTip="While armed, clicking a figurine or square erases its reading; clicking a chart strips its detail (again removes the chart). Nothing else is touched."/>
                     <Button Content="Clear" Click="OnReset"
                             ToolTip="Forget everything: charts, modifiers, the saved session"/>
                 </StackPanel>

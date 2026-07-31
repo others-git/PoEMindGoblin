@@ -1652,6 +1652,14 @@ public partial class VoyageView : UserControl, IDisposable
     private void OnBoardSquareClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (sender is not Border { Tag: int square }) return;
+        if (RemoveBtn.IsChecked == true)
+        {
+            if (_session.RemoveSquareModifiers(square))
+                FinishRemoval($"Square {square} panel read erased.");
+            else SetStatus($"Square {square} has no panel read to erase "
+                           + "(its figurines are removed individually).", bad: true);
+            return;
+        }
         SetTarget(Target.Square, square,
                   $"Hover square {square} in game, then press Ctrl+Alt+C.");
         RefreshBoard();
@@ -1667,15 +1675,66 @@ public partial class VoyageView : UserControl, IDisposable
             SetStatus($"Panel cell {index} is empty.", bad: true);
             return;
         }
+        if (RemoveBtn.IsChecked == true)
+        {
+            // Two gears: the first click strips a bad hover read back to shape-and-
+            // level; a second click (now detail-less) removes the chart outright.
+            if (_session.ByPanelIndex.TryGetValue(index, out var chart)
+                && HasCapturedDetail(chart))
+            {
+                _session.RemoveChartDetail(index);
+                FinishRemoval($"Chart {index} detail erased \u2014 shape and level kept; "
+                              + "click again to remove the chart entirely.");
+            }
+            else
+            {
+                _session.RemoveChart(index);
+                FinishRemoval($"Chart {index} removed from the panel.");
+            }
+            return;
+        }
         SetTarget(Target.Chart, index,
                   $"Chart {index} selected — copy or paste its text below.");
         RefreshBoard();
         RefreshPanel();
     }
 
+    // ---- targeted removal ----------------------------------------------------------
+
+    private void OnRemoveModeChanged(object sender, RoutedEventArgs e)
+    {
+        SetStatus(RemoveBtn.IsChecked == true
+            ? "Remove armed \u2014 click a figurine, square or chart to erase its reading."
+            : "Remove off.");
+    }
+
+    /// <summary>The bookkeeping every targeted removal shares: the plan was computed
+    /// against data that just changed, so it goes; everything else stays.</summary>
+    private void FinishRemoval(string status)
+    {
+        _solution = null;
+        _steps = [];
+        _badges = new Dictionary<int, VoyageSession.SquareBadges>();
+        _summary.Clear();
+        SolveInfo.Text = "";
+        Persist();
+        RefreshBoard();
+        RefreshPanel();
+        RebuildModifiers();
+        RefreshProgress();
+        SetStatus(status);
+    }
+
     private void OnFigurineMarkerClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (sender is not Border { Tag: int index }) return;
+        if (RemoveBtn.IsChecked == true)
+        {
+            if (_session.RemoveFigurine(index))
+                FinishRemoval($"Figurine {index} reading erased \u2014 re-slurp or click it to re-read.");
+            else SetStatus($"Figurine {index} has no reading to erase.", bad: true);
+            return;
+        }
         SetTarget(Target.Figurine, index, $"Figurine {index} selected — copy or type its text below.");
         RefreshBoard();
         RefreshPanel();
