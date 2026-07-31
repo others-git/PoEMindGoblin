@@ -235,8 +235,8 @@ public class BorderSynergyTests
     /// <summary>Field observations, one line each: rooms measured dense, and rooms
     /// measured neutral so they are not re-tested.</summary>
     [Theory]
-    [InlineData("Brine King's Domain", 1.0)]
-    [InlineData("Sea Pillars", 0.5)]
+    [InlineData("Sea Pillars", 1.0)]
+    [InlineData("Brine King's Domain", 0.8)]
     [InlineData("Pelagic Abyss", 0.6)]
     [InlineData("Clam-infested Shelf", 0.0)]
     [InlineData("Diving Shoals", 0.0)]

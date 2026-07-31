@@ -64,17 +64,16 @@ public static class AreaPopulation
     public static readonly IReadOnlyDictionary<string, double> RoomRareDensity =
         new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
         {
-            // "Exceptional" was the observation, and 0.5 undersold it: at half the
-            // pack-headline scale the chart drifted to a NEIGHBOURING tile of the
-            // sulphur square. Double the base rares says what was seen, and makes the
-            // payout tile unambiguously its seat.
-            ["Brine King's Domain"] = 1.0,
+            // Reordered by continued field play (2026-07-31): Sea Pillars' always-rare
+            // starfish packs out-earn Brine King's Domain, the early "hard to say"
+            // resolved with more runs. Pillars takes the top seat; Brine stays strong.
+            ["Sea Pillars"] = 1.0,
 
-            // Always-rare starfish packs observed throughout. Good value, judged below
-            // Brine ("hard to say" was the field note, so half is the honest middle).
-            ["Sea Pillars"] = 0.5,
+            // "Exceptional" was the original observation and it holds -- just no longer
+            // the best. Still comfortably above every other measured tileset.
+            ["Brine King's Domain"] = 0.8,
 
-            // Abyss rares throughout, judged slightly better than Sea Pillars.
+            // Abyss rares throughout; below both of the above.
             ["Pelagic Abyss"] = 0.6,
 
             // MEASURED NEUTRAL, kept at zero so nobody re-tests them: Diving Shoals ran

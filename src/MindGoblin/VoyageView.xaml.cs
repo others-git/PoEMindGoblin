@@ -870,12 +870,11 @@ public partial class VoyageView : UserControl, IDisposable
         SetStatus(status);
     }
 
-    private async void FinishSlurp()
+    private void FinishSlurp()
     {
         SlurpBtn.IsChecked = false;      // routes through StopSlurp via OnSlurpChanged
-        StopSlurp("Slurp complete \u2014 solving.");
+        StopSlurp("Slurp complete \u2014 Solve when ready.");
         RebuildModifiers();
-        await SolveAsync();
     }
     private void Capture(string text, string how)
     {
