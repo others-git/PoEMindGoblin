@@ -363,6 +363,24 @@ public sealed class VoyageProfile
         return density;
     }
 
+    /// <summary>
+    /// A TILE's rare density from everything the chart itself states: pack size (rares
+    /// spawn out of packs), the tileset's measured room bonus, and the chart's own
+    /// rare-adding lines. The last term is what lets rares drive currency: a chart
+    /// with "+50% increased number of Rare Monsters" standing ON a "Rare Monsters
+    /// drop an additional Divine Orb" square earns those drops, and before this the
+    /// model paid it nothing for them.
+    /// </summary>
+    public static double ChartRareDensity(Chart chart) =>
+        chart.MonsterPackSize / 100
+        + AreaPopulation.RoomRareBonus(chart)
+        + chart.OwnLines().Sum(MonsterDensityOf);
+
+    /// <summary>The population twin: pack size plus the chart's own pack-adding lines.</summary>
+    public static double ChartPackDensity(Chart chart) =>
+        chart.MonsterPackSize / 100
+        + chart.OwnLines().Sum(PackDensityOf);
+
     private static readonly Regex PackSizePct =
         new(@"(\d+)%\s+increased Pack Size", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex RareCountPct =

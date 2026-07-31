@@ -144,6 +144,27 @@ public class BorderSynergyTests
     }
 
     /// <summary>
+    /// Rares drive currency when the border pays per rare: a chart whose own lines ADD
+    /// rares must win the "Rare Monsters drop an additional Divine Orb" square over an
+    /// otherwise identical chart -- pack size is not the only way to be rare-dense.
+    /// </summary>
+    [Fact]
+    public void ARareCountChartWinsTheDivineSquare()
+    {
+        var session = Session(out _, out _);
+        var rares = 6;
+        session.ApplyChartText(rares,
+            "Deep Trench\nAnchorfield\n50% increased number of Rare Monsters");
+        session.ApplySquareModifiers(1,
+            ["Rare Monsters in Area drop an additional Divine Orb"]);
+
+        var currency = VoyageRules.Defaults().Single(p => p.Name == "currency");
+        var plan = session.Plan(session.Solve(currency, TimeSpan.FromSeconds(3)));
+
+        Assert.Equal(1, plan.Single(s => s.ChartNumber == rares).Square);
+    }
+
+    /// <summary>
     /// An adjacent gift buffs the NEIGHBOURS and never the tile it stands on: the
     /// chart's own value must be identical with and without the gift line, under
     /// every profile. Asked directly from the field ("do gives-adjacent tiles buff

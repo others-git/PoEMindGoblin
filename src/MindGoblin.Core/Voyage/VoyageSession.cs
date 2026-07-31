@@ -385,9 +385,8 @@ public sealed class VoyageSession
                 AdjacentPerMonsterValue = payoutAdj ? adjacent : 0,
                 AdjacentPerQuantityValue = containerAdj ? adjacent : 0,
                 AdjacentPayoutOnPopulation = channel == VoyageProfile.PayoutChannel.Population,
-                MonsterDensity = syn * (c.MonsterPackSize / 100
-                                        + AreaPopulation.RoomRareBonus(c)),
-                PackDensity = syn * c.MonsterPackSize / 100,
+                MonsterDensity = syn * VoyageProfile.ChartRareDensity(c),
+                PackDensity = syn * VoyageProfile.ChartPackDensity(c),
                 AdjacentMonsterDensity = c.AdjacentModifier is { } line
                     ? syn * VoyageProfile.MonsterDensityOf(line) : 0,
                 AdjacentPackDensity = c.AdjacentModifier is { } packLine
@@ -539,9 +538,8 @@ public sealed class VoyageSession
         if (board.At(cell) is not { } here) return [];
 
         var syn = profile.MonsterPayoutSynergy;
-        var rareDensity = syn * (here.Chart.MonsterPackSize / 100
-                                 + AreaPopulation.RoomRareBonus(here.Chart));
-        var packDensity = syn * here.Chart.MonsterPackSize / 100;
+        var rareDensity = syn * VoyageProfile.ChartRareDensity(here.Chart);
+        var packDensity = syn * VoyageProfile.ChartPackDensity(here.Chart);
         var qtyDensity = syn * here.Chart.ItemQuantity / 100;
 
         var result = new List<(int, string, double)>();
@@ -604,9 +602,8 @@ public sealed class VoyageSession
 
         return VoyageRoute.Plan(board, placement =>
         {
-            var rareDensity = syn * (placement.Chart.MonsterPackSize / 100
-                                     + AreaPopulation.RoomRareBonus(placement.Chart));
-            var packDensity = syn * placement.Chart.MonsterPackSize / 100;
+            var rareDensity = syn * VoyageProfile.ChartRareDensity(placement.Chart);
+            var packDensity = syn * VoyageProfile.ChartPackDensity(placement.Chart);
             var qtyDensity = syn * placement.Chart.ItemQuantity / 100;
             var worth = profile.ScoreChart(placement.Chart)
                         + flat.GetValueOrDefault(placement.Cell)
