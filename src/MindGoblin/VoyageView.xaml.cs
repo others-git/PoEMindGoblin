@@ -1152,6 +1152,13 @@ public partial class VoyageView : UserControl, IDisposable
 
     private void ApplySolution(VoyageSolver.Solution solution, VoyageProfile profile)
     {
+        // A solve races Clear and Dive Again: cancellation covers the common case, but
+        // a result that slipped past it must not be applied over a session that no
+        // longer holds its charts -- that is a crash wearing a plan's clothes.
+        var known = _session.ByPanelIndex.Values
+            .Select(c => c.Id).ToHashSet(StringComparer.Ordinal);
+        if (solution.Placements.Any(p => !known.Contains(p.Chart.Id))) return;
+
         _solution = solution;
         _steps = _session.Plan(_solution);
         _badges = _session.Badges(_solution);
@@ -1334,6 +1341,8 @@ public partial class VoyageView : UserControl, IDisposable
 
     private void OnReset(object sender, RoutedEventArgs e)
     {
+        _solving?.Cancel();          // the board it is solving just stopped existing
+        if (SlurpBtn.IsChecked == true) SlurpBtn.IsChecked = false;
         _session = new VoyageSession();
         VoyageSessionState.Delete();
         _solution = null;
