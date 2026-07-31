@@ -7,9 +7,9 @@ public class LevelReaderTests
     [Fact]
     public void ExposesTheDigitsItWasTrainedOn()
     {
-        // The training capture contained no 0, 5 or 9. Stating that explicitly matters:
+        // '5' has never appeared in a training capture. Stating that explicitly matters:
         // callers need to know a null level can mean "untrained digit", not just "no text".
-        Assert.Equal(['1', '2', '3', '4', '6', '7', '8'], new LevelReader().KnownDigits);
+        Assert.Equal(['0', '1', '2', '3', '4', '6', '7', '8', '9'], new LevelReader().KnownDigits);
     }
 
     [Fact]
@@ -88,17 +88,17 @@ public class LevelReaderTests
     [Fact]
     public void LearningAddsADigitWithoutDisturbingTheRest()
     {
-        var nine = LevelReader.DigitTemplate.FromRows('9', new LevelReader.Options() is var o
+        var five = LevelReader.DigitTemplate.FromRows('5', new LevelReader.Options() is var o
             ? Enumerable.Range(0, o.TextHeight)
                         .Select(y => y is >= 4 and < 16 ? "#########" : ".........")
                         .ToArray()
             : []);
 
-        var taught = new LevelReader().Learn(nine);
-        Assert.Contains('9', taught.KnownDigits);
-        Assert.Equal(8, taught.KnownDigits.Count);
+        var taught = new LevelReader().Learn(five);
+        Assert.Contains('5', taught.KnownDigits);
+        Assert.Equal(10, taught.KnownDigits.Count);
         // The built-in reader must be untouched -- Learn returns a new reader.
-        Assert.DoesNotContain('9', new LevelReader().KnownDigits);
+        Assert.DoesNotContain('5', new LevelReader().KnownDigits);
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public class LevelReaderTests
     {
         var eight = LevelReader.BuiltInTemplates().Single(t => t.Digit == '8');
         var taught = new LevelReader().Learn(eight);
-        Assert.Equal(7, taught.KnownDigits.Count);
+        Assert.Equal(9, taught.KnownDigits.Count);
     }
 
     [Fact]
