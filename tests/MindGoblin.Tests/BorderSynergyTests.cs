@@ -144,24 +144,48 @@ public class BorderSynergyTests
     }
 
     /// <summary>
-    /// Rares drive currency when the border pays per rare: a chart whose own lines ADD
-    /// rares must win the "Rare Monsters drop an additional Divine Orb" square over an
-    /// otherwise identical chart -- pack size is not the only way to be rare-dense.
+    /// Rares drive currency THROUGH THE REAL MODS: the pool (poedb) has no self-scope
+    /// rare adders, so the interaction runs on adjacency -- a "+30% increased Rare
+    /// Monsters in adjacent Areas" gift chart must seat itself beside the Divine
+    /// square under the currency profile.
     /// </summary>
     [Fact]
-    public void ARareCountChartWinsTheDivineSquare()
+    public void ARareGiftChartFeedsTheDivineSquare()
     {
         var session = Session(out _, out _);
-        var rares = 6;
-        session.ApplyChartText(rares,
-            "Deep Trench\nAnchorfield\n50% increased number of Rare Monsters");
+        var gift = 6;
+        session.ApplyChartText(gift,
+            "Deep Trench\nAnchorfield\nAdjacent Modifier: "
+            + "30% increased number of Rare Monsters in adjacent Areas");
         session.ApplySquareModifiers(1,
             ["Rare Monsters in Area drop an additional Divine Orb"]);
 
         var currency = VoyageRules.Defaults().Single(p => p.Name == "currency");
         var plan = session.Plan(session.Solve(currency, TimeSpan.FromSeconds(3)));
 
-        Assert.Equal(1, plan.Single(s => s.ChartNumber == rares).Square);
+        Assert.Contains(plan.Single(s => s.ChartNumber == gift).Square, new[] { 2, 4 });
+    }
+
+    /// <summary>
+    /// The conflation guard, asked for from the field: a GLOBAL rare line lifts every
+    /// tile equally, so it must not fake own-tile density and steal the Divine square
+    /// from a genuinely dense chart.
+    /// </summary>
+    [Fact]
+    public void AGlobalRareLineDoesNotStealThePayoutSquare()
+    {
+        var session = Session(out var packChart, out _);   // packChart: +50% pack size
+        var global = 6;
+        session.ApplyChartText(global,
+            "Deep Trench\nAnchorfield\nVoyage Modifier: "
+            + "25% increased number of Rare Monsters in all Voyage Areas");
+        session.ApplySquareModifiers(1,
+            ["Rare Monsters in Area drop an additional Divine Orb"]);
+
+        var currency = VoyageRules.Defaults().Single(p => p.Name == "currency");
+        var plan = session.Plan(session.Solve(currency, TimeSpan.FromSeconds(3)));
+
+        Assert.Equal(1, plan.Single(s => s.ChartNumber == packChart).Square);
     }
 
     /// <summary>

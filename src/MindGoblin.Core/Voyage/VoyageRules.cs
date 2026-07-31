@@ -364,22 +364,23 @@ public sealed class VoyageProfile
     }
 
     /// <summary>
-    /// A TILE's rare density from everything the chart itself states: pack size (rares
-    /// spawn out of packs), the tileset's measured room bonus, and the chart's own
-    /// rare-adding lines. The last term is what lets rares drive currency: a chart
-    /// with "+50% increased number of Rare Monsters" standing ON a "Rare Monsters
-    /// drop an additional Divine Orb" square earns those drops, and before this the
-    /// model paid it nothing for them.
+    /// A TILE's rare density from what the chart itself states: pack size (rares spawn
+    /// out of packs) and the tileset's measured room bonus. NOTHING ELSE, validated
+    /// against the poedb mod pool: every rare-adding chart line is scoped "in adjacent
+    /// Areas" or "in all Voyage Areas" -- self-scope rare adders do not exist. An
+    /// earlier version summed the chart's own lines here, which could only ever catch
+    /// GLOBAL lines and so credited a board-wide buff to the carrier's own tile --
+    /// exactly the conflation this comment exists to prevent repeating. Adjacent
+    /// gifts pay their neighbours through the channel machinery; global lines lift
+    /// every tile equally and must steer placement not at all.
     /// </summary>
     public static double ChartRareDensity(Chart chart) =>
-        chart.MonsterPackSize / 100
-        + AreaPopulation.RoomRareBonus(chart)
-        + chart.OwnLines().Sum(MonsterDensityOf);
+        chart.MonsterPackSize / 100 + AreaPopulation.RoomRareBonus(chart);
 
-    /// <summary>The population twin: pack size plus the chart's own pack-adding lines.</summary>
+    /// <summary>The population twin. Same corpus rule: pack size is the only
+    /// self-scope population statement a chart makes.</summary>
     public static double ChartPackDensity(Chart chart) =>
-        chart.MonsterPackSize / 100
-        + chart.OwnLines().Sum(PackDensityOf);
+        chart.MonsterPackSize / 100;
 
     private static readonly Regex PackSizePct =
         new(@"(\d+)%\s+increased Pack Size", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
