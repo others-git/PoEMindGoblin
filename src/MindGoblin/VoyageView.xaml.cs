@@ -365,22 +365,23 @@ public partial class VoyageView : UserControl, IDisposable
 
     private void OnCalibrate(object sender, RoutedEventArgs e)
     {
-        // Opens the file rather than offering a dialog of spinners: the values are pixel
-        // coordinates, and the way to get them right is to run VoyageProbe's overlay,
-        // look at where the grid lands, and nudge. A GUI would not make that easier.
-        // Two things are calibrated now -- where the chart panel is, and where the Area
-        // Modifiers panel is -- so this opens the folder rather than one of them.
+        // The in-app calibrator needs a capture to draw over; until one exists the
+        // best help is saying how to make one.
+        if (!File.Exists(CalibrationWindow.CapturePath))
+        {
+            SetStatus("Press Identify Charts once first \u2014 calibration draws over that capture.",
+                      bad: true);
+            return;
+        }
         try
         {
-            ChartPanelReader.Options.WriteDefaultsIfMissing();
-            AreaModifierPanel.Options.WriteDefaultsIfMissing();
-            var folder = System.IO.Path.GetDirectoryName(ChartPanelReader.Options.DefaultPath)!;
-            Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
-            SetStatus("Calibration files opened. Save, then read again.");
+            var window = new CalibrationWindow { Owner = Window.GetWindow(this) };
+            if (window.ShowDialog() == true)
+                SetStatus("Calibration saved \u2014 press Identify Charts to re-read with it.");
         }
         catch (Exception ex)
         {
-            SetStatus($"Could not open the calibration folder: {ex.Message}", bad: true);
+            SetStatus($"Calibration window failed: {ex.Message}", bad: true);
         }
     }
 

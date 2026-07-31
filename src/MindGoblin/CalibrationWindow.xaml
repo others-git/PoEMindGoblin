@@ -1,0 +1,59 @@
+<Window x:Class="MindGoblin.CalibrationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:MindGoblin"
+        Title="Panel calibration" Width="1500" Height="940"
+        Background="#0A0908" Foreground="#E6DBC2"
+        WindowStartupLocation="CenterOwner">
+    <!--
+        In-app calibration over the LAST IDENTIFY CAPTURE: the grid the reader will use
+        is drawn over the pixels it will read, so a drifted origin is visible as boxes
+        sitting beside glyphs instead of on them. Nudge, watch the live decode count,
+        save. The screenshot never leaves the machine.
+    -->
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="#131110" Padding="14,10"
+                BorderBrush="#2A2018" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Origin" Foreground="#8A7A5E" VerticalAlignment="Center"
+                           FontFamily="{x:Static local:PoeFonts.Display}"/>
+                <Button Content="◀" Click="OnNudge" Tag="x-5" Margin="8,0,0,0" Padding="8,4"/>
+                <Button Content="◀" Click="OnNudge" Tag="x-1" Padding="6,4" FontSize="10"/>
+                <TextBlock x:Name="OriginLabel" Width="88" TextAlignment="Center"
+                           VerticalAlignment="Center" FontFamily="Consolas"/>
+                <Button Content="▶" Click="OnNudge" Tag="x+1" Padding="6,4" FontSize="10"/>
+                <Button Content="▶" Click="OnNudge" Tag="x+5" Padding="8,4"/>
+                <Button Content="▲" Click="OnNudge" Tag="y-1" Margin="10,0,0,0" Padding="8,4"/>
+                <Button Content="▼" Click="OnNudge" Tag="y+1" Padding="8,4"/>
+
+                <TextBlock Text="Pitch" Foreground="#8A7A5E" VerticalAlignment="Center"
+                           Margin="18,0,0,0" FontFamily="{x:Static local:PoeFonts.Display}"/>
+                <Button Content="−" Click="OnNudge" Tag="p-1" Margin="8,0,0,0" Padding="10,4"/>
+                <TextBlock x:Name="PitchLabel" Width="36" TextAlignment="Center"
+                           VerticalAlignment="Center" FontFamily="Consolas"/>
+                <Button Content="+" Click="OnNudge" Tag="p+1" Padding="10,4"/>
+
+                <TextBlock x:Name="DecodeLabel" Margin="22,0,0,0" VerticalAlignment="Center"
+                           Foreground="#86A86A"/>
+
+                <Button Content="Save" Click="OnSave" Margin="24,0,0,0"
+                        Style="{StaticResource Primary}"/>
+                <Button Content="Cancel" Click="OnCancel" Margin="8,0,0,0"/>
+                <Button Content="Open calibration files" Click="OnOpenFolder" Margin="18,0,0,0"
+                        ToolTip="The Area-Modifiers panel region, board origin and figurine inset still live in the JSON files."/>
+            </StackPanel>
+        </Border>
+        <TextBlock DockPanel.Dock="Top" Margin="14,6" FontSize="12" Foreground="#6B5F4E"
+                   Text="Arrow keys nudge the origin (Shift = ×5) · the boxes must sit ON the glyphs · green box = chart detected there"/>
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                      Background="#060907" Focusable="False">
+            <Grid x:Name="Zoom">
+                <Grid.LayoutTransform>
+                    <ScaleTransform x:Name="Scale" ScaleX="0.75" ScaleY="0.75"/>
+                </Grid.LayoutTransform>
+                <Image x:Name="Shot" Stretch="None"/>
+                <Canvas x:Name="Overlay" IsHitTestVisible="False"/>
+            </Grid>
+        </ScrollViewer>
+    </DockPanel>
+</Window>
