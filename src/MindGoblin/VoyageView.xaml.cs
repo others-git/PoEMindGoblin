@@ -2817,10 +2817,22 @@ public partial class VoyageView : UserControl, IDisposable
             Headline = alert.Headline;
             Detail = alert.Detail;
             Where = alert.Where;
-            Accent = alert.Kind == AlertKind.Jackpot
-                ? new SolidColorBrush(Color.FromRgb(0xC8, 0xAA, 0x6E))    // brass
-                : new SolidColorBrush(Color.FromRgb(0xB8, 0x50, 0x3E));   // rust
+            // Grail rows shout: bright gold on a lit row, bigger headline. The two
+            // modifiers that decide a whole voyage must not look like the rest.
+            Accent = alert.Kind switch
+            {
+                AlertKind.Grail => new SolidColorBrush(Color.FromRgb(0xF0, 0xD2, 0x6A)),
+                AlertKind.Jackpot => new SolidColorBrush(Color.FromRgb(0xC8, 0xAA, 0x6E)),
+                _ => new SolidColorBrush(Color.FromRgb(0xB8, 0x50, 0x3E)),
+            };
+            RowBackground = alert.Kind == AlertKind.Grail
+                ? new SolidColorBrush(Color.FromRgb(0x2A, 0x22, 0x0E))
+                : new SolidColorBrush(Color.FromRgb(0x13, 0x11, 0x10));
+            HeadlineSize = alert.Kind == AlertKind.Grail ? 17 : 14;
         }
+
+        public Brush RowBackground { get; }
+        public double HeadlineSize { get; }
 
         public string Headline { get; }
         public string Detail { get; }

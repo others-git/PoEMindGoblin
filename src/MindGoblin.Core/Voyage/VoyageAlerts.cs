@@ -5,6 +5,10 @@ namespace MindGoblin.Core.Voyage;
 /// <summary>Why a modifier is worth stopping for.</summary>
 public enum AlertKind
 {
+    /// <summary>The two build-the-whole-voyage modifiers -- the Divine figurine and
+    /// Messages in Bottles. Sorted above everything and displayed louder.</summary>
+    Grail,
+
     /// <summary>Rare and lucrative. Build the voyage around it.</summary>
     Jackpot,
 
@@ -80,7 +84,7 @@ public static class VoyageAlerts
     /// </summary>
     private static readonly Rule[] Rules =
     [
-        new(AlertKind.Jackpot, @"Divine Orbs?", "Divine Orbs",
+        new(AlertKind.Grail, @"Divine Orbs?", "Divine Orbs",
             "The biggest per-rare payout on the board. Pair it with anything adding rare "
             + "monsters, and run that square early."),
 
@@ -89,10 +93,10 @@ public static class VoyageAlerts
             + "at zero, because player power is not loot. Right-click its chart twice to "
             + "require it."),
 
-        new(AlertKind.Jackpot, @"additional Messages? in (?:a )?Bottles?", "Messages in a Bottle",
-            "Field-verified: the most profitable chase right now. The gift pays into "
-            + "ADJACENT areas, so it belongs beside the highest-quantity tiles — the "
-            + "bottles profile plans exactly that."),
+        new(AlertKind.Grail, @"additional Messages? in (?:a )?Bottles?", "Messages in a Bottle",
+            "The most profitable chase: ~39c each, sellable UNOPENED. A hidden-until-"
+            + "charted voyage mod (ilvl 68+, max +2) — it cannot be crafted for, only "
+            + "revealed. Seat it centrally beside the highest-quantity tiles."),
 
         new(AlertKind.Jackpot, @"drop Dead Man's Sulphur", "Sulphur off rares",
             "Every rare drops sulphur -- the currency that pays for board rerolls and "
@@ -164,7 +168,7 @@ public static class VoyageAlerts
 
         return [.. Enumerable.Range(0, Rules.Length)
             .Where(i => charts.ContainsKey(i) || squares.ContainsKey(i))
-            .OrderBy(i => Rules[i].Kind == AlertKind.Trap ? 1 : 0)
+            .OrderBy(i => (int)Rules[i].Kind)
             .ThenBy(i => i)
             .Select(i => new VoyageAlert(Rules[i].Kind, Rules[i].Headline, Rules[i].Detail)
             {

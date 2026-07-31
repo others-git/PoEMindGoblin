@@ -706,7 +706,7 @@
                     <ItemsControl x:Name="AlertList">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Background="{StaticResource Slate}"
+                                <Border Background="{Binding RowBackground}"
                                         BorderBrush="{Binding Accent}" BorderThickness="3,0,0,0"
                                         Padding="12,7" Margin="0,0,0,4">
                                     <Grid>
@@ -720,7 +720,7 @@
                                                  the edge rather than onto a second line. -->
                                             <WrapPanel Orientation="Horizontal">
                                                 <TextBlock Text="{Binding Headline}"
-                                                           FontFamily="{x:Static local:PoeFonts.Display}" FontSize="14"
+                                                           FontFamily="{x:Static local:PoeFonts.Display}" FontSize="{Binding HeadlineSize}"
                                                            Foreground="{Binding Accent}"/>
                                                 <TextBlock Text="{Binding Where}" FontSize="11"
                                                            Foreground="{StaticResource Shade}"

@@ -47,16 +47,36 @@ public class VoyageAlertsTests
     }
 
     [Fact]
-    public void DivineOrbsRaiseAJackpot()
+    public void DivineOrbsRaiseAGrail()
     {
         var session = SessionWith((3,
             "Salt Barrens\nAbyssal Plain\nItem Quantity: +20%\n"
             + "Rare Monsters adjacent in Areas drop 2 additional Divine Orbs"));
 
         var alert = Assert.Single(VoyageAlerts.Scan(session));
-        Assert.Equal(AlertKind.Jackpot, alert.Kind);
+        Assert.Equal(AlertKind.Grail, alert.Kind);
         Assert.Equal("Divine Orbs", alert.Headline);
         Assert.Equal(3, alert.ChartIndex);
+    }
+
+    /// <summary>The two grails outrank every ordinary jackpot: Divine first, bottles
+    /// second, the rest after -- and both display louder in the banner.</summary>
+    [Fact]
+    public void GrailsSortAboveJackpots()
+    {
+        var session = SessionWith(
+            (1, "Salt Barrens\nAbyssal Plain\nAdjacent Modifier: "
+                + "Adjacent Areas contain 2 additional Messages in Bottles"),
+            (2, "Tempest Reach\nAnchorfield\nVoyage Modifier: Players in all Voyage Areas "
+                + "have Soul Eater"));
+        session.ApplySquareModifiers(1, ["Rare Monsters in Area drop an additional Divine Orb"]);
+
+        var alerts = VoyageAlerts.Scan(session);
+        Assert.Equal(AlertKind.Grail, alerts[0].Kind);
+        Assert.Equal("Divine Orbs", alerts[0].Headline);
+        Assert.Equal(AlertKind.Grail, alerts[1].Kind);
+        Assert.Equal("Messages in a Bottle", alerts[1].Headline);
+        Assert.Equal(AlertKind.Jackpot, alerts[2].Kind);
     }
 
     /// <summary>
