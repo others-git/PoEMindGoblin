@@ -324,7 +324,9 @@ public sealed class VoyageProfile
         var starfish = AdditionalStarfish.Match(line);
         if (starfish.Success)
         {
-            // Observed at Sea Pillars: the starfish are always-rare. Each is a rare.
+            // Field-confirmed mechanism (2026-07-31): each starfish PACK carries
+            // exactly one rare, and the mod's count is the pack count -- so the
+            // number maps to rares one for one.
             var n = starfish.Groups[1].Success ? double.Parse(starfish.Groups[1].Value) : 1;
             density += n / AreaPopulation.RaresPerArea;
         }
@@ -916,7 +918,7 @@ public sealed class VoyageRules : IDisposable
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Imprisoned Monsters?", Weight = 2.0,
                                  Comment = "an imprisoned monster is a rare" },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional Giant Starfish", Weight = 2.0,
-                                 Comment = "observed always-rare: each starfish is a rare" },
+                                 Comment = "field-confirmed: one rare per starfish pack, count maps 1:1" },
                 new VoyageRule { Pattern = @"(?:(\d+)|an)\s+additional (?:\w+'s )?Strongbox(?:es)?",
                                  Weight = 2.0 * AreaPopulation.RaresPerRolledStrongbox,
                                  Comment = "a rolled box pours out ~3 rares (community: up to 7 "
