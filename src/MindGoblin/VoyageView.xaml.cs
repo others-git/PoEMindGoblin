@@ -667,14 +667,34 @@ public partial class VoyageView : UserControl, IDisposable
     /// the press, never from a timer; the delays only give the game time to draw the
     /// tooltip and fill the clipboard for THIS press's single copy.
     /// </summary>
+    /// <summary>One capture is in flight: further F9s and Skips must wait for it.
+    /// The handler awaits on the UI thread, so without this a rapid second press
+    /// interleaved at an await -- double injection, and a blind dequeue that could
+    /// silently drop a step Skip had already advanced past.</summary>
+    private bool _slurpBusy;
+
     private async void OnSlurpKey()
     {
+        if (_slurpBusy) return;
         if (_slurp is not { Count: > 0 })
         {
             FinishSlurp();
             return;
         }
         var (isFigurine, index) = _slurp.Peek();
+        _slurpBusy = true;
+        try
+        {
+            await SlurpStep(isFigurine, index);
+        }
+        finally
+        {
+            _slurpBusy = false;
+        }
+    }
+
+    private async Task SlurpStep(bool isFigurine, int index)
+    {
         if (isFigurine)
         {
             await SlurpFigurine(index);
@@ -714,6 +734,8 @@ public partial class VoyageView : UserControl, IDisposable
             return;
         }
 
+        // Stop may have disarmed the queue while the capture was in flight.
+        if (_slurp is not { Count: > 0 } || _slurp.Peek() != (isFigurine: false, index)) return;
         _slurp.Dequeue();
         _solution = null;
         Persist();
@@ -844,6 +866,7 @@ public partial class VoyageView : UserControl, IDisposable
             _capturing = false;
         }
 
+        if (_slurp is not { Count: > 0 } || _slurp.Peek() != (IsFigurine: true, index)) return;
         _slurp.Dequeue();
         RefreshBoard();
         RebuildModifiers();
@@ -855,6 +878,7 @@ public partial class VoyageView : UserControl, IDisposable
     /// <summary>Move past a cell that will not copy (an empty tooltip, a mis-read).</summary>
     private void OnSlurpSkip(object sender, RoutedEventArgs e)
     {
+        if (_slurpBusy) return;   // never advance under a capture in flight
         if (_slurp is not { Count: > 0 }) return;
         var (wasFigurine, skipped) = _slurp.Dequeue();
         RefreshSlurpPanel();

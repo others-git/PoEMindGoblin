@@ -36,8 +36,16 @@ public partial class CalibrationWindow : Window
         Loaded += (_, _) =>
         {
             _bitmap = new System.Drawing.Bitmap(_capturePath);
-            Shot.Source = new BitmapImage(new Uri(_capturePath));
-            // Fit the width; the panel lives on the right half, so start scrolled there.
+            // OnLoad, or BitmapImage keeps the FILE handle open for as long as the
+            // image is shown -- and the next Identify Charts would then fail to
+            // overwrite last-identify.png, silently freezing this view in the past.
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            image.UriSource = new Uri(_capturePath);
+            image.EndInit();
+            Shot.Source = image;
             Redraw();
         };
         Unloaded += (_, _) => _bitmap?.Dispose();
