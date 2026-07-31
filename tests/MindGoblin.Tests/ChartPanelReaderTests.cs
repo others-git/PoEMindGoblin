@@ -63,6 +63,29 @@ public class ChartPanelReaderTests
         Assert.Equal(24, ReadFixture().Count);
     }
 
+    /// <summary>
+    /// The 3.29.1 capture whose glow flecks stretched min/max glyph bounds into the
+    /// surrounding artwork and read four E+S Corners as Junctions (#12, #26, #39,
+    /// #44). Contiguous-run bounds fixed it; this fixture holds the patch's art.
+    /// </summary>
+    [Fact]
+    public void ThePostPatchCaptureDecodesTheCornersCorrectly()
+    {
+        using var px = new BitmapPixels(
+            Path.Combine(AppContext.BaseDirectory, "fixtures", "voyage-panel-3291.png"));
+        var cells = new ChartPanelReader().Read(px);
+
+        Assert.Equal(60, cells.Count);
+        Assert.All(cells, c => Assert.NotNull(c.Shape));
+        foreach (var index in new[] { 12, 26, 39, 44 })
+            Assert.Equal(ChartShape.Corner, cells.Single(c => c.Index == index).Shape);
+        Assert.Equal(17, cells.Count(c => c.Shape == ChartShape.Crossing));
+        Assert.Equal(15, cells.Count(c => c.Shape == ChartShape.Corner));
+        Assert.Equal(14, cells.Count(c => c.Shape == ChartShape.Straight));
+        Assert.Equal(8, cells.Count(c => c.Shape == ChartShape.Junction));
+        Assert.Equal(6, cells.Count(c => c.Shape == ChartShape.End));
+    }
+
     [Fact]
     public void EveryChartResolvesToAKnownShape()
     {

@@ -198,6 +198,25 @@ public sealed class ChartPanelReader
         _levels = levels ?? new LevelReader();
     }
 
+    /// <summary>The longest contiguous stretch of lines dense enough to be glyph
+    /// rather than stray glow. Ties go to the earlier run; a fleck loses either way.</summary>
+    private static (int Min, int Max) LongestRun(int[] counts)
+    {
+        const int floor = 3;
+        int bestMin = 0, bestMax = -1, runStart = -1;
+        for (var i = 0; i <= counts.Length; i++)
+        {
+            var dense = i < counts.Length && counts[i] >= floor;
+            if (dense && runStart < 0) runStart = i;
+            if (!dense && runStart >= 0)
+            {
+                if (i - runStart > bestMax - bestMin + 1) { bestMin = runStart; bestMax = i - 1; }
+                runStart = -1;
+            }
+        }
+        return (bestMin, bestMax);
+    }
+
     /// <summary>The path glyph is a saturated green distinct from the parchment behind it.</summary>
     private static bool IsGreen(int r, int g, int b) => g > 90 && g - r > 35 && g - b > 25;
 
@@ -236,7 +255,8 @@ public sealed class ChartPanelReader
         var green = new bool[size, size];
         var dark = new bool[size, size];
         var count = 0;
-        int minX = size, minY = size, maxX = -1, maxY = -1;
+        var rowGreen = new int[size];
+        var colGreen = new int[size];
 
         for (var y = 0; y < size; y++)
         {
@@ -247,16 +267,25 @@ public sealed class ChartPanelReader
                 {
                     green[y, x] = true;
                     count++;
-                    if (x < minX) minX = x;
-                    if (x > maxX) maxX = x;
-                    if (y < minY) minY = y;
-                    if (y > maxY) maxY = y;
+                    rowGreen[y]++;
+                    colGreen[x]++;
                 }
                 if (IsDark(r, g, b)) dark[y, x] = true;
             }
         }
 
-        if (count < o.OccupiedThreshold || maxX < 0) return null;
+        if (count < o.OccupiedThreshold) return null;
+
+        // ROBUST bounds, not min/max: 3.29.1 brightened the glyph glow, and an
+        // isolated fleck of green ABOVE a glyph stretched a min/max box into the dark
+        // artwork -- where the north edge band then found "paths" and read E+S
+        // Corners as Junctions. A density floor alone cannot fix it, because a truly
+        // open edge's exit glow is real green at similar density. What separates a
+        // fleck from the glyph is CONTIGUITY: bounds come from the longest contiguous
+        // run of dense rows (and columns), so nothing detached can join the box.
+        var (minY, maxY) = LongestRun(rowGreen);
+        var (minX, maxX) = LongestRun(colGreen);
+        if (maxX < 0 || maxY < 0) return null;
 
         var bw = maxX - minX + 1;
         var bh = maxY - minY + 1;
