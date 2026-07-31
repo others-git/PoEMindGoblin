@@ -404,7 +404,14 @@ public partial class VoyageView : UserControl, IDisposable
 
     // ---- pass 1: screenshot ------------------------------------------------------
 
-    private void OnReadPanel(object sender, RoutedEventArgs e)
+    private void OnReadPanel(object sender, RoutedEventArgs e) => IdentifyChartsNow();
+
+    /// <summary>
+    /// Screenshot the game and decode the chart panel into the session. Shared by the
+    /// Identify Charts button and the slurp's arming step, so both agree on what a
+    /// read is. True when at least one chart decoded.
+    /// </summary>
+    private bool IdentifyChartsNow()
     {
         try
         {
@@ -421,7 +428,7 @@ public partial class VoyageView : UserControl, IDisposable
             {
                 SetStatus("No charts found. Is the Voyage screen open on the primary monitor?",
                           bad: true);
-                return;
+                return false;
             }
 
             _session.ApplyPanelRead(cells);
@@ -436,10 +443,12 @@ public partial class VoyageView : UserControl, IDisposable
             SetStatus(unread == 0
                 ? $"Read {cells.Count} charts."
                 : $"Read {cells.Count} charts; {unread} had an unreadable level.");
+            return true;
         }
         catch (Exception ex)
         {
             SetStatus($"Capture failed: {ex.Message}", bad: true);
+            return false;
         }
     }
 
@@ -596,6 +605,16 @@ public partial class VoyageView : UserControl, IDisposable
     {
         if (SlurpBtn.IsChecked == true)
         {
+            // Identify first, always: the slurp's chart list is only as fresh as the
+            // last panel read, and ApplyPanelRead merges -- survivors keep their
+            // detail, new cells join as unidentified, spent cells drop. If the game
+            // is not on screen the identify says so and the slurp stands down.
+            if (!IdentifyChartsNow())
+            {
+                SlurpBtn.IsChecked = false;
+                return;
+            }
+
             // Figurines lead: the border rerolls every voyage, and the figurine
             // TOOLTIP is the authoritative text -- hovering the tile misses its
             // adjacent-scope lines entirely (field-confirmed). Only unread ones,
@@ -611,9 +630,7 @@ public partial class VoyageView : UserControl, IDisposable
             if (pending.Count == 0)
             {
                 SlurpBtn.IsChecked = false;
-                SetStatus(_session.Charts.Count == 0
-                    ? "Identify Charts first \u2014 the slurp needs to know which cells hold charts."
-                    : "Nothing to slurp \u2014 every chart has its details already.", bad: true);
+                SetStatus("Nothing to slurp \u2014 the border is read and every chart has its details.", bad: true);
                 return;
             }
             if (Window.GetWindow(this) is not { } window)
