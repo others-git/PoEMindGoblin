@@ -84,6 +84,13 @@ public class ChartPanelReaderTests
         Assert.Equal(14, cells.Count(c => c.Shape == ChartShape.Straight));
         Assert.Equal(8, cells.Count(c => c.Shape == ChartShape.Junction));
         Assert.Equal(6, cells.Count(c => c.Shape == ChartShape.End));
+
+        // Every level reads too: this capture is where '0' and '9' were carved from
+        // (L:80 and L:79), closing two-thirds of the reader's known digit gap.
+        Assert.All(cells, c => Assert.NotNull(c.Level));
+        Assert.Equal(80, cells.Single(c => c.Index == 10).Level);
+        Assert.Equal(79, cells.Single(c => c.Index == 20).Level);
+        Assert.Equal(80, cells.Single(c => c.Index == 39).Level);
     }
 
     [Fact]

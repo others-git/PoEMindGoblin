@@ -37,7 +37,8 @@
                            Foreground="#86A86A"/>
 
                 <Button Content="Save" Click="OnSave" Margin="24,0,0,0"
-                        Style="{StaticResource Primary}"/>
+                        Background="#C8AA6E" Foreground="#1A1509" FontWeight="SemiBold"
+                        Padding="16,4" BorderThickness="0"/>
                 <Button Content="Cancel" Click="OnCancel" Margin="8,0,0,0"/>
                 <Button Content="Open calibration files" Click="OnOpenFolder" Margin="18,0,0,0"
                         ToolTip="The Area-Modifiers panel region, board origin and figurine inset still live in the JSON files."/>

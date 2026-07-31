@@ -19,11 +19,11 @@ namespace MindGoblin.Core.Voyage;
 ///   * The text baseline drifts a pixel or two between cells. Every candidate is therefore
 ///     tried at a range of vertical offsets, not just one.
 ///
-/// KNOWN GAP: the capture this was trained on contains only the digits 1,2,3,4,6,7,8.
-/// 0, 5 and 9 have no template and a level containing one reads as null rather than a
-/// wrong number -- a missing level is recoverable, a fabricated one silently corrupts the
-/// plan. <see cref="Learn"/> and the user template file close the gap from a later capture
-/// without a rebuild.
+/// KNOWN GAP: '5' still has no template -- the training captures have yet to contain
+/// one -- so a level with a 5 reads as null rather than a wrong number: a missing level
+/// is recoverable, a fabricated one silently corrupts the plan. '0' and '9' were carved
+/// from a 3.29.1 capture (L:80 and L:79 captions) the moment they first appeared.
+/// <see cref="Learn"/> and the user template file close such gaps without a rebuild.
 /// </summary>
 public sealed class LevelReader
 {
@@ -316,6 +316,13 @@ public sealed class LevelReader
 
     private static readonly Dictionary<char, string[]> BuiltIn = new()
     {
+        ['0'] =
+        [
+            "..........", "..........", "..........", "..........", "...####...",
+            "..######..", ".##...###.", "##.....##.", "##.....###", "##.....###",
+            "##.....###", "##.....###", "##.....##.", "###....##.", ".###..##..",
+            "..#####...", "...##.....", "..........", "..........", "..........",
+        ],
         ['1'] =
         [
             ".....", ".....", ".....", ".....", ".....", ".....",
@@ -364,6 +371,13 @@ public sealed class LevelReader
             "###...##.", "###...##.", ".###.##..", "..####...", "..#####..",
             ".##.####.", "##...###.", "##....###", "##....##.", "###..###.",
             ".######..", "...##....", ".........", ".........", ".........",
+        ],
+        ['9'] =
+        [
+            ".........", ".........", ".........", ".........", "..####...",
+            ".#######.", ".##...##.", "##....##.", "##....###", "###...###",
+            "###...###", ".########", "..#######", "......##.", "......##.",
+            ".....###.", "#######..", ".#####...", ".........", ".........",
         ],
     };
 }
