@@ -272,7 +272,6 @@ public partial class VoyageView : UserControl, IDisposable
         _weights.Reset(profile.Name);
         RefreshWeights();
         SetStatus($"Weights for \"{profile.Name}\" back to shipped \u2014 Solve to replan.");
-        if (_steps.Count > 0) _ = SolveAsync();
     }
 
     /// <summary>
@@ -355,7 +354,11 @@ public partial class VoyageView : UserControl, IDisposable
                 Paint(v);
                 WeightsBtn.Content = _weights.AnyTuned(profile.Name) ? "Weights ●" : "Weights";
             };
-            slider.LostMouseCapture += (_, _) => { if (_steps.Count > 0) _ = SolveAsync(); };
+            slider.LostMouseCapture += (_, _) =>
+            {
+                if (_steps.Count > 0)
+                    SetStatus("Weights changed \u2014 Solve to replan under them.");
+            };
             Grid.SetColumn(slider, 1);
             row.Children.Add(slider);
 
