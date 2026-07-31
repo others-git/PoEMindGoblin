@@ -811,7 +811,7 @@ public partial class VoyageView : UserControl, IDisposable
                 return;
             }
             var box = System.Drawing.Rectangle.Intersect(screen, found);
-            var raw = await ScreenOcr.ReadRegionAsync(box, upscale: 3);
+            var raw = await ScreenOcr.ReadRegionAsync(box, upscale: 3, blueText: true);
             var mods = AreaModifierPanel.TooltipLines(raw);
             if (mods.Count == 0)
             {

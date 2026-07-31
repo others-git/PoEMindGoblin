@@ -247,7 +247,8 @@ public sealed class AreaModifierPanel
             .Where(l => !Chrome.IsMatch(l))
             // A modifier always carries words plus a number or a known verb; screen
             // furniture ("WAYPOINT", an HP readout, a mangled heading) never has both.
-            .Where(l => ModShaped.IsMatch(l) && Regex.IsMatch(l, "[A-Za-z]{3}"))];
+            .Where(l => ModShaped.IsMatch(l) && Regex.IsMatch(l, "[A-Za-z]{3}"))
+            .Select(Canonicalize)];
     }
 
     private static readonly Regex Chrome = new(
@@ -266,6 +267,72 @@ public sealed class AreaModifierPanel
     private static readonly Regex ModShaped = new(
         @"\d|contains?|Placing|Soul Eater|Monsters|Players|Adjacent|Charts",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Snap a mangled OCR line to the board-mod corpus it clearly came from.
+    ///
+    /// The templates are known ("#% more Scarabs found in adjacent Areas"), so a line
+    /// whose WORDS overwhelmingly match one template is that mod wearing OCR damage
+    /// ("Scarabs found in adjacent Area9"): rebuild it as the template with the line's
+    /// numbers dropped into the '#' slots. Repair declines rather than guesses -- a
+    /// weak match, or a number count that does not fit the slots, returns the line
+    /// untouched, because a wrong canonical line would score confidently and wrongly.
+    /// </summary>
+    public static string Canonicalize(string line)
+    {
+        var digits = BoundedNumbers.Matches(line).Select(m => m.Value).ToList();
+        var lineTokens = TokenCounts(line);
+        if (lineTokens.Count == 0) return line;
+
+        string? best = null;
+        var bestScore = 0.0;
+        foreach (var template in ChartRewards.Current.BoardLines.Keys)
+        {
+            var t = TokenCounts(template);
+            if (t.Count == 0) continue;
+            var overlap = 0;
+            var lineTotal = 0;
+            var tmplTotal = 0;
+            foreach (var (tok, n) in t) tmplTotal += n;
+            foreach (var (tok, n) in lineTokens)
+            {
+                lineTotal += n;
+                if (t.TryGetValue(tok, out var m)) overlap += Math.Min(n, m);
+            }
+            var score = (double)overlap / Math.Max(tmplTotal, lineTotal);
+            if (score > bestScore) { bestScore = score; best = template; }
+        }
+        if (best is null || bestScore < 0.68) return line;
+
+        var parts = best.Split('#');
+        if (parts.Length - 1 != digits.Count) return line;
+        var rebuilt = new System.Text.StringBuilder(parts[0]);
+        for (var i = 0; i < digits.Count; i++)
+        {
+            rebuilt.Append(digits[i]);
+            rebuilt.Append(parts[i + 1]);
+        }
+        return rebuilt.ToString();
+    }
+
+    /// <summary>Numbers standing on their own -- a digit fused into a mangled word
+    /// ("adjacent8Areå") is OCR debris, not a roll.</summary>
+    private static readonly Regex BoundedNumbers = new(
+        @"(?<![A-Za-z\d])\d+(?![A-Za-z\d])", RegexOptions.CultureInvariant);
+
+    private static Dictionary<string, int> TokenCounts(string text)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (Match m in WordToken.Matches(text.ToLowerInvariant()))
+        {
+            counts.TryGetValue(m.Value, out var n);
+            counts[m.Value] = n + 1;
+        }
+        return counts;
+    }
+
+    private static readonly Regex WordToken = new(
+        @"[a-z]{2,}", RegexOptions.CultureInvariant);
 
     /// <summary>
     /// Rejoin modifier text that OCR split across lines.

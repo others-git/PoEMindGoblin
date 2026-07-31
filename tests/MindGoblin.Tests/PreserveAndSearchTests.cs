@@ -160,6 +160,37 @@ public class FigurineTooltipTests
         Assert.Contains(2, session.SquaresAwaitingModifiers);
     }
 
+    /// <summary>
+    /// OCR damage from the live session, verbatim, snapped back to the corpus: the
+    /// words identify the template, the line's own numbers fill its slots.
+    /// </summary>
+    [Theory]
+    [InlineData("50% more Rarity of Items found in adjacent Ageasll",
+                "50% more Rarity of Items found in adjacent Areas")]
+    [InlineData("Adjacent Areas contain 12 additional packs of Sea ééåsts•",
+                "Adjacent Areas contain 12 additional packs of Sea Beasts")]
+    [InlineData("475% more Scarabs found in adjacent Area9",
+                "475% more Scarabs found in adjacent Areas")]
+    [InlineData("50% increased number of Rare Monsters in adjacent Areas l:",
+                "50% increased number of Rare Monsters in adjacent Areas")]
+    public void MangledLinesSnapToTheCorpus(string mangled, string expected) =>
+        Assert.Equal(expected, AreaModifierPanel.Canonicalize(mangled));
+
+    /// <summary>Repair declines rather than guesses: no usable number for the slot, or
+    /// words too damaged to identify a template, and the line passes through raw.</summary>
+    [Theory]
+    [InlineData("MEI increased Pack Size in adjacent Areay")]           // the roll is gone
+    [InlineData("something entirely unlike any board modifier")]
+    public void UnrepairableLinesPassThroughUntouched(string line) =>
+        Assert.Equal(line, AreaModifierPanel.Canonicalize(line));
+
+    [Fact]
+    public void CleanLinesSurviveCanonicalizationExactly()
+    {
+        const string line = "120% increased Quantity of Items found in adjacent Areas";
+        Assert.Equal(line, AreaModifierPanel.Canonicalize(line));
+    }
+
     /// <summary>A figurine carrying two mods must bind as TWO board modifiers -- the
     /// channel classifiers anchor at line start, and squares already bind per line.</summary>
     [Fact]

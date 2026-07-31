@@ -65,13 +65,13 @@ public static class ScreenOcr
 
     /// <summary>Read the lines of text in a screen rectangle, top to bottom.</summary>
     public static async Task<IReadOnlyList<string>> ReadRegionAsync(
-        Rectangle region, int upscale = 3)
+        Rectangle region, int upscale = 3, bool blueText = false)
     {
         if (Engine is not { } engine) return [];
         if (region.Width <= 0 || region.Height <= 0) return [];
 
         using var shot = ScreenCapture.CaptureRegion(region);
-        using var prepared = Prepare(shot, upscale);
+        using var prepared = Prepare(shot, upscale, blueText);
         var bitmap = await ToSoftwareBitmapAsync(prepared);
 
         var result = await engine.RecognizeAsync(bitmap);
@@ -92,7 +92,7 @@ public static class ScreenOcr
     /// size; scaling up costs a millisecond and measurably improves the result. The
     /// engine also refuses images past MaxImageDimension, so the factor is capped.
     /// </summary>
-    private static Bitmap Prepare(Bitmap source, int upscale)
+    private static Bitmap Prepare(Bitmap source, int upscale, bool blueText = false)
     {
         var factor = Math.Max(1, upscale);
         var max = (int)OcrEngine.MaxImageDimension;
@@ -100,14 +100,59 @@ public static class ScreenOcr
                && (source.Width * factor > max || source.Height * factor > max))
             factor--;
 
-        if (factor == 1) return (Bitmap)source.Clone();
-
-        var scaled = new Bitmap(source.Width * factor, source.Height * factor,
+        Bitmap scaled;
+        if (factor == 1)
+        {
+            scaled = (Bitmap)source.Clone();
+        }
+        else
+        {
+            scaled = new Bitmap(source.Width * factor, source.Height * factor,
                                 PixelFormat.Format32bppArgb);
-        using var g = Graphics.FromImage(scaled);
-        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-        g.DrawImage(source, 0, 0, scaled.Width, scaled.Height);
+            using var g = Graphics.FromImage(scaled);
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            g.DrawImage(source, 0, 0, scaled.Width, scaled.Height);
+        }
+        if (blueText) ThresholdBlue(scaled);
         return scaled;
+    }
+
+    /// <summary>
+    /// Reduce a magic-blue-on-anything capture to black text on white.
+    ///
+    /// Figurine tooltips render over whatever sits behind them -- parchment on the
+    /// left of the board, the dark chart stash on the right -- and OCR against the
+    /// noisy dark side misread numbers and mangled words the parchment side got
+    /// right. The text colour itself is the one constant, so keep exactly it.
+    /// </summary>
+    private static void ThresholdBlue(Bitmap bitmap)
+    {
+        var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height),
+            ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+        try
+        {
+            unsafe
+            {
+                for (var y = 0; y < bitmap.Height; y++)
+                {
+                    var row = (byte*)data.Scan0 + y * data.Stride;
+                    for (var x = 0; x < bitmap.Width; x++)
+                    {
+                        var b = row[x * 4];
+                        var g = row[x * 4 + 1];
+                        var r = row[x * 4 + 2];
+                        var isText = b > 110 && b > r + 30 && b > g + 20;
+                        var v = (byte)(isText ? 0 : 255);
+                        row[x * 4] = v; row[x * 4 + 1] = v; row[x * 4 + 2] = v;
+                        row[x * 4 + 3] = 255;
+                    }
+                }
+            }
+        }
+        finally
+        {
+            bitmap.UnlockBits(data);
+        }
     }
 
     /// <summary>
