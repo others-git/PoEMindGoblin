@@ -649,6 +649,16 @@ public sealed class VoyageSession
         /// <summary>"Placing Lanterns does not reduce your Lantern count" applies
         /// here: place lanterns FROM this square for free.</summary>
         public bool FreeLanterns { get; init; }
+
+        /// <summary>Messages in Bottles landing on this square. Their own count,
+        /// not folded into the container list: field-verified the most profitable
+        /// chase, so they get the loudest mark.</summary>
+        public double Bottles { get; init; }
+
+        /// <summary>Other walk-up openables here: barrels, treasure anchors, the
+        /// lost Pirate's Locker, exotic fish. (Tormented cages deliberately absent
+        /// -- field-judged not worth an icon.)</summary>
+        public IReadOnlyList<string> Containers { get; init; } = [];
     }
 
     public IReadOnlyDictionary<int, SquareBadges> Badges(VoyageSolver.Solution solution)
@@ -675,6 +685,13 @@ public sealed class VoyageSession
 
             var lanterns = lines.Sum(GoldenLanternCount);
             var freeLanterns = lines.Any(l => FreeLanternLine.IsMatch(l));
+            var bottles = lines.Sum(BottleCount);
+            var containers = lines
+                .Select(l => ContainerLine.Match(l))
+                .Where(m => m.Success)
+                .Select(m => m.Groups[1].Value)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
             var bosses = lines
                 .Select(l => NamedBoss.Match(l))
                 .Where(m => m.Success)
@@ -704,11 +721,12 @@ public sealed class VoyageSession
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            if (lanterns > 0 || freeLanterns || bosses.Count > 0 || payouts.Count > 0
+            if (lanterns > 0 || freeLanterns || bottles > 0 || containers.Count > 0
+                || bosses.Count > 0 || payouts.Count > 0
                 || boxes.Count > 0 || dangers.Count > 0)
                 result[VoyagePlan.SquareNumber(placement.Cell, Layout.Cols)] =
                     new SquareBadges(lanterns, bosses, payouts, boxes, dangers)
-                    { FreeLanterns = freeLanterns };
+                    { FreeLanterns = freeLanterns, Bottles = bottles, Containers = containers };
         }
         return result;
     }
@@ -741,6 +759,21 @@ public sealed class VoyageSession
 
     /// <summary>The named creatures the tables can put in a square. Weird names on
     /// purpose -- that is how you know they are bosses.</summary>
+    private static double BottleCount(string line)
+    {
+        var m = BottleLine.Match(line);
+        if (!m.Success) return 0;
+        return m.Groups[1].Success ? double.Parse(m.Groups[1].Value) : 1;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex BottleLine =
+        new(@"(?:(\d+)|an)\s+additional Messages? in (?:a )?Bottles?",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private static readonly System.Text.RegularExpressions.Regex ContainerLine =
+        new(@"(Clusters? of Barrels|Treasure Anchors?|Pirate's Locker|exotic Fish)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     private static readonly System.Text.RegularExpressions.Regex FreeLanternLine =
         new(@"Placing Lanterns does not reduce",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);

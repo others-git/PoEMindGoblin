@@ -2143,7 +2143,8 @@ public partial class VoyageView : UserControl, IDisposable
         // The icon row: what the square CONTAINS, at a glance. A golden lantern to
         // grab, a named boss to expect. Sourced from the same lines the scoring uses,
         // so an icon never promises something the plan did not price.
-        if (badges is { } b && (b.GoldenLanterns > 0 || b.FreeLanterns || b.Bosses.Count > 0
+        if (badges is { } b && (b.GoldenLanterns > 0 || b.FreeLanterns || b.Bottles > 0
+                                || b.Containers.Count > 0 || b.Bosses.Count > 0
                                 || b.Payouts.Count > 0 || b.Strongboxes.Count > 0
                                 || b.Dangers.Count > 0))
         {
@@ -2170,6 +2171,33 @@ public partial class VoyageView : UserControl, IDisposable
                     });
                 lantern.ToolTip = $"{b.GoldenLanterns:0} Golden Lantern{(b.GoldenLanterns > 1 ? "s" : "")} \u2014 grab early, the quantity buff pays for the rest of the run";
                 row.Children.Add(lantern);
+            }
+            if (b.Bottles > 0)
+            {
+                var bottle = new StackPanel
+                    { Orientation = Orientation.Horizontal, Margin = new Thickness(3, 0, 3, 0) };
+                bottle.Children.Add(BottleIcon());
+                if (b.Bottles > 1)
+                    bottle.Children.Add(new TextBlock
+                    {
+                        Text = "×" + b.Bottles.ToString("0"),
+                        FontFamily = new FontFamily("Consolas"),
+                        FontSize = 10,
+                        Foreground = Brush(0xF0, 0xD2, 0x64),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(2, 0, 0, 0),
+                    });
+                bottle.ToolTip = $"{b.Bottles:0} Message{(b.Bottles > 1 ? "s" : "")} in a Bottle "
+                               + "\u2014 the profit chase; open every one";
+                row.Children.Add(bottle);
+            }
+            if (b.Containers.Count > 0)
+            {
+                var keg = new StackPanel
+                    { Orientation = Orientation.Horizontal, Margin = new Thickness(3, 0, 3, 0) };
+                keg.Children.Add(BarrelIcon());
+                keg.ToolTip = "Openables here: " + string.Join(", ", b.Containers);
+                row.Children.Add(keg);
             }
             if (b.FreeLanterns)
             {
@@ -2283,6 +2311,59 @@ public partial class VoyageView : UserControl, IDisposable
 
     /// <summary>A little golden lantern, drawn rather than fonted: a glowing body under
     /// a dark cap, unmistakable at 12px against the slate.</summary>
+    /// <summary>A corked bottle: neck, shoulder, body. The profit chase's mark.</summary>
+    private static UIElement BottleIcon()
+    {
+        var g = new Grid { Width = 8, Height = 13 };
+        g.Children.Add(new Border      // cork
+        {
+            Width = 3, Height = 2,
+            Background = Brush(0xA3, 0x8D, 0x6D),
+            VerticalAlignment = VerticalAlignment.Top,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        });
+        g.Children.Add(new Border      // neck
+        {
+            Width = 3, Height = 4,
+            Background = Brush(0x8F, 0xB8, 0x9A),
+            VerticalAlignment = VerticalAlignment.Top,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        g.Children.Add(new Border      // body
+        {
+            Width = 8, Height = 8,
+            CornerRadius = new CornerRadius(2, 2, 3, 3),
+            Background = Brush(0x6E, 0xA8, 0x84),
+            BorderBrush = Brush(0x3A, 0x5C, 0x48),
+            BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Bottom,
+        });
+        return g;
+    }
+
+    /// <summary>A barrel: staves and two hoops, for the other openables.</summary>
+    private static UIElement BarrelIcon()
+    {
+        var g = new Grid { Width = 9, Height = 11 };
+        g.Children.Add(new Border
+        {
+            CornerRadius = new CornerRadius(3),
+            Background = Brush(0x8A, 0x6A, 0x3C),
+            BorderBrush = Brush(0x4A, 0x38, 0x20),
+            BorderThickness = new Thickness(1),
+        });
+        foreach (var y in new[] { 3.0, 7.0 })
+            g.Children.Add(new Border
+            {
+                Height = 1,
+                Background = Brush(0x3A, 0x2C, 0x18),
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(1, y, 1, 0),
+            });
+        return g;
+    }
+
     private static UIElement LanternIcon()
     {
         var g = new Grid { Width = 10, Height = 13 };

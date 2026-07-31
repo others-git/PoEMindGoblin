@@ -86,6 +86,9 @@ public class SquareBadgeTests
         session.ApplySquareModifiers(3, ["Area contains 2 additional Diviner's Strongboxes"]);
         session.ApplySquareModifiers(6,
             ["Placing Lanterns does not reduce your Lantern count in adjacent Areas"]);
+        session.ApplySquareModifiers(4, ["Area contains 3 additional Messages in Bottles",
+                                         "Area contains 2 additional Clusters of Barrels",
+                                         "Area contains an additional cage of Tormented Spirits"]);
         // The sulphur stat guarantees chart 2 outranks the blank charts and is placed,
         // which the danger-badge assertion below depends on.
         session.ApplyChartText(2,
@@ -100,6 +103,10 @@ public class SquareBadgeTests
         Assert.Contains("Dead Man's Sulphur", badges[1].Payouts);
         Assert.Contains("Diviner's Strongboxes", badges[3].Strongboxes);
         Assert.True(badges[6].FreeLanterns);
+        Assert.Equal(3, badges[4].Bottles);
+        Assert.Contains("Clusters of Barrels", badges[4].Containers);
+        Assert.DoesNotContain(badges[4].Containers,
+                              c => c.Contains("Tormented", StringComparison.OrdinalIgnoreCase));
         var dangerSquare = Assert.Single(plan, s => s.ChartNumber == 2).Square;
         Assert.NotEmpty(badges[dangerSquare].Dangers);
     }
