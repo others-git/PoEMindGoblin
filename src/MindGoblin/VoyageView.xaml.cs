@@ -1814,6 +1814,20 @@ public partial class VoyageView : UserControl, IDisposable
         else
             lines.Add("Area modifiers not read yet.");
 
+        // What the NEIGHBOURS push in: the answer to "why is this square worth more
+        // than its chart", shown where the question gets asked.
+        if (step is not null && _solution is not null && Tuned is { } tuned)
+        {
+            var received = _session.ReceivedOnSquare(tuned, _solution, square);
+            if (received.Count > 0)
+            {
+                lines.Add($"— gained from adjacent —");
+                foreach (var (from, modifier, value) in received)
+                    lines.Add($"square {from}: {modifier}"
+                              + (value > 0.5 ? $"  (+{value:0})" : ""));
+            }
+        }
+
         return Tip(
             step is null ? $"Square {square}" : $"Square {square} · chart {step.ChartNumber}",
             // No shape and no rotation: the square is DRAWN, so its lines already say

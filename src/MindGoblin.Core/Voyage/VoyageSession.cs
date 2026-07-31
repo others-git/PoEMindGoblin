@@ -456,10 +456,25 @@ public sealed class VoyageSession
             + chart.AdjacentPackDensity * nbrPack.GetValueOrDefault(cell)
             + chart.AdjacentQuantityDensity * nbrQty.GetValueOrDefault(cell);
 
+        // The game never leaves a square empty by choice: "up to nine" caps players
+        // who OWN fewer than nine charts, it is not an invitation to leave holes when
+        // junk scores negative -- which the currency profile's penalties made real,
+        // and the solver answered with a seven-chart board. With a full pool the
+        // board must fill; empties are only legal when the pool or cap cannot cover.
+        var cells = Layout.Rows * Layout.Cols;
+        var mustFill = scored.Count >= cells && (profile.MaxCharts ?? cells) >= cells;
         var solution = new VoyageSolver(Layout.Rows, Layout.Cols, scored, score,
+                                        allowEmpty: !mustFill,
                                         strandedPenalty: profile.StrandedSquarePenalty,
                                         maxPlacements: profile.MaxCharts)
             .Solve(budget, ct);
+        if (mustFill && solution.IsEmpty)
+            // A shape-starved pool can make a full board genuinely impossible; a
+            // partial answer then beats refusing to answer.
+            solution = new VoyageSolver(Layout.Rows, Layout.Cols, scored, score,
+                                        strandedPenalty: profile.StrandedSquarePenalty,
+                                        maxPlacements: profile.MaxCharts)
+                .Solve(budget, ct);
 
         // The bonus buys inclusion, not points. Reporting it would claim ten million
         // where the board earned six hundred, so peel it back off for every required
@@ -506,6 +521,45 @@ public sealed class VoyageSession
                 into[cell] = into.GetValueOrDefault(cell) + worth;
         }
         return (flat, perRare, perPack, perQty);
+    }
+
+    /// <summary>
+    /// What a solved square RECEIVES from its neighbours' adjacent modifiers, priced
+    /// under the profile: the tile-side answer to "why is this square worth more than
+    /// its chart". Channel-aware exactly like the solver -- a per-rare payout arrives
+    /// scaled by THIS tile's rare density, a container gift by its quantity.
+    /// </summary>
+    public IReadOnlyList<(int FromSquare, string Modifier, double Value)> ReceivedOnSquare(
+        VoyageProfile profile, VoyageSolver.Solution solution, int square)
+    {
+        if (solution.IsEmpty) return [];
+        var board = new VoyageBoard(Layout.Rows, Layout.Cols);
+        foreach (var p in solution.Placements) board.Place(p);
+        var cell = CellOf(square);
+        if (board.At(cell) is not { } here) return [];
+
+        var syn = profile.MonsterPayoutSynergy;
+        var rareDensity = syn * (here.Chart.MonsterPackSize / 100
+                                 + AreaPopulation.RoomRareBonus(here.Chart));
+        var packDensity = syn * here.Chart.MonsterPackSize / 100;
+        var qtyDensity = syn * here.Chart.ItemQuantity / 100;
+
+        var result = new List<(int, string, double)>();
+        foreach (var side in Enum.GetValues<Side>())
+        {
+            if (board.At(VoyageBoard.Neighbour(cell, side)) is not { } neighbour) continue;
+            if (neighbour.Chart.AdjacentModifier is not { } adj) continue;
+            var value = profile.ScoreAdjacent(neighbour.Chart);
+            value *= VoyageProfile.PayoutChannelOf(adj) switch
+            {
+                VoyageProfile.PayoutChannel.Rares => 1 + rareDensity,
+                VoyageProfile.PayoutChannel.Population => 1 + packDensity,
+                _ when VoyageProfile.IsContainerGift(adj) => 1 + qtyDensity,
+                _ => 1,
+            };
+            result.Add((VoyagePlan.SquareNumber(neighbour.Cell, Layout.Cols), adj, value));
+        }
+        return result;
     }
 
     /// <summary>

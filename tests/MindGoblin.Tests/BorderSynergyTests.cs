@@ -123,6 +123,51 @@ public class BorderSynergyTests
     }
 
     /// <summary>
+    /// The game never leaves a square empty by choice: a pool of nine-plus charts must
+    /// fill the board even when every chart SCORES negative -- the currency profile's
+    /// penalties made the solver answer with holes.
+    /// </summary>
+    [Fact]
+    public void NegativeChartsStillFillTheBoard()
+    {
+        var session = new VoyageSession();
+        session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
+            { Level = 80 }).ToList());
+        foreach (var i in Enumerable.Range(1, 12))
+            session.ApplyChartText(i, "Reach\nAnchorfield\nVoyage Modifier: Monsters in "
+                                      + "all Voyage Areas cannot drop Equipment, Flasks or Tinctures");
+
+        var bottles = VoyageRules.Defaults().Single(p => p.Name == "bottles");
+        var solution = session.Solve(bottles, TimeSpan.FromSeconds(3));
+        Assert.Equal(9, solution.Placements.Count);
+    }
+
+    /// <summary>The tile-side view of adjacency: a square beside a payout gift lists
+    /// what arrives and from where, channel-scaled like the solver prices it.</summary>
+    [Fact]
+    public void ASquareReportsWhatItGainsFromNeighbours()
+    {
+        var session = Session(out _, out _);
+        var gift = 11;
+        session.ApplyChartText(gift,
+            "Kelp Forest\nAnchorfield\nAdjacent Modifier: "
+            + "30% increased number of Rare Monsters in adjacent Areas");
+
+        // The sulphur square seats the gift chart beside square 1 deterministically
+        // (the same arrangement ARareGiftChartSitsBesideTheSulphurSquare proves).
+        session.ApplySquareModifiers(1, ["Rare Monsters in Area drop Dead Man's Sulphur"]);
+
+        var sulphur = VoyageRules.Defaults().Single(p => p.Name == "sulphur");
+        var solution = session.Solve(sulphur, TimeSpan.FromSeconds(3));
+        var giftSquare = session.Plan(solution).Single(s => s.ChartNumber == gift).Square;
+
+        var received = session.ReceivedOnSquare(sulphur, solution, 1);
+        Assert.Contains(received, r => r.FromSquare == giftSquare
+                                       && r.Modifier.Contains("Rare Monsters"));
+    }
+
+    /// <summary>
     /// Straight from a live board that solved suspiciously fast: a FIGURINE carrying
     /// the per-rare sulphur payout must dominate the sulphur solve exactly like a
     /// square read of the same line would.
