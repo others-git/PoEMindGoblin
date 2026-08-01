@@ -22,90 +22,48 @@ public static class WeightCategories
     public static double Multiplier(int slider) =>
         Math.Clamp(slider, Min, Max) / (double)Baseline;
 
-    /// <summary>
-    /// Category per keyword, FIRST match wins -- order carries the judgement calls.
-    /// "Rare Monsters drop Dead Man's Sulphur" is a sulphur payout that happens to ride
-    /// rares, so Sulphur outranks Rares; the orb drops are Currency the same way.
-    /// </summary>
-    private static readonly (string Category, Regex Match)[] Classifier =
-    [
-        ("Sulphur", Rx(@"Sulphur|Filthscrabble")),
-        // Boundaries carry the difference between neighbours: "Gold" is not "Golden
-        // Lantern", and "Divine" is not "Diviner's Strongbox".
-        ("Gold", Rx(@"Gold\b")),
-        ("Currency", Rx(@"Divine\b|Exalted|Scarab|Chaos|Annulment|Regret|Ancient|Chromatic|"
-                        + @"Gemcutter|Orbs?\b|Stacked Decks|Currency|Altar")),
-        ("Magic monsters", Rx(@"Magic Monsters|at least Magic")),
-        ("Rares", Rx(@"Rare Monsters|Imprisoned|Essences|Possessed|Fracture on death|"
-                     + @"Pantheon|Starfish|Wisps|Atziri")),
-        ("Packs", Rx(@"Pack Size|additional packs?")),
-        ("Containers", Rx(@"Strongbox|Barrel|Bottle|Treasure|Locker|Tormented|Fish|"
-                          + @"Jellyfish|Lantern")),
-        ("Areas", Rx(@"^Area:")),
-        ("Loot", Rx(@"Qu?au?ntity|Rarity|explicit modifier|Flasks?|Experience|Fractured|"
-                    + @"Support Gem|Unique")),
-    ];
+    /// <summary>Pattern -> stat, straight from the catalog: no keyword guessing.
+    /// A rule the catalog does not know (a strategy's ExtraRule, a hand edit) is
+    /// "Extras" and scales only with its own slider.</summary>
+    public const string Other = "Extras";
 
-    public const string Other = "Other";
+    private static readonly Dictionary<string, Stat> StatByPattern =
+        ModCatalog.Entries.ToDictionary(e => e.Pattern, e => e.Stat, StringComparer.Ordinal);
 
-    private static Regex Rx(string pattern) =>
-        new(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    public static string CategoryOf(VoyageRule rule) =>
+        StatByPattern.TryGetValue(rule.Pattern, out var stat) ? stat.ToString() : Other;
 
-    public static string CategoryOf(VoyageRule rule)
+    /// <summary>The stats a compiled profile has rules in, in enum order.</summary>
+    public static IReadOnlyList<string> CategoriesIn(VoyageProfile profile)
     {
-        foreach (var (category, match) in Classifier)
-            if (match.IsMatch(rule.Pattern)) return category;
-        return Other;
+        var present = profile.Rules.Select(CategoryOf).ToHashSet(StringComparer.Ordinal);
+        return [.. Enum.GetValues<Stat>().Select(s => s.ToString()).Append(Other)
+            .Where(present.Contains)];
     }
 
-    /// <summary>
-    /// Which shipped profile OWNS each category -- where its rules come from when the
-    /// active profile has none of its own. This is what makes the sliders a blend
-    /// rather than a pointless uniform rescale: a single-minded profile like sulphur
-    /// classifies into ONE category, and scaling one category by itself changes no
-    /// ordering at all. Pulling a silent category in from its owner does.
-    /// </summary>
-    public static readonly IReadOnlyList<(string Category, string Owner)> Owners =
-    [
-        ("Sulphur", "sulphur"),
-        ("Currency", "currency"),
-        ("Gold", "gold"),
-        ("Rares", "rare monsters"),
-        ("Magic monsters", "magic monsters"),
-        ("Packs", "pack size"),
-        ("Containers", "containers"),
-        ("Loot", "uniques"),
-    ];
-
-    /// <summary>Baseline for the profile's own categories, off for borrowed ones --
-    /// so all-defaults is exactly the plain profile.</summary>
+    /// <summary>Baseline for stats the strategy weights, off for the rest -- so
+    /// all-defaults is exactly the shipped preset.</summary>
     public static int DefaultFor(VoyageProfile profile, string category) =>
         CategoriesIn(profile).Contains(category) ? Baseline : 0;
 
     /// <summary>
-    /// Every category the panel should offer for a profile: its own, plus each owned
-    /// category it could borrow. An INVERTED profile (dump prices value negatively so
-    /// junk sorts first) only gets its own -- blending positive rules into it would
-    /// quietly turn the junk detector into a value detector.
+    /// Every stat the panel offers: the whole enum, always -- the catalog itself is
+    /// the donor for stats the strategy does not weight, so raising one from zero
+    /// prices its mods at catalog value x the slider. An INVERTED strategy (dump)
+    /// keeps to its own stats; borrowing positives would flip its meaning.
     /// </summary>
     public static IReadOnlyList<string> SliderCategories(VoyageProfile profile)
     {
         var own = CategoriesIn(profile);
         if (profile.ChartBaseValue > 0) return own;
-        var ordered = Owners.Select(o => o.Category)
-            .Concat(own)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
-        // canonical order first, then any leftover profile-only categories (Areas, Other)
-        return [.. Classifier.Select(c => c.Category).Append(Other)
-            .Where(c => ordered.Contains(c))];
+        return [.. Enum.GetValues<Stat>().Select(s => s.ToString())
+            .Concat(own).Distinct(StringComparer.Ordinal)];
     }
 
     /// <summary>
-    /// The profile the solver actually runs: its own rules scaled by their category
-    /// sliders, plus -- for each category it has no rules in but whose slider is
-    /// raised above zero -- the owning profile's rules for that category, scaled the
-    /// same way. All-default sliders return the profile itself, exactly.
+    /// The profile the solver actually runs: its rules scaled by their stat's slider,
+    /// plus catalog rules at (unit x slider/10) for any raised stat the strategy has
+    /// none of. All-default sliders return the profile itself, exactly.
     /// </summary>
     public static VoyageProfile Blended(
         VoyageProfile profile,
@@ -122,16 +80,21 @@ public static class WeightCategories
             sliders.GetValueOrDefault(CategoryOf(r), Baseline))).ToList();
 
         if (profile.ChartBaseValue <= 0)
-            foreach (var (category, ownerName) in Owners)
+            foreach (var stat in Enum.GetValues<Stat>())
             {
-                if (own.Contains(category)) continue;
-                var v = sliders.GetValueOrDefault(category, 0);
+                var name = stat.ToString();
+                if (own.Contains(name)) continue;
+                var v = sliders.GetValueOrDefault(name, 0);
                 if (v <= 0) continue;
-                var owner = library.FirstOrDefault(p => p.Name == ownerName);
-                if (owner is null || ReferenceEquals(owner, profile)) continue;
-                rules.AddRange(owner.Rules
-                    .Where(r => CategoryOf(r) == category)
-                    .Select(r => Scale(r, v)));
+                rules.AddRange(ModCatalog.Entries
+                    .Where(e => e.Stat == stat)
+                    .Select(e => new VoyageRule
+                    {
+                        Pattern = e.Pattern,
+                        Weight = e.UnitValue * Multiplier(v),
+                        ScalesWithBoard = e.ScalesWithBoard,
+                        Comment = e.Comment,
+                    }));
             }
 
         return new VoyageProfile
@@ -155,14 +118,6 @@ public static class WeightCategories
         ScalesWithBoard = r.ScalesWithBoard,
         Comment = r.Comment,
     };
-
-    /// <summary>The categories a profile actually has rules in, in display order.</summary>
-    public static IReadOnlyList<string> CategoriesIn(VoyageProfile profile)
-    {
-        var present = profile.Rules.Select(CategoryOf).ToHashSet(StringComparer.Ordinal);
-        return [.. Classifier.Select(c => c.Category).Append(Other).Where(present.Contains)];
-    }
-
 }
 
 /// <summary>

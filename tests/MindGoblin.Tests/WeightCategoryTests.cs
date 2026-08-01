@@ -14,14 +14,14 @@ public class WeightCategoryTests
     [Theory]
     [InlineData(@"drop Dead Man's Sulphur", "Sulphur")]
     [InlineData(@"contains? Filthscrabble", "Sulphur")]
-    [InlineData(@"Rare Monsters.*drop (?:(\d+)|an) additional (?:Divine|Exalted) Orbs?", "Currency")]
-    [InlineData(@"(\d+)%\s+increased number of Rare Monsters(?!.*all Voyage Areas)", "Rares")]
-    [InlineData(@"are at least Magic", "Magic monsters")]
+    [InlineData(@"drop (?:(\d+)|an) additional Divine Orbs?", "Currency")]
+    [InlineData(@"(\d+)%\s+increased number of Rare Monsters(?!.*all Voyage Areas)(?!.*per connection)", "Rares")]
+    [InlineData(@"are at least Magic", "Magic")]
     [InlineData(@"(?:(\d+)|an)\s+additional packs? of", "Packs")]
-    [InlineData(@"(?:(\d+)|an)\s+additional Diviner's Strongbox(?:es)?", "Containers")]
-    [InlineData(@"Area: Anchorfield", "Areas")]
-    [InlineData(@"Item Quantity:\s*\+?(\d+)", "Loot")]
-    [InlineData(@"(\d+)% chance (?:for Charts? )?to not be consumed", "Other")]
+    [InlineData(@"(?:(\d+)|an)\s+additional Diviner's Strongbox(?:es)?", "Boxes")]
+    [InlineData(@"(?:(\d+)|an)\s+additional Messages? in (?:a )?Bottles?", "Bottles")]
+    [InlineData(@"Item Quantity:\s*\+?(\d+)", "Quantity")]
+    [InlineData(@"a rule the catalog never heard of", "Extras")]
     public void RulesLandInTheRightCategory(string pattern, string expected) =>
         Assert.Equal(expected, WeightCategories.CategoryOf(Rule(pattern)));
 
@@ -35,7 +35,7 @@ public class WeightCategoryTests
             var categories = WeightCategories.CategoriesIn(profile);
             Assert.True(categories.Count > 0, profile.Name);
             Assert.True(categories.Count(c => c != WeightCategories.Other) > 0,
-                        $"{profile.Name}: everything fell into Other");
+                        $"{profile.Name}: everything fell into Extras");
         }
     }
 
@@ -64,12 +64,13 @@ public class WeightCategoryTests
     }
 
     /// <summary>
-    /// The reason the panel exists at all: a single-minded profile scaling only itself
-    /// changes NO ordering. Raising a category the profile has no rules in borrows the
-    /// owning profile's rules at that strength -- sulphur-first, but Divines count.
+    /// The reason the panel exists at all: a single-minded strategy scaling only
+    /// itself changes NO ordering. Raising a stat it does not weight prices those
+    /// mods straight from the CATALOG at slider strength -- sulphur-first, but
+    /// Divines count.
     /// </summary>
     [Fact]
-    public void RaisingAForeignCategoryBorrowsItsOwnersRules()
+    public void RaisingAForeignCategoryDrawsFromTheCatalog()
     {
         var sulphur = Shipped("sulphur");
         var divine = "Rare Monsters in Area drop an additional Divine Orb";
@@ -77,26 +78,26 @@ public class WeightCategoryTests
 
         var blended = WeightCategories.Blended(sulphur,
             new Dictionary<string, int> { ["Currency"] = 5 }, VoyageRules.Defaults());
-        var owner = Shipped("currency");
-        Assert.Equal(owner.ScoreText([divine]) * 0.5, blended.ScoreText([divine]), 6);
+        // catalog: 162c x 10 rares, at half strength
+        Assert.Equal(162 * 10 * 0.5, blended.ScoreText([divine]), 6);
 
         // and its own rules are untouched while doing so
         var line = "Rare Monsters in Area drop Dead Man's Sulphur";
         Assert.Equal(sulphur.ScoreText([line]), blended.ScoreText([line]), 6);
     }
 
-    /// <summary>Every profile except the inverted dump offers the full deck: the
-    /// sulphur panel must never again be one pointless slider.</summary>
+    /// <summary>Every strategy except the inverted dump offers the whole stat deck.</summary>
     [Fact]
     public void EveryUprightProfileOffersTheWholeDeck()
     {
+        var statCount = Enum.GetValues<Stat>().Length;
         foreach (var profile in VoyageRules.Defaults().Where(p => p.ChartBaseValue <= 0))
         {
             var offered = WeightCategories.SliderCategories(profile);
-            Assert.True(offered.Count >= WeightCategories.Owners.Count,
+            Assert.True(offered.Count >= statCount,
                         $"{profile.Name} offers only {offered.Count}");
         }
-        // dump keeps to its own categories: borrowed positive rules would invert it
+        // dump keeps to its own stats: borrowed positive rules would invert it
         var dump = Shipped("dump");
         Assert.Equal(WeightCategories.CategoriesIn(dump), WeightCategories.SliderCategories(dump));
     }

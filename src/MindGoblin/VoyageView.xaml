@@ -430,7 +430,7 @@
                     <TextBlock x:Name="CaptureHint" Foreground="#86A86A" FontSize="12"
                                VerticalAlignment="Center" Margin="12,0,0,0"/>
                     <Rectangle Width="1" Height="22" Fill="{StaticResource Silt}" Margin="18,0"/>
-                    <TextBlock Text="Optimise for" Foreground="{StaticResource Shade}"
+                    <TextBlock Text="Strategy" Foreground="{StaticResource Shade}"
                                VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <!-- An explicit ItemTemplate, not DisplayMemberPath: a templated
                          ComboBox renders SelectionBoxItem through SelectionBoxItemTemplate,

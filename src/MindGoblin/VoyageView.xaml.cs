@@ -294,8 +294,6 @@ public partial class VoyageView : UserControl, IDisposable
         {
             var def = WeightCategories.DefaultFor(profile, category);
             var value = _weights.Get(profile.Name, category, def);
-            var owner = WeightCategories.Owners
-                .FirstOrDefault(o => o.Category == category).Owner;
             var borrowed = def == 0;
 
             var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
@@ -308,8 +306,8 @@ public partial class VoyageView : UserControl, IDisposable
                 Text = category,
                 FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center,
-                ToolTip = borrowed && owner is not null
-                    ? $"Not part of \"{profile.Name}\" — raising it borrows the \"{owner}\" rules at this strength"
+                ToolTip = borrowed
+                    ? $"Not part of \"{profile.Name}\" — raising it prices these mods at catalog value × the slider"
                     : null,
             };
             row.Children.Add(label);
