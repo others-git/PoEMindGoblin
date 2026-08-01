@@ -13,6 +13,9 @@ anywhere** — every tool uses public data or the player's own screen.
 
 ```
 src/MindGoblin.Core/        no UI: gem RoI, prices, the whole Voyage model and solver
+  Voyage/VoyageStrategy.cs  THE SCORING CORE: ModCatalog (every mod -> stat + normalized
+                            value, once) x Strategies (weight presets). Compiles into
+                            VoyageProfile so the solver never sees the split.
 src/MindGoblin/             WPF app (net10.0-windows10.0.19041.0 — the OCR needs the SDK projection)
 tests/MindGoblin.Tests/     xunit; Core is UI-free so these run headless
 tools/fetch_voyage_mods.py  regenerates assets/voyage-mods.json from poedb
@@ -29,14 +32,23 @@ dotnet run --project tools/VoyageProbe -- session.json --refine          # every
 dotnet run --project tools/VoyageProbe -- session.json --budget strongbox  # does more time find better?
 python3 tools/fetch_voyage_mods.py   # refresh the mod tables after a patch
 publish/MindGoblin.exe --render voyage out.png --demo shot.png           # render the UI offscreen
+publish/MindGoblin.exe --render voyage out.png --demo shot.png --weights # ...with the weights panel open
 ```
+
+**Identify Charts always saves its screenshot** to `MindGoblin_data/last-identify.png`
+— when a read goes wrong, the pixels ARE the bug report; VoyageProbe decodes that file
+offline, overlay and all. The in-app Calibrate window draws the grid over it live.
 
 **Never screenshot the primary screen to inspect the UI** — the game is usually on it, and
 once that captured a live boss fight instead of the app. Use `--render`.
 
 ## Voyage mechanics (verified against the game's own help text)
 
-* Board is **3×3**, chart panel **6×10**. Place **up to** nine charts; fewer is legal.
+* Board is **3×3**, chart panel **6×10**. Place **up to** nine charts — but the game
+  never leaves a square empty *by choice*: with nine-plus charts the board must fill,
+  even when every chart scores negative (the currency profile once answered its own
+  penalties with a seven-chart board). Empties are only legal when the pool or the
+  placement cap cannot cover the cells.
 * **The voyage starts in the bottom-left chart** and travels by connections.
 * **Every chart has exactly one implicit**, and it is either *"in all Voyage Areas"*
   (global, position irrelevant) or *"adjacent Areas"* (buffs neighbours). The copied item
@@ -44,6 +56,18 @@ once that captured a live boss fight instead of the app. Use `--render`.
 * **Every board edge applies a modifier to the chart touching it**, rerolled each voyage.
   Twelve edge segments on a 3×3, so a corner square is touched by two, an edge-centre by
   one, and **the middle by none** — which is why square 5 is off the read checklist.
+* **The figurine TOOLTIP is the authoritative border text** (hover the carving, not the
+  tile): the Area Modifiers panel never lists a figurine's adjacent-scope lines. Figurines
+  are read by hover + OCR of the magic-blue tooltip text, bind one BoardModifier per line,
+  and take precedence over any square-panel read of the same cell — the reverse once held
+  and one stale panel read silently muted twelve fresh figurine captures.
+* **Bottles are the chase** (researched): "Adjacent Areas contain 1–2 additional Messages
+  in Bottles" is a hidden-until-charted voyage mod, ilvl 68+, max +2, on every base that
+  shows a table. ~39c each, sellable UNOPENED. It cannot be crafted for — only revealed.
+* **3.29.1**: the max-res chart mod NEVER FUNCTIONED and no longer rolls (a chart still
+  carrying it is free upside — the alert says so); Grasping Vines is its replacement
+  danger; dredged currency now rolls Strongboxes mid-voyage; Eldritch Depths is a new
+  chart variant, unmeasured.
 * **All connections must lead to the board edge or to another connection.** Connections
   are mutual: an open edge facing a closed one is invalid from both sides. An open edge
   facing an *empty in-bounds cell* is invalid — which is why a partial board must form a
@@ -128,11 +152,12 @@ league is newer than any model's cutoff.
   something the additive model can express — it needs the multiplicative synergy fix below.
   It is also why the Soul Eater pin has to be an explicit constraint rather than something
   the optimiser would work out.
-* **Pinning** (`VoyageSolver`'s `pin:`) nails one chart to one cell by filtering the
-  candidate orderings — free at search time, and the seed obeys it for nothing. The pinned
-  cell must also refuse to stay empty, in both the search and the seed, or the placement cap
-  drops the pin silently. Choosing the cell has to respect SHAPE: a Crossing in a corner
-  opens twice onto the border, so a pin there makes the whole board unsolvable.
+* **Required charts are a VALUE, not a constraint.** The right-click star adds a bonus
+  larger than any real board can score, so "seats the chart" always outranks "does not"
+  while the search still chooses WHERE freely — which quietly subsumes the old
+  cheapest-square pin (deleted, machinery and all: the layout that loses least is the
+  optimum). The bonus is peeled back off the reported score. The X (exclude) beats the
+  star, and a corrupt session file cannot make a chart both.
 
 ## Sources, in order of trust
 
@@ -145,8 +170,9 @@ league is newer than any model's cutoff.
    the shape of a strategy, never for a figure.
 
 **Reddit is unreachable** — it blocks Anthropic's crawler at the platform level. Not a
-setting, and not something to route around with a spoofed user agent. If a thread matters,
-paste it in.
+setting, and not something to route around with a spoofed user agent. Mirrors are dead
+too (teddit/removeddit gone; live redlib instances 403 the fetcher or challenge curl).
+If a thread matters, paste it in. Web search snippets quoting reddit are fair game.
 
 ## Community strategy (see `research/`)
 
@@ -154,9 +180,15 @@ Corroborated: plan from the reward outward rather than filling the board; adjace
 belong in the centre, global ones on the edge, high-value rewards in a corner (two border
 modifiers); read the borders *before* placing; borders are rerollable for sulphur.
 
-**Known model gap:** a border modifier paying *per rare* multiplied by a chart adding rares
-is a MULTIPLICATION, and our scoring is additive. Fixing it means splitting the corpus into
-multipliers and payouts; the shape is clear, the magnitude would be a guess.
+**The multiplication gap is CLOSED — three channels.** Per-monster border payouts
+multiply with the receiving tile: per-RARE payouts by its rare density (pack size + the
+tileset's measured room bonus — and per poedb, NO self-scope rare-adding chart mods
+exist, so nothing else may count), at-least-Magic payouts by its pack density, and
+container gifts (bottles, boxes, barrels…) by its Item Quantity. `PairAdjacency` is the
+single source of truth — search gain, seed and polish all call it, because the first time
+they each had a copy the polish drifted. Rare feeders are priced: a rolled Strongbox ≈4
+rares (dredged currency rolls them since 3.29.1), starfish are one rare per pack, count
+1:1 (field-confirmed), imprisoned monsters ARE rares and DO collect per-rare payouts.
 
 **Discard:** the widely-repeated "centre is 6× a corner". The same article's own example
 gives 12 vs 6 boxes — it is **2×**, which is what the model already says.
@@ -171,13 +203,22 @@ imply.
 ## Conventions
 
 * Every feature ships with its tests in the same change.
-* Weights in `VoyageRules.Defaults()` are a starting point, not a claim about the economy —
-  they are the thing most worth arguing with. The rule file is hot-reloaded, and shipped
-  profiles missing from an existing file are added on load.
+* **What a mod is worth and how much a plan cares are separate questions.** `ModCatalog`
+  answers the first (one entry per mod, chaos-anchored where market-backed, judged and
+  documented where not); `Strategies` answer the second (weight presets over stats).
+  They compile into the old profile shape, the rule file is hot-reloaded, and the Weights
+  sliders edit stats directly with the catalog as donor for stats a strategy skips. The
+  catalog is the thing most worth arguing with.
 * A rule that matches nothing the game can roll **fails the build** (`ProfileCoverageTests`),
   as does a reward no profile scores. The same applies to `VoyageAlerts` patterns.
 * **`VoyageAlerts` is not scoring.** A Divine Orb line and a Chromatic Orb line are the same
   shape and score alike; one is worth a hundred times the other, and a sum cannot say so. It
   is a short list checked by name, and it works because it is usually empty — keep it that
-  way. Traps (`cannot drop Equipment`, `reduced quantity per connection`, lowered max res)
-  matter as much as jackpots: the game's own tables file the first two as *rewards*.
+  way. Two tiers above trap: **GRAIL** (the Divine figurine and Messages in Bottles) sorts
+  above every jackpot and displays louder. Traps (`cannot drop Equipment`, `reduced
+  quantity per connection`) matter as much: the game's own tables file both as *rewards*.
+* **The app sends input to the game in exactly one place** (`GameInput`): a single
+  hover-and-copy inside the user's own F9 press, per GGG's one-action-per-keypress line.
+  Nothing may call it in a loop or from a timer. Screenshots and clipboard reads are the
+  only other contact. The slurp identifies the panel on arm, walks unread figurines then
+  unidentified charts only, and never auto-solves — nothing does, except the Solve button.
