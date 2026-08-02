@@ -42,6 +42,42 @@ public sealed class ScreenCapture
     public static Rectangle PrimaryScreenBounds() =>
         new(0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
 
+    /// <summary>Where a game rectangle came from, so the UI can say so rather than
+    /// leaving the user to wonder which resolution the plan was built against.</summary>
+    public enum BoundsSource { Detected, Pinned, PrimaryScreen }
+
+    public readonly record struct GameBounds(Rectangle Rect, BoundsSource Source)
+    {
+        public string Describe => Source switch
+        {
+            BoundsSource.Detected => $"{Rect.Width}×{Rect.Height} (detected)",
+            BoundsSource.Pinned => $"{Rect.Width}×{Rect.Height} (set by you)",
+            _ => $"{Rect.Width}×{Rect.Height} (primary screen)",
+        };
+    }
+
+    /// <summary>
+    /// The rectangle the game is drawn in -- the one every calibrated coordinate is
+    /// relative to.
+    ///
+    /// Detection first, the user's pin second, the primary screen last. Everything
+    /// downstream works in CLIENT coordinates: the capture is this rectangle, so the
+    /// reader's pixels start at the game's top-left whether it is fullscreen or a window
+    /// in the corner of a second monitor, and only the code that moves the real cursor
+    /// has to add the origin back.
+    /// </summary>
+    public static GameBounds ResolveGameBounds()
+    {
+        var pin = MindGoblin.Core.Voyage.GameResolution.Load();
+        if (pin.Auto && GameWindow.ClientBounds() is { } client)
+            return new GameBounds(client, BoundsSource.Detected);
+        if (pin.IsPinned)
+            // A pinned resolution says nothing about WHERE the window is, so it means
+            // the usual thing: fullscreen at the origin.
+            return new GameBounds(new Rectangle(0, 0, pin.Width, pin.Height), BoundsSource.Pinned);
+        return new GameBounds(PrimaryScreenBounds(), BoundsSource.PrimaryScreen);
+    }
+
     /// <summary>Capture the whole primary screen.</summary>
     public static Bitmap CapturePrimaryScreen() => CaptureRegion(PrimaryScreenBounds());
 

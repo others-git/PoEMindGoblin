@@ -35,6 +35,14 @@ publish/MindGoblin.exe --render voyage out.png --demo shot.png           # rende
 publish/MindGoblin.exe --render voyage out.png --demo shot.png --weights # ...with the weights panel open
 ```
 
+**The game's resolution is DETECTED, not assumed.** `ScreenCapture.ResolveGameBounds()`
+asks the game window for its CLIENT rect (`GameWindow`), falls back to a resolution the
+user pinned in the calibrator, and only then to the primary screen. Everything downstream
+works in CLIENT coordinates — the capture is that rectangle, so a windowed game on a
+second monitor reads exactly like a fullscreen one, and only `GameInput.HoverAt` adds the
+window origin back. Before this the app rescaled to the primary screen, which is the same
+number only when the game is fullscreen on it.
+
 **Identify Charts always saves its screenshot** to `MindGoblin_data/last-identify.png`
 — when a read goes wrong, the pixels ARE the bug report; VoyageProbe decodes that file
 offline, overlay and all. The in-app Calibrate window draws the grid over it live.

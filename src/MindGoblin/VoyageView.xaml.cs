@@ -431,7 +431,10 @@ public partial class VoyageView : UserControl, IDisposable
     {
         try
         {
-            using var bmp = ScreenCapture.CapturePrimaryScreen();
+            // The GAME's rectangle, not the screen's: the calibration is relative to
+            // what the game draws, so capturing anything else shifts every coordinate.
+            var bounds = ScreenCapture.ResolveGameBounds();
+            using var bmp = ScreenCapture.CaptureRegion(bounds.Rect);
             // Always keep the last capture: when a read goes wrong, the pixels ARE the
             // bug report -- VoyageProbe decodes this file offline, overlay and all.
             try { bmp.Save(MindGoblin.Core.SettingsFolder.FileIn("last-identify.png")); }
@@ -456,9 +459,10 @@ public partial class VoyageView : UserControl, IDisposable
             RefreshProgress();
 
             var unread = cells.Count(c => c.Level is null);
-            SetStatus(unread == 0
-                ? $"Read {cells.Count} charts."
-                : $"Read {cells.Count} charts; {unread} had an unreadable level.");
+            SetStatus((unread == 0
+                    ? $"Read {cells.Count} charts"
+                    : $"Read {cells.Count} charts; {unread} had an unreadable level")
+                + $" · {bounds.Describe}.");
             return true;
         }
         catch (Exception ex)
@@ -551,10 +555,13 @@ public partial class VoyageView : UserControl, IDisposable
     private async Task<bool> ReadAreaPanelInto(int square, string hoverHint)
     {
         var options = AreaModifierPanel.Options.Load();
-        var screen = ScreenCapture.PrimaryScreenBounds();
-        var (x, y, w, h) = options.ToPixels(screen.Width, screen.Height);
+        var game = ScreenCapture.ResolveGameBounds().Rect;
+        // Fractions of the GAME's rectangle, then offset onto the screen: a windowed
+        // game's panel is at the same fraction of its client area and nowhere near the
+        // same fraction of the desktop.
+        var (x, y, w, h) = options.ToPixels(game.Width, game.Height);
         var raw = await ScreenOcr.ReadRegionAsync(
-            new System.Drawing.Rectangle(x, y, w, h), options.Upscale);
+            new System.Drawing.Rectangle(game.X + x, game.Y + y, w, h), options.Upscale);
 
         var reading = AreaModifierPanel.Read(raw);
         if (!reading.IsRead)
@@ -753,11 +760,13 @@ public partial class VoyageView : UserControl, IDisposable
         // ForScreen, not the raw calibration: the reader scales its own copy to the
         // screen it decoded, so hovering the unscaled coordinates put the cursor on a
         // different cell than the one the plan numbered on any other resolution.
-        var screenBounds = ScreenCapture.PrimaryScreenBounds();
-        var o = ChartPanelReader.Options.Load()
-            .ForScreen(screenBounds.Width, screenBounds.Height);
+        var game = ScreenCapture.ResolveGameBounds().Rect;
+        var o = ChartPanelReader.Options.Load().ForScreen(game.Width, game.Height);
         var (row, col) = ((index - 1) / o.Cols, (index - 1) % o.Cols);
-        GameInput.HoverAt(o.OriginX + col * o.Pitch, o.OriginY + row * o.Pitch);
+        // Client-relative like everything else, plus the window origin -- this is the
+        // one place that has to know where on the DESKTOP the game happens to sit.
+        GameInput.HoverAt(game.X + o.OriginX + col * o.Pitch,
+                          game.Y + o.OriginY + row * o.Pitch);
         await Task.Delay(140);
         if (!GameInput.SendCopy())
         {
@@ -866,11 +875,13 @@ public partial class VoyageView : UserControl, IDisposable
         if (slot is null) { OnSlurpSkip(this, new RoutedEventArgs()); return; }
 
         SlurpInfo.Text = $"Reading figurine {index} ({slot.Edge})…";
+        var game = ScreenCapture.ResolveGameBounds().Rect;
         var screen = ScreenCapture.PrimaryScreenBounds();
         // The board coordinates are PIXELS, so they need the same rescale the panel
-        // rectangle gets for free by being fractional.
-        var o = AreaModifierPanel.Options.Load().ForScreen(screen.Width, screen.Height);
-        var (hx, hy) = FigurinePosition(slot, o);
+        // rectangle gets for free by being fractional -- against the GAME's size.
+        var o = AreaModifierPanel.Options.Load().ForScreen(game.Width, game.Height);
+        var (cx, cy) = FigurinePosition(slot, o);
+        var (hx, hy) = (game.X + cx, game.Y + cy);
         GameInput.HoverAt(hx, hy);
         await Task.Delay(240);   // the tooltip fades in
 

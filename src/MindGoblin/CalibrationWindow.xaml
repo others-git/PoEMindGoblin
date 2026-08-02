@@ -4,48 +4,87 @@
         xmlns:local="clr-namespace:MindGoblin"
         Title="Panel calibration" Width="1500" Height="940"
         Background="#0A0908" Foreground="#E6DBC2"
+        Focusable="True" FocusManager.IsFocusScope="True"
+        Typography.StandardLigatures="False"
         WindowStartupLocation="CenterOwner">
     <!--
         In-app calibration over the LAST IDENTIFY CAPTURE: the grid the reader will use
         is drawn over the pixels it will read, so a drifted origin is visible as boxes
         sitting beside glyphs instead of on them. Nudge, watch the live decode count,
         save. The screenshot never leaves the machine.
+
+        Calibration is the LAST resort. Auto-detection of the game's resolution handles
+        almost everything, and the picker below handles the rest; this grid is for when
+        the panel has genuinely moved.
+
+        Every nudge button is Focusable="False" ON PURPOSE. Clicking one used to take
+        keyboard focus, after which the arrow keys were competing with WPF's own
+        directional focus navigation and Shift+Arrow did nothing at all.
     -->
     <DockPanel>
         <Border DockPanel.Dock="Top" Background="#131110" Padding="14,10"
                 BorderBrush="#2A2018" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Origin" Foreground="#8A7A5E" VerticalAlignment="Center"
-                           FontFamily="{x:Static local:PoeFonts.Display}"/>
-                <Button Content="◀" Click="OnNudge" Tag="x-5" Margin="8,0,0,0" Padding="8,4"/>
-                <Button Content="◀" Click="OnNudge" Tag="x-1" Padding="6,4" FontSize="10"/>
-                <TextBlock x:Name="OriginLabel" Width="88" TextAlignment="Center"
-                           VerticalAlignment="Center" FontFamily="Consolas"/>
-                <Button Content="▶" Click="OnNudge" Tag="x+1" Padding="6,4" FontSize="10"/>
-                <Button Content="▶" Click="OnNudge" Tag="x+5" Padding="8,4"/>
-                <Button Content="▲" Click="OnNudge" Tag="y-1" Margin="10,0,0,0" Padding="8,4"/>
-                <Button Content="▼" Click="OnNudge" Tag="y+1" Padding="8,4"/>
+            <StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <TextBlock Text="Game resolution" Foreground="#8A7A5E" VerticalAlignment="Center"
+                               FontFamily="{x:Static local:PoeFonts.Display}"/>
+                    <ComboBox x:Name="ResolutionBox" Width="230" Margin="8,0,0,0"
+                              SelectionChanged="OnResolutionChanged"
+                              ToolTip="Auto asks the game's own window. Pick a resolution only if that fails."/>
+                    <TextBlock x:Name="ResolutionNote" Margin="12,0,0,0" VerticalAlignment="Center"
+                               Foreground="#6B5F4E" FontSize="12"/>
+                </StackPanel>
 
-                <TextBlock Text="Pitch" Foreground="#8A7A5E" VerticalAlignment="Center"
-                           Margin="18,0,0,0" FontFamily="{x:Static local:PoeFonts.Display}"/>
-                <Button Content="−" Click="OnNudge" Tag="p-1" Margin="8,0,0,0" Padding="10,4"/>
-                <TextBlock x:Name="PitchLabel" Width="36" TextAlignment="Center"
-                           VerticalAlignment="Center" FontFamily="Consolas"/>
-                <Button Content="+" Click="OnNudge" Tag="p+1" Padding="10,4"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Origin" Foreground="#8A7A5E" VerticalAlignment="Center"
+                               FontFamily="{x:Static local:PoeFonts.Display}"/>
+                    <Button Content="◀◀" Click="OnNudge" Tag="x-5" Margin="8,0,0,0" Padding="8,4" Focusable="False"/>
+                    <Button Content="◀" Click="OnNudge" Tag="x-1" Padding="6,4" FontSize="10" Focusable="False"/>
+                    <TextBlock x:Name="OriginLabel" Width="88" TextAlignment="Center"
+                               VerticalAlignment="Center" FontFamily="Consolas"/>
+                    <Button Content="▶" Click="OnNudge" Tag="x+1" Padding="6,4" FontSize="10" Focusable="False"/>
+                    <Button Content="▶▶" Click="OnNudge" Tag="x+5" Padding="8,4" Focusable="False"/>
 
-                <TextBlock x:Name="DecodeLabel" Margin="22,0,0,0" VerticalAlignment="Center"
-                           Foreground="#86A86A"/>
+                    <!-- Y gets the same ±5 as X. It had only ±1, which is why nudging
+                         down the panel felt broken next to nudging across it. -->
+                    <Button Content="▲▲" Click="OnNudge" Tag="y-5" Margin="14,0,0,0" Padding="8,4" Focusable="False"/>
+                    <Button Content="▲" Click="OnNudge" Tag="y-1" Padding="6,4" FontSize="10" Focusable="False"/>
+                    <Button Content="▼" Click="OnNudge" Tag="y+1" Padding="6,4" FontSize="10" Focusable="False"/>
+                    <Button Content="▼▼" Click="OnNudge" Tag="y+5" Padding="8,4" Focusable="False"/>
 
-                <Button Content="Save" Click="OnSave" Margin="24,0,0,0"
-                        Background="#C8AA6E" Foreground="#1A1509" FontWeight="SemiBold"
-                        Padding="16,4" BorderThickness="0"/>
-                <Button Content="Cancel" Click="OnCancel" Margin="8,0,0,0"/>
-                <Button Content="Open calibration files" Click="OnOpenFolder" Margin="18,0,0,0"
-                        ToolTip="The Area-Modifiers panel region, board origin and figurine inset still live in the JSON files."/>
+                    <TextBlock Text="Pitch" Foreground="#8A7A5E" VerticalAlignment="Center"
+                               Margin="18,0,0,0" FontFamily="{x:Static local:PoeFonts.Display}"/>
+                    <Button Content="−−" Click="OnNudge" Tag="p-5" Margin="8,0,0,0" Padding="8,4" Focusable="False"/>
+                    <Button Content="−" Click="OnNudge" Tag="p-1" Padding="8,4" FontSize="10" Focusable="False"/>
+                    <TextBlock x:Name="PitchLabel" Width="36" TextAlignment="Center"
+                               VerticalAlignment="Center" FontFamily="Consolas"/>
+                    <Button Content="+" Click="OnNudge" Tag="p+1" Padding="8,4" FontSize="10" Focusable="False"/>
+                    <Button Content="++" Click="OnNudge" Tag="p+5" Padding="8,4" Focusable="False"/>
+
+                    <Button Content="Reset" Click="OnReset" Margin="14,0,0,0" Padding="10,4" Focusable="False"
+                            ToolTip="Back to the shipped measurement, rescaled to this capture"/>
+
+                    <Button Content="Save" Click="OnSave" Margin="20,0,0,0" Focusable="False"
+                            Background="#C8AA6E" Foreground="#1A1509" FontWeight="SemiBold"
+                            Padding="16,4" BorderThickness="0"/>
+                    <Button Content="Cancel" Click="OnCancel" Margin="8,0,0,0" Padding="10,4" Focusable="False"/>
+                    <Button Content="Files" Click="OnOpenFolder" Margin="10,0,0,0" Padding="10,4" Focusable="False"
+                            ToolTip="The Area-Modifiers panel region, board origin and figurine inset still live in the JSON files."/>
+                </StackPanel>
             </StackPanel>
         </Border>
+
+        <Border DockPanel.Dock="Top" Background="#0E0C0B" Padding="14,7"
+                BorderBrush="#1F1A15" BorderThickness="0,0,0,1">
+            <StackPanel>
+                <TextBlock x:Name="DecodeLabel" Foreground="#86A86A" FontSize="13"/>
+                <TextBlock x:Name="AdviceLabel" Foreground="#B8503E" FontSize="12"
+                           TextWrapping="Wrap" Margin="0,3,0,0" Visibility="Collapsed"/>
+            </StackPanel>
+        </Border>
+
         <TextBlock DockPanel.Dock="Top" Margin="14,6" FontSize="12" Foreground="#6B5F4E"
-                   Text="Arrow keys nudge the origin (Shift = ×5) · the boxes must sit ON the glyphs · green box = chart detected there"/>
+                   Text="Arrow keys nudge the origin, Shift+Arrow moves 5 · the boxes must sit ON the glyphs · green box = chart detected there"/>
         <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
                       Background="#060907" Focusable="False">
             <Grid x:Name="Zoom">

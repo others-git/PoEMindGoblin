@@ -42,6 +42,25 @@ public partial class App : Application
 
     private static void RenderToFile(string view, string path, bool demo, string? screenshot, bool weights = false)
     {
+        // The calibrator is a WINDOW, and all of its work happens in Loaded -- so it has
+        // to be shown to be rendered. Shown far off the desktop: this app must never put
+        // a window over the game, and "briefly" is still over it.
+        if (view.Equals("calibration", StringComparison.OrdinalIgnoreCase))
+        {
+            var window = new CalibrationWindow
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -20000,
+                Top = -20000,
+                ShowInTaskbar = false,
+            };
+            window.Show();
+            window.UpdateLayout();
+            Save(Render(window, (int)window.ActualWidth, (int)window.ActualHeight), path);
+            window.Close();
+            return;
+        }
+
         FrameworkElement element = view.ToLowerInvariant() switch
         {
             "voyage" => BuildVoyage(demo, screenshot, weights),
@@ -59,12 +78,24 @@ public partial class App : Application
         element.Arrange(new Rect(0, 0, width, height));
         element.UpdateLayout();
 
-        var target = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-        target.Render(element);
+        var target = Render(element, width, height);
 
         // The view holds a file watcher; a render is a one-shot and should not leave one.
         (element as IDisposable)?.Dispose();
 
+        Save(target, path);
+    }
+
+    private static RenderTargetBitmap Render(Visual visual, int width, int height)
+    {
+        var target = new RenderTargetBitmap(
+            Math.Max(1, width), Math.Max(1, height), 96, 96, PixelFormats.Pbgra32);
+        target.Render(visual);
+        return target;
+    }
+
+    private static void Save(RenderTargetBitmap target, string path)
+    {
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(target));
         using var stream = File.Create(path);

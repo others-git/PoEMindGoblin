@@ -17,6 +17,10 @@ namespace MindGoblin;
 /// question "where are the numbers" while leaving "are they right" to imagination.
 /// Here the grid is drawn over the very pixels the reader consumes: when every box
 /// sits on a glyph and the count says 60, the calibration is right by inspection.
+///
+/// The LAST resort of three. Auto-detection reads the game's own window and covers
+/// almost everything; the resolution picker covers a launcher detection cannot find;
+/// this grid is for when the panel itself has moved.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public partial class CalibrationWindow : Window
@@ -24,6 +28,7 @@ public partial class CalibrationWindow : Window
     private readonly string _capturePath;
     private ChartPanelReader.Options _options;
     private System.Drawing.Bitmap? _bitmap;
+    private bool _loadingPresets;
 
     public static string CapturePath => SettingsFolder.FileIn("last-identify.png");
 
@@ -46,39 +51,143 @@ public partial class CalibrationWindow : Window
             image.UriSource = new Uri(_capturePath);
             image.EndInit();
             Shot.Source = image;
+
+            // Work in the CAPTURE's coordinate space, which is the game's. The reader
+            // rescales its own copy to whatever it is decoding, so calibrating in the
+            // stored reference space meant a nudge of 1 moved the drawn box by 1 and
+            // the actual decode by the scale factor -- the two never agreeing.
+            _options = _options.ForScreen(_bitmap.Width, _bitmap.Height);
+
+            LoadPresets();
+            // The window itself takes the keys. Every button is Focusable="False", so
+            // focus stays here and the arrows cannot be stolen by focus navigation.
+            Focus();
+            Keyboard.Focus(this);
             Redraw();
         };
         Unloaded += (_, _) => _bitmap?.Dispose();
-        PreviewKeyDown += OnKey;
+
+        // handledEventsToo: nothing downstream gets to swallow an arrow key before the
+        // window has had it.
+        AddHandler(PreviewKeyDownEvent, new KeyEventHandler(OnKey), handledEventsToo: true);
     }
+
+    // ---- resolution ---------------------------------------------------------------
+
+    private sealed record Choice(string Label, GameResolution Value);
+
+    private void LoadPresets()
+    {
+        _loadingPresets = true;
+        var current = GameResolution.Load();
+        var detected = GameWindow.ClientBounds();
+
+        var choices = new List<Choice>
+        {
+            new(detected is { } d ? $"Auto — detected {d.Width}×{d.Height}"
+                                  : "Auto — game not running",
+                new GameResolution()),
+        };
+        choices.AddRange(ScreenPreset.Common.Select(
+            p => new Choice(p.Label, new GameResolution
+            {
+                Auto = false, Width = p.Width, Height = p.Height,
+            })));
+
+        // A pin for a resolution the shortlist does not carry must still show as itself
+        // rather than silently reading as Auto.
+        if (current.IsPinned && ScreenPreset.Match(current.Width, current.Height) is null)
+            choices.Add(new Choice($"{current.Width} × {current.Height}", current));
+
+        ResolutionBox.ItemsSource = choices;
+        ResolutionBox.DisplayMemberPath = nameof(Choice.Label);
+        ResolutionBox.SelectedItem = current.IsPinned
+            ? choices.FirstOrDefault(c => c.Value.IsPinned
+                                          && c.Value.Width == current.Width
+                                          && c.Value.Height == current.Height)
+              ?? choices[0]
+            : choices[0];
+
+        var capture = _bitmap is null ? "" : $"capture is {_bitmap.Width}×{_bitmap.Height}";
+        ResolutionNote.Text = detected is null && !current.IsPinned
+            ? $"Falling back to the primary screen · {capture}"
+            : capture;
+        _loadingPresets = false;
+    }
+
+    private void OnResolutionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingPresets) return;
+        if (ResolutionBox.SelectedItem is not Choice choice) return;
+        try
+        {
+            choice.Value.Save();
+            AdviceLabel.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Advise($"Could not save the resolution: {ex.Message}");
+        }
+    }
+
+    // ---- nudging ------------------------------------------------------------------
+
+    /// <summary>
+    /// One nudge, as data rather than as three copies of the same arithmetic. Pitch is
+    /// floored: a zero pitch stacks every cell on the origin and reads as "no charts".
+    /// </summary>
+    private static ChartPanelReader.Options Nudge(
+        ChartPanelReader.Options o, char axis, int delta) => axis switch
+    {
+        'x' => o with { OriginX = o.OriginX + delta },
+        'y' => o with { OriginY = o.OriginY + delta },
+        _ => o with { Pitch = Math.Max(10, o.Pitch + delta) },
+    };
 
     private void OnKey(object sender, KeyEventArgs e)
     {
         var step = (Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? 5 : 1;
-        var handled = true;
-        _options = e.Key switch
+        var (axis, delta) = e.Key switch
         {
-            Key.Left => _options with { OriginX = _options.OriginX - step },
-            Key.Right => _options with { OriginX = _options.OriginX + step },
-            Key.Up => _options with { OriginY = _options.OriginY - step },
-            Key.Down => _options with { OriginY = _options.OriginY + step },
-            _ => Handle(out handled),
+            Key.Left => ('x', -step),
+            Key.Right => ('x', step),
+            Key.Up => ('y', -step),
+            Key.Down => ('y', step),
+            Key.OemMinus or Key.Subtract => ('p', -step),
+            Key.OemPlus or Key.Add => ('p', step),
+            _ => ('\0', 0),
         };
-        if (handled) { e.Handled = true; Redraw(); }
-        ChartPanelReader.Options Handle(out bool h) { h = false; return _options; }
+        if (axis == '\0') return;
+
+        _options = Nudge(_options, axis, delta);
+        e.Handled = true;
+        Redraw();
     }
 
     private void OnNudge(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { Tag: string tag }) return;
-        var delta = int.Parse(tag[1..].Replace("+", ""));
-        _options = tag[0] switch
-        {
-            'x' => _options with { OriginX = _options.OriginX + delta },
-            'y' => _options with { OriginY = _options.OriginY + delta },
-            _ => _options with { Pitch = Math.Max(10, _options.Pitch + delta) },
-        };
+        if (sender is not Button { Tag: string tag } || tag.Length < 2) return;
+        if (!int.TryParse(tag[1..], System.Globalization.NumberStyles.AllowLeadingSign,
+                          System.Globalization.CultureInfo.InvariantCulture, out var delta))
+            return;
+        _options = Nudge(_options, tag[0], delta);
         Redraw();
+    }
+
+    private void OnReset(object sender, RoutedEventArgs e)
+    {
+        _options = _bitmap is null
+            ? new ChartPanelReader.Options()
+            : new ChartPanelReader.Options().ForScreen(_bitmap.Width, _bitmap.Height);
+        Redraw();
+    }
+
+    // ---- decode + overlay ----------------------------------------------------------
+
+    private void Advise(string message)
+    {
+        AdviceLabel.Text = message;
+        AdviceLabel.Visibility = Visibility.Visible;
     }
 
     /// <summary>Redecode with the current numbers and redraw every glyph box.</summary>
@@ -93,9 +202,27 @@ public partial class CalibrationWindow : Window
         var cells = new ChartPanelReader(_options, LevelReader.LoadWithUserTemplates())
             .Read(pixels);
         var occupied = cells.ToDictionary(c => (c.Row, c.Col), c => c);
-        DecodeLabel.Text = $"{cells.Count} charts detected · "
-            + string.Join("  ", cells.GroupBy(c => c.Shape).OrderByDescending(g => g.Count())
-                .Select(g => $"{g.Key}×{g.Count()}"));
+        var slots = _options.Rows * _options.Cols;
+
+        DecodeLabel.Text = cells.Count == 0
+            ? $"No charts detected in {slots} cells"
+            : $"{cells.Count} of {slots} cells hold a chart · "
+              + string.Join("  ", cells.GroupBy(c => c.Shape).OrderByDescending(g => g.Count())
+                  .Select(g => $"{g.Key}×{g.Count()}"))
+              + $" · {cells.Count(c => c.Level is null)} unreadable levels";
+
+        // An almost-empty panel decodes to almost nothing whether the calibration is
+        // perfect or hopeless, and reads as "it didn't notice my charts" either way.
+        // Say which it is, because the picture cannot.
+        AdviceLabel.Visibility = Visibility.Collapsed;
+        if (cells.Count == 0)
+            Advise("Nothing decoded. If the panel really is empty this says nothing about "
+                   + "the calibration — re-run Identify Charts with a full panel. If it is "
+                   + "not empty, nudge the origin until the boxes sit on the glyphs.");
+        else if (cells.Count < 8)
+            Advise($"Only {cells.Count} charts in this capture — enough to check the boxes "
+                   + "land on them, but too few to trust the grid across the whole panel. "
+                   + "Re-run Identify Charts with a fuller panel to be sure.");
 
         Overlay.Children.Clear();
         var found = new SolidColorBrush(Color.FromRgb(0x86, 0xA8, 0x6A));
@@ -134,6 +261,8 @@ public partial class CalibrationWindow : Window
 
     private void OnSave(object sender, RoutedEventArgs e)
     {
+        // Saved against the capture's own size, so ForScreen is the identity next time
+        // the game runs at this resolution and a nudge of 1 stays a nudge of 1.
         _options.Save();
         DialogResult = true;
         Close();
