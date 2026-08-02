@@ -812,6 +812,12 @@
                         </Border>
                         <TextBlock x:Name="Progress" Foreground="{StaticResource Ash}"
                                    FontFamily="Consolas" FontSize="12" Margin="10,0,0,0"/>
+                        <!-- Detected at launch, not at the first capture: every
+                             calibrated coordinate is scaled to this number, and being
+                             wrong about it looks like "the reader found nothing". -->
+                        <TextBlock x:Name="ResolutionHint" FontFamily="Consolas" FontSize="11"
+                                   Margin="16,0,0,0" VerticalAlignment="Center"
+                                   Foreground="{StaticResource Shade}"/>
                     </StackPanel>
                 </Grid>
             </Border>

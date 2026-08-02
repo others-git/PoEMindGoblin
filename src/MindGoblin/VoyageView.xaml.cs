@@ -122,6 +122,7 @@ public partial class VoyageView : UserControl, IDisposable
         RefreshProgress();
         ReportRestored();
         ReportProfileChanges();
+        ReportGameResolution();
 
         // Popping out and docking REPARENT this control, which raises Unloaded/Loaded.
         // Stopping the poll unconditionally on Unloaded would silently kill read mode the
@@ -207,6 +208,42 @@ public partial class VoyageView : UserControl, IDisposable
         _outdated = [];
         _solution = null;
         SetStatus("Rules restored to the shipped defaults. Solve again.");
+    }
+
+    /// <summary>
+    /// Detect the game's resolution AT LAUNCH and say so, rather than at the first
+    /// capture and silently.
+    ///
+    /// Every calibrated coordinate is scaled to this number, so being wrong about it
+    /// looks like "the reader found nothing" — a symptom that sends people to the
+    /// calibrate window for a problem calibration cannot fix. Saying it up front turns
+    /// that into something the user can see before they press anything.
+    /// </summary>
+    private void ReportGameResolution()
+    {
+        try
+        {
+            var bounds = ScreenCapture.ResolveGameBounds();
+            ResolutionHint.Text = bounds.Describe;
+            ResolutionHint.Foreground = new SolidColorBrush(
+                bounds.Source == ScreenCapture.BoundsSource.PrimaryScreen
+                    ? Color.FromRgb(0xB8, 0x50, 0x3E)     // a guess, and it should look like one
+                    : Color.FromRgb(0x6B, 0x5F, 0x4E));
+            ResolutionHint.ToolTip = bounds.Source switch
+            {
+                ScreenCapture.BoundsSource.Detected =>
+                    "Read from the game's own window — nothing to configure.",
+                ScreenCapture.BoundsSource.Pinned =>
+                    "The resolution you set under Calibrate. Switch it back to Auto once "
+                    + "the game is running.",
+                _ => "The game was not found, so this is the primary screen — right only "
+                     + "if the game is fullscreen on it. Set your resolution under Calibrate.",
+            };
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            ResolutionHint.Text = "";
+        }
     }
 
     private void ReportRestored()

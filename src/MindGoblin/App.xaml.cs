@@ -21,8 +21,48 @@ namespace MindGoblin;
 [SupportedOSPlatform("windows")]
 public partial class App : Application
 {
+    /// <summary>
+    /// Write the stack somewhere the user can find it, then say where.
+    ///
+    /// This is a portable exe on somebody else's machine: there is no debugger to
+    /// attach and no console to read, so an unhandled exception reaches the person as
+    /// four words in a dialog. "Index outside the bounds of the array on launch" cost a
+    /// full reproduction hunt that a stack trace would have answered in a line.
+    /// </summary>
+    private static void Report(Exception ex, string when)
+    {
+        var path = MindGoblin.Core.SettingsFolder.FileIn("crash.log");
+        try
+        {
+            MindGoblin.Core.SettingsFolder.EnsureExists();
+            File.AppendAllText(path,
+                $"--- {DateTimeOffset.Now:u} · {when} · {Environment.OSVersion}\n{ex}\n\n");
+        }
+        catch (Exception) { /* a crash while reporting a crash helps nobody */ }
+
+        try
+        {
+            MessageBox.Show(
+                $"{ex.GetType().Name}: {ex.Message}\n\nWritten to:\n{path}\n\n"
+                + "Please send that file — it names the line.",
+                "MindGoblin hit a problem", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        catch (Exception) { }
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Both halves: the dispatcher catches the UI thread, AppDomain catches the rest.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            Report(args.Exception, "ui");
+            args.Handled = true;      // a reported crash beats a silent disappearance
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception ex) Report(ex, "background");
+        };
+
         if (e.Args is [ "--render", var view, var path, ..])
         {
             // --demo takes the screenshot to populate from. It is not shipped with the

@@ -213,7 +213,23 @@ public sealed class LevelReader
             foreach (var t in _templates)
             {
                 if (x + t.Width > width || t.Ink == 0) continue;
-                for (var dy = 0; dy <= pad; dy++)
+
+                // A TEMPLATE THAT DOES NOT FIT IS NOT A CANDIDATE.
+                //
+                // The band scales with the screen; the templates do not, because they
+                // are carved from a real capture and cannot be re-rendered (see the
+                // class remarks -- no installed font matches Fontin). So below the
+                // calibrated 2560x1440 the 20-row templates are taller than the rows
+                // available, and laying one over the band walked straight off the end
+                // of it: IndexOutOfRange on every 1080p read, which is to say Identify
+                // Charts and the calibrate window both died on launch for anyone not
+                // playing at the resolution these numbers were measured at.
+                //
+                // Declining is the right answer, not stretching the mask: a scaled
+                // 1-bit template would match approximately, and a FABRICATED level
+                // silently corrupts a plan where a missing one is merely missing.
+                var lastOffset = Math.Min(pad, height - t.Height);
+                for (var dy = 0; dy <= lastOffset; dy++)
                 {
                     var error = Mismatch(digits, t, x, dy);
                     if (error >= bestError) continue;

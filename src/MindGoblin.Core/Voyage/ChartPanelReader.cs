@@ -303,25 +303,39 @@ public sealed class ChartPanelReader
         var padY = (int)(bh * (1 - o.EdgeSpan) / 2);
         var m = o.EdgeMargin;
 
+        // EVERY BAND IS CLAMPED TO THE WINDOW.
+        //
+        // The margin scans inward from the detected bounds, so minY + m runs off the
+        // bottom of the array whenever the green run ends within m of it, and maxY - m
+        // runs off the top when it starts there. On the calibrated 2560x1440 the glyph
+        // window is 36 pixels and the runs sit comfortably inside; scale the calibration
+        // down and GlyphHalf floors at 6, so a 12-pixel window with a 3-pixel margin has
+        // almost no room and a sliver of glyph at an edge threw IndexOutOfRange -- which
+        // is to say the reader crashed on 1080p, and crashed hardest exactly when the
+        // calibration was off and the user went looking for the calibrator.
+        //
+        // Fewer rows to look at is the honest answer when the band is thin. It is not a
+        // missing edge: an edge only counts once OpenThreshold columns touch it either
+        // way, and a run that thin has no columns to spare.
         var north = 0; var south = 0; var west = 0; var east = 0;
         for (var x = minX + padX; x <= maxX - padX; x++)
         {
-            for (var d = 0; d <= m; d++)
+            for (var d = 0; d <= m && minY + d < size; d++)
             {
                 if (dark[minY + d, x]) { north++; break; }
             }
-            for (var d = 0; d <= m; d++)
+            for (var d = 0; d <= m && maxY - d >= 0; d++)
             {
                 if (dark[maxY - d, x]) { south++; break; }
             }
         }
         for (var y = minY + padY; y <= maxY - padY; y++)
         {
-            for (var d = 0; d <= m; d++)
+            for (var d = 0; d <= m && minX + d < size; d++)
             {
                 if (dark[y, minX + d]) { west++; break; }
             }
-            for (var d = 0; d <= m; d++)
+            for (var d = 0; d <= m && maxX - d >= 0; d++)
             {
                 if (dark[y, maxX - d]) { east++; break; }
             }
