@@ -61,7 +61,9 @@
                     <Button Content="+" Click="OnNudge" Tag="p+1" Padding="8,4" FontSize="10" Focusable="False"/>
                     <Button Content="++" Click="OnNudge" Tag="p+5" Padding="8,4" Focusable="False"/>
 
-                    <Button Content="Reset" Click="OnReset" Margin="14,0,0,0" Padding="10,4" Focusable="False"
+                    <Button Content="Recapture" Click="OnRecapture" Margin="14,0,0,0" Padding="10,4" Focusable="False"
+                            ToolTip="Take a fresh screenshot of the game right now. Alt-tab to the Voyage screen first — this window does not have to be in front."/>
+                    <Button Content="Reset" Click="OnReset" Margin="6,0,0,0" Padding="10,4" Focusable="False"
                             ToolTip="Back to the shipped measurement, rescaled to this capture"/>
 
                     <Button Content="Save" Click="OnSave" Margin="20,0,0,0" Focusable="False"

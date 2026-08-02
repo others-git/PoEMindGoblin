@@ -180,6 +180,52 @@ public partial class CalibrationWindow : Window
         Redraw();
     }
 
+    /// <summary>
+    /// Take a fresh screenshot, here and now.
+    ///
+    /// This window drew whatever the LAST Identify happened to capture, loaded once and
+    /// never again -- so a capture taken with something in front of the game, or before
+    /// the Voyage screen was open, left the calibrator showing stale pixels with no way
+    /// to replace them. Nudging a grid over the wrong screenshot is worse than useless:
+    /// it calibrates against a picture of nothing.
+    ///
+    /// The game does not need to be in front for the SAVE, only for the capture, so the
+    /// dance is: alt-tab to the Voyage screen, come back, press this.
+    /// </summary>
+    private void OnRecapture(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var bounds = ScreenCapture.ResolveGameBounds();
+            using var shot = ScreenCapture.CaptureRegion(bounds.Rect);
+
+            // The old bitmap holds the FILE open, so it goes before the new one lands on
+            // top of it -- and the WPF image is cached OnLoad, so it never held it.
+            _bitmap?.Dispose();
+            _bitmap = null;
+            shot.Save(_capturePath, System.Drawing.Imaging.ImageFormat.Png);
+            _bitmap = new System.Drawing.Bitmap(shot);
+
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            image.UriSource = new Uri(_capturePath);
+            image.EndInit();
+            Shot.Source = image;
+
+            _options = new ChartPanelReader(ChartPanelReader.Options.Load())
+                .Resolve(new BitmapPixels(_bitmap));
+            LoadPresets();
+            Redraw();
+            ResolutionNote.Text = $"recaptured {bounds.Describe}";
+        }
+        catch (Exception ex)
+        {
+            Advise($"Could not recapture: {ex.Message}");
+        }
+    }
+
     /// <summary>Back to the grid found in the capture, which is where it opened.</summary>
     private void OnReset(object sender, RoutedEventArgs e)
     {
