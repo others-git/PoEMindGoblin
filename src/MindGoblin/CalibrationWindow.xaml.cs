@@ -88,7 +88,8 @@ public partial class CalibrationWindow : Window
         PitchLabel.Text = _options.Pitch.ToString();
         if (_bitmap is null) return;
 
-        using var pixels = new BitmapPixels((System.Drawing.Bitmap)_bitmap.Clone());
+        // No clone: BitmapPixels borrows, so the window keeps its capture across redraws.
+        var pixels = new BitmapPixels(_bitmap);
         var cells = new ChartPanelReader(_options, LevelReader.LoadWithUserTemplates())
             .Read(pixels);
         var occupied = cells.ToDictionary(c => (c.Row, c.Col), c => c);

@@ -39,6 +39,8 @@ public class RulesReviewTests
     [InlineData("gold", "Adjacent Areas contain an additional pack of Crabs")]
     [InlineData("magic monsters", "Adjacent Areas contain an additional pack of the Drowned")]
     [InlineData("rare monsters", "Adjacent Areas contain an additional Imprisoned Monster")]
+    [InlineData("scarabs", "Rare Monsters in Area drop an additional Scarab")]
+    [InlineData("scarabs", "Adjacent Areas contain an additional Operative's Strongbox")]
     public void ARollOfOneStillScores(string profile, string line) =>
         Assert.True(Profile(profile).ScoreText([line]) > 0,
                     $"'{line}' scores zero under '{profile}'");

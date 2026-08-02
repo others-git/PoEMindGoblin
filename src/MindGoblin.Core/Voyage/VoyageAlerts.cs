@@ -99,7 +99,7 @@ public static class VoyageAlerts
             + "revealed. Seat it centrally beside the highest-quantity tiles."),
 
         new(AlertKind.Jackpot, @"drop Dead Man's Sulphur", "Sulphur off rares",
-            "Every rare drops sulphur -- the currency that pays for board rerolls and "
+            "Every rare drops sulphur — the currency that pays for board rerolls and "
             + "Allflame crafts. Pair it with anything adding rares; under a sulphur "
             + "profile this square is the whole plan."),
 
@@ -162,9 +162,16 @@ public static class VoyageAlerts
             foreach (var rule in ChartLines(chart).SelectMany(Matching))
                 (charts.TryGetValue(rule, out var s) ? s : charts[rule] = []).Add(index);
 
-        foreach (var (square, lines) in session.SquareModifiers.OrderBy(kv => kv.Key))
-            foreach (var rule in lines.SelectMany(Matching))
-                (squares.TryGetValue(rule, out var s) ? s : squares[rule] = []).Add(square);
+        // BoardModifiers, not the raw square panel reads: the slurp reads FIGURINES, and
+        // the figurine tooltip is the authoritative border text. Scanning only the panel
+        // dictionary meant the two GRAIL modifiers -- a Divine Orb figurine and Messages
+        // in Bottles -- were read, scored and badged but never announced, because the
+        // whole primary workflow writes figurines and never writes a square.
+        foreach (var modifier in session.BoardModifiers())
+            foreach (var rule in Matching(modifier.Description))
+                foreach (var cell in modifier.AffectedCells)
+                    (squares.TryGetValue(rule, out var s) ? s : squares[rule] = [])
+                        .Add(VoyagePlan.SquareNumber(cell, session.Layout.Cols));
 
         return [.. Enumerable.Range(0, Rules.Length)
             .Where(i => charts.ContainsKey(i) || squares.ContainsKey(i))

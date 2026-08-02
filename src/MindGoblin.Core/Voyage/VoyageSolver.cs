@@ -71,7 +71,18 @@ public sealed class VoyageSolver
     /// <summary>Where a Voyage begins: the bottom-left square, per the in-game help.</summary>
     public static Cell StartCell(int rows) => new(rows - 1, 0);
 
-    /// <summary>Nodes explored on the last solve, so pathological inputs are visible.</summary>
+    /// <summary>
+    /// Layouts examined on the last solve, so pathological inputs are visible.
+    ///
+    /// Counts ALL THREE stages -- seed dives, polish swaps and search nodes -- because
+    /// they are alternative ways of doing the same work and the answer routinely comes
+    /// from the first two. Counting only the search made a correct solve read as a
+    /// broken one: on a board where nothing depends on placement (no adjacency modifier
+    /// and no border modifier that the profile scores) the seed finds a connected board,
+    /// the polish swaps in the best charts, and the root bound then equals the incumbent
+    /// so not one node is expanded. That is the bound working perfectly, and it reported
+    /// "3 layouts checked" -- indistinguishable from the search having collapsed.
+    /// </summary>
     public long NodesExplored { get; private set; }
 
     /// <summary>Per-cell chart indices, best-scoring first. Built once per solve.</summary>
@@ -309,6 +320,7 @@ public sealed class VoyageSolver
                         board.Clear(placement.Cell);
                         var candidate = new Placement(_charts[i], placement.Cell, rotation);
                         board.Place(candidate);
+                        NodesExplored++;
                         if (KeepsRoute() && Evaluate(board) > baseline + 1e-9)
                         {
                             used[i] = true;
@@ -337,6 +349,7 @@ public sealed class VoyageSolver
                             var b = new Placement(placement.Chart, other.Cell, rb);
                             board.Place(a);
                             board.Place(b);
+                            NodesExplored++;
                             if (KeepsRoute() && Evaluate(board) > baseline + 1e-9)
                             {
                                 improved = true;
@@ -494,6 +507,7 @@ public sealed class VoyageSolver
         bool Dive(int index)
         {
             if (budget-- <= 0) return false;
+            NodesExplored++;      // a seed dive is a layout examined like any other
 
             // The clock, not just the node count. Checked sparsely -- reading a stopwatch
             // per node would cost more than the dive it is protecting.
@@ -603,7 +617,10 @@ public sealed class VoyageSolver
         + giver.AdjacentPerMonsterValue
           * (1 + (giver.AdjacentPayoutOnPopulation
                       ? receiver.PackDensity : receiver.MonsterDensity))
-        + giver.AdjacentPerQuantityValue * (1 + receiver.QuantityDensity);
+        + giver.AdjacentPerQuantityValue * (1 + receiver.QuantityDensity)
+        // The amplifier: a share of the receiver's own explicit mods, with no baseline
+        // of its own -- worth everything beside a fat chart and nothing beside a blank.
+        + giver.AdjacentMagnitudeValue * receiver.ExplicitValue;
 
     /// <summary>Per-chart score ceiling: the best this chart scores on ANY cell, floored
     /// at zero. Indexed like <see cref="_charts"/>; maintained as a running sum down the
@@ -663,9 +680,17 @@ public sealed class VoyageSolver
         var maxDensity = _charts.Count == 0 ? 0
             : Math.Max(0, _charts.Max(c => Math.Max(c.QuantityDensity,
                   Math.Max(c.MonsterDensity, c.PackDensity))));
+        // The amplifier pair term is a PRODUCT of two signed quantities -- a strategy
+        // may price magnitude negatively (dump) and explicit value negatively with it --
+        // so the only safe ceiling is over absolute values. Loose, and it has to be:
+        // an optimistic bound that is ever too LOW prunes the true optimum and then
+        // reports the survivor as proved.
+        var maxMagnitude = _charts.Count == 0 ? 0 : _charts.Max(c => Math.Abs(c.AdjacentMagnitudeValue));
+        var maxExplicit = _charts.Count == 0 ? 0 : _charts.Max(c => Math.Abs(c.ExplicitValue));
         var bestAdjacent = _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c =>
             c.AdjacentValue + (c.AdjacentPerMonsterValue + c.AdjacentPerQuantityValue)
-                              * (1 + maxDensity)));
+                              * (1 + maxDensity))
+            + maxMagnitude * maxExplicit);
         var pairsRemaining = AdjacentPairsFrom();
 
         _cellSuffix = new double[n + 1];

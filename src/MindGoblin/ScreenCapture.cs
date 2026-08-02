@@ -62,16 +62,21 @@ public sealed class ScreenCapture
     }
 }
 
-/// <summary>Fast pixel access over a captured bitmap.</summary>
+/// <summary>
+/// Fast pixel access over a captured bitmap.
+///
+/// BORROWS the bitmap: every pixel is copied out in the constructor and the bitmap is
+/// never touched again, so this owns nothing and disposes nothing. It used to dispose
+/// what it was handed, which made every `using var bmp` / `using var pixels` pair a
+/// double-dispose and had the calibration window cloning a bitmap to defend itself.
+/// </summary>
 [SupportedOSPlatform("windows")]
-public sealed class BitmapPixels : IPixels, IDisposable
+public sealed class BitmapPixels : IPixels
 {
-    private readonly Bitmap _bmp;
     private readonly int[] _argb;
 
     public BitmapPixels(Bitmap bmp)
     {
-        _bmp = bmp;
         Width = bmp.Width;
         Height = bmp.Height;
         _argb = new int[Width * Height];
@@ -96,6 +101,4 @@ public sealed class BitmapPixels : IPixels, IDisposable
         var p = _argb[y * Width + x];
         return ((p >> 16) & 0xFF, (p >> 8) & 0xFF, p & 0xFF);
     }
-
-    public void Dispose() => _bmp.Dispose();
 }

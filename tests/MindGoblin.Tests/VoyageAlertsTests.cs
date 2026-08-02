@@ -228,6 +228,57 @@ public class VoyageAlertsTests
         Assert.Equal("chart 2 · square 5", alert.Where);
     }
 
+    /// <summary>
+    /// The slurp reads FIGURINES, not square panels -- the figurine tooltip is the
+    /// authoritative border text, and the Area Modifiers panel never lists a figurine's
+    /// adjacent-scope lines at all. Scanning only the square dictionary meant the two
+    /// GRAIL modifiers were read, scored and badged in the primary workflow and never
+    /// once announced, which is the one job this banner has.
+    /// </summary>
+    [Fact]
+    public void AFigurineRaisesItsAlertOnTheSquareItBuffs()
+    {
+        var session = SessionWith();
+        // Figurine 1 sits on the top edge above square 1.
+        session.ApplyFigurineText(1,
+            "Rare Monsters adjacent in Areas drop 2 additional Divine Orbs");
+
+        var alert = Assert.Single(VoyageAlerts.Scan(session));
+        Assert.Equal(AlertKind.Grail, alert.Kind);
+        Assert.Equal("Divine Orbs", alert.Headline);
+        Assert.Equal("square 1", alert.Where);
+    }
+
+    /// <summary>A figurine carrying several lines raises each modifier it holds.</summary>
+    [Fact]
+    public void EveryLineOfAFigurineIsScanned()
+    {
+        var session = SessionWith();
+        session.ApplyFigurineText(2,
+            "Adjacent Areas contain 8 additional packs of Crabs\n"
+            + "Adjacent Areas contain 2 additional Messages in a Bottle");
+
+        var alert = Assert.Single(VoyageAlerts.Scan(session));
+        Assert.Equal("Messages in a Bottle", alert.Headline);
+        Assert.Equal("square 2", alert.Where);
+    }
+
+    /// <summary>
+    /// A figurine SUPERSEDES a stale panel read of the square it touches -- that is the
+    /// precedence BoardModifiers already enforces for scoring, and the banner has to
+    /// agree with it or it announces a border that is no longer there.
+    /// </summary>
+    [Fact]
+    public void AFigurineOverridesTheSquarePanelReadBehindIt()
+    {
+        var session = SessionWith();
+        session.ApplySquareModifiers(1,
+            ["Rare Monsters in Area drop an additional Divine Orb"]);
+        session.ApplyFigurineText(1, "Adjacent Areas contain 8 additional packs of Crabs");
+
+        Assert.Empty(VoyageAlerts.Scan(session));
+    }
+
     /// <summary>The same chart listing its implicit twice is one modifier, not two.</summary>
     [Fact]
     public void OneChartRaisesOneAlertPerHeadline()

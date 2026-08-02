@@ -107,6 +107,25 @@ once that captured a live boss fight instead of the app. Use `--render`.
   `L.'j6`. Chart levels go through template matching; only modifier text goes through OCR.
 * **PoE's font (Fontin) is not on Windows.** A sweep of every system `.ttf` at every
   plausible size missed by 134 of ~130 ink pixels, so glyphs must be carved from a capture.
+* **Fontin's `ffi` ligature is an EMPTY glyph** — zero contours, full 1658-unit advance —
+  in SmallCaps, Bold and Italic; only Regular draws it. Any word carrying one loses three
+  letters and keeps their space (`Free di⎵⎵culty roll`). `VoyageView.xaml` sets
+  `Typography.StandardLigatures="False"` on the root, where it inherits to tooltips too;
+  a new window using `PoeFonts` needs the same line.
+* **Anything that reads the border must go through `BoardModifiers()`**, never
+  `SquareModifiers` directly. The slurp writes FIGURINES, so a feature reading the square
+  dictionary sees an empty board in the normal workflow — which is how `VoyageAlerts`
+  came to read, score and badge a Divine figurine and never once announce it. Same split
+  put `ReadProgress` (panel reads only) permanently behind `SquaresAwaitingModifiers`
+  (figurine-aware), so a finished pass showed 75%.
+* **Calibration is measured in pixels, and the app both READS and HOVERS at it.** Scale
+  both or neither: `ChartPanelReader.Options.ForScreen` / `AreaModifierPanel.Options.ForScreen`
+  are the one way in. The reader scaled its own copy while the slurp hovered the raw
+  numbers, so off 2560x1440 the panel decoded correctly and the cursor sat on a different
+  cell — and the wrong chart's text parses perfectly.
+* **A hotkey handler that awaits is `async void`.** `HotkeyService` catches only the
+  synchronous part; anything past the first await is unhandled on the dispatcher and ends
+  the app. Every such handler carries its own try/catch.
 * **WSL does not pass environment variables to Windows binaries.** An experiment gated on
   one measures nothing; pass a flag or an argument instead.
 
@@ -142,6 +161,15 @@ league is newer than any model's cutoff.
   false only fails the current branch: the loops above carry on and each candidate still
   pays its placement checks. The seed's clock check did that, so six dives each ground
   through all 200k nodes after time was up — a 500ms budget ran 2.9s. Zero the counter.
+* **A tiny node count is not automatically the bug it looks like.** When a profile scores
+  no adjacency modifier and no border modifier, every chart is worth the same on every
+  cell, the objective collapses to "take the nine best charts", and seed + polish solve it
+  outright — the root bound then equals the incumbent and the search correctly expands
+  NOTHING. Sulphur on a panel whose sulphur is all headline stats does exactly this.
+  Check the VALUE against the top-nine sum before hunting: that is what separates this
+  from the two real bugs wearing the same costume (a reused board bottoming out in two
+  nodes, a seed spending the whole clock). `NodesExplored` counts all three stages for
+  this reason — reporting search nodes alone made a perfect solve read as a collapsed one.
 * **Scoring must stay O(1) per call.** It runs for every chart at every cell at every node.
   Precompute per-square board value; running the profile's regexes in there cost ~7×.
 * Adjacency is scored **once per adjacent pair**, when the second of the two is placed, and
@@ -180,11 +208,18 @@ Corroborated: plan from the reward outward rather than filling the board; adjace
 belong in the centre, global ones on the edge, high-value rewards in a corner (two border
 modifiers); read the borders *before* placing; borders are rerollable for sulphur.
 
-**The multiplication gap is CLOSED — three channels.** Per-monster border payouts
-multiply with the receiving tile: per-RARE payouts by its rare density (pack size + the
-tileset's measured room bonus — and per poedb, NO self-scope rare-adding chart mods
-exist, so nothing else may count), at-least-Magic payouts by its pack density, and
-container gifts (bottles, boxes, barrels…) by its Item Quantity. `PairAdjacency` is the
+**The multiplication gap is CLOSED — four channels.** Border payouts multiply with the
+receiving tile: per-RARE payouts by its rare density (pack size + the tileset's measured
+room bonus — and per poedb, NO self-scope rare-adding chart mods exist, so nothing else
+may count), at-least-Magic payouts by its pack density, container gifts (bottles, boxes,
+barrels…) by its Item Quantity, and **amplifiers** (`#% increased explicit modifier
+magnitudes`) by the receiving chart's EXPLICIT value — its rolled affixes and the stats
+that aggregate them, never its one implicit. The amplifier is the odd one out and the
+shape to copy for any future mod like it: it has no payout of its own, so it is priced as
+a FRACTION (0.01 per percent, not chaos) and carries no flat baseline — worth everything
+beside a fat chart and exactly nothing beside a blank one. Scored flat it was counted but
+inert; moving the figurine between squares changed neither the board value nor a single
+placement. `PairAdjacency` is the
 single source of truth — search gain, seed and polish all call it, because the first time
 they each had a copy the polish drifted. Rare feeders are priced: a rolled Strongbox ≈4
 rares (dredged currency rolls them since 3.29.1), starfish are one rare per pack, count
@@ -211,6 +246,12 @@ imply.
   catalog is the thing most worth arguing with.
 * A rule that matches nothing the game can roll **fails the build** (`ProfileCoverageTests`),
   as does a reward no profile scores. The same applies to `VoyageAlerts` patterns.
+* **A `Stat` is an identifier; the slider shows a LABEL and explains itself on hover.**
+  `StatText.Label`/`Describe` carry both and a stat missing either fails the build —
+  catalog shorthand ("LootLock", "Meta", "Player") on a weight the user is meant to tune
+  is a weight they will not touch. Renaming a stat means adding it to
+  `WeightCategories.Renamed`, or every tuned `voyage-weights.json` silently reverts to
+  the shipped baseline.
 * **`VoyageAlerts` is not scoring.** A Divine Orb line and a Chromatic Orb line are the same
   shape and score alike; one is worth a hundred times the other, and a sum cannot say so. It
   is a short list checked by name, and it works because it is usually empty — keep it that

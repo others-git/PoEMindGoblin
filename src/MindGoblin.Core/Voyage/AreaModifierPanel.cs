@@ -60,6 +60,38 @@ public sealed class AreaModifierPanel
         /// </summary>
         public int Upscale { get; init; } = 2;
 
+        /// <summary>Resolution the board coordinates above were measured at. The panel
+        /// bounds are fractions and need no such thing; the hover points are pixels and
+        /// do.</summary>
+        public int ReferenceWidth { get; init; } = 2560;
+        public int ReferenceHeight { get; init; } = 1440;
+
+        /// <summary>
+        /// The board coordinates as they apply to a screen of this size.
+        ///
+        /// The panel rectangle scales itself (it is fractional); the hover points did
+        /// not, so on any other resolution the app read the Area Modifiers panel in the
+        /// right place and hovered the figurines in the wrong one. Absent reference
+        /// fields in an existing calibration file default to the measured 2560x1440,
+        /// which is exactly what they were.
+        /// </summary>
+        public Options ForScreen(int width, int height)
+        {
+            if (width == ReferenceWidth && height == ReferenceHeight) return this;
+            var sx = width / (double)ReferenceWidth;
+            var sy = height / (double)ReferenceHeight;
+            var s = Math.Min(sx, sy);
+            return this with
+            {
+                BoardOriginX = (int)Math.Round(BoardOriginX * sx),
+                BoardOriginY = (int)Math.Round(BoardOriginY * sy),
+                BoardPitch = Math.Max(1, (int)Math.Round(BoardPitch * s)),
+                FigurineInset = Math.Max(1, (int)Math.Round(FigurineInset * s)),
+                ReferenceWidth = width,
+                ReferenceHeight = height,
+            };
+        }
+
         public (int X, int Y, int Width, int Height) ToPixels(int screenWidth, int screenHeight)
         {
             var x = (int)Math.Round(Left * screenWidth);
@@ -86,8 +118,11 @@ public sealed class AreaModifierPanel
             try
             {
                 var loaded = JsonSerializer.Deserialize<Options>(File.ReadAllText(path), Json);
-                // A zero-width window would read nothing and look like "no modifiers".
-                return loaded is { } o && o.Right > o.Left && o.Bottom > o.Top
+                // A zero-width window would read nothing and look like "no modifiers",
+                // and a zero reference resolution would divide by it in ForScreen and
+                // hover at infinity.
+                return loaded is { ReferenceWidth: > 0, ReferenceHeight: > 0 } o
+                       && o.Right > o.Left && o.Bottom > o.Top
                     ? loaded
                     : new Options();
             }
@@ -345,8 +380,15 @@ public sealed class AreaModifierPanel
     private static IReadOnlyList<string> Join(IReadOnlyList<string> lines)
     {
         var result = new List<string>();
-        foreach (var line in lines)
+        foreach (var raw in lines)
         {
+            // Blank entries are dropped rather than indexed. Fresh reads never produce
+            // one, but Restitch runs over whatever is in the session file, and a single
+            // "" there used to throw out of the constructor -- turning a hand edit into
+            // an app that will not start, where every other load path degrades.
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+            var line = raw.Trim();
+
             // A continuation starts lower-case, or the previous line ended mid-phrase.
             var continues = result.Count > 0
                             && (char.IsLower(line[0]) || EndsMidPhrase(result[^1]));

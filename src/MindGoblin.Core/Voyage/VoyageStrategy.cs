@@ -29,11 +29,11 @@ public enum Stat
 
     /// <summary>Strongboxes, named and generic. Dredged currency rolls them mid-voyage
     /// since 3.29.1, so their rare-fountain half also rides the rare channel.</summary>
-    Boxes,
+    Strongboxes,
 
     /// <summary>The other openables: barrels, anchors, cages, fish, jellyfish, and the
     /// board's roaming bosses (Captainsbane, Brinerot) as loot events.</summary>
-    Containers,
+    Openables,
 
     /// <summary>Golden Lanterns and free lantern placement: quantity engines.</summary>
     Lanterns,
@@ -69,7 +69,7 @@ public enum Stat
     Uniques,
 
     /// <summary>Chart refunds ("chance to not be consumed").</summary>
-    Preserve,
+    ChartRefunds,
 
     /// <summary>Experience gain. Nearly worthless to a farmer; dump burns it.</summary>
     Experience,
@@ -82,13 +82,108 @@ public enum Stat
     /// <summary>"Cannot drop Equipment, Flasks or Tinctures": the loot-deleting trap
     /// that reads as a reward. Weighted negative by loot strategies, positive by dump
     /// (junk by definition is what a dump voyage burns).</summary>
-    LootLock,
+    NoEquipmentDrops,
 
-    /// <summary>Explicit-modifier magnitudes and other meta-amplifiers.</summary>
-    Meta,
+    /// <summary>Explicit-modifier magnitudes: multiplies a chart's whole rolled set.</summary>
+    ModifierMagnitude,
 
     /// <summary>Player power (Soul Eater). No loot value; the star exists for it.</summary>
-    Player,
+    PlayerPower,
+}
+
+/// <summary>
+/// How a stat says what it is, to somebody who is not holding the catalog.
+///
+/// The enum names are identifiers -- terse, and several of them were frank shorthand
+/// ("LootLock", "Meta", "Player") that meant nothing on a slider. What the panel shows is
+/// a LABEL, and what it says on hover is a sentence, because a weight the user cannot
+/// name is a weight they will not touch. Kept beside the enum so a new stat cannot ship
+/// without both: <c>EveryStatHasALabelAndADescription</c> fails the build otherwise.
+/// </summary>
+public static class StatText
+{
+    public static string Label(Stat stat) => stat switch
+    {
+        Stat.Currency => "Currency",
+        Stat.Scarabs => "Scarabs",
+        Stat.Bottles => "Bottles",
+        Stat.Strongboxes => "Strongboxes",
+        Stat.Openables => "Other openables",
+        Stat.Lanterns => "Golden Lanterns",
+        Stat.Sulphur => "Sulphur",
+        Stat.Gold => "Gold",
+        Stat.Quantity => "Item Quantity",
+        Stat.Rarity => "Item Rarity",
+        Stat.Packs => "Monster packs",
+        Stat.Rares => "Rare monsters",
+        Stat.Magic => "Magic monsters",
+        Stat.Uniques => "Uniques",
+        Stat.ChartRefunds => "Chart refunds",
+        Stat.Experience => "Experience",
+        Stat.Danger => "Monster danger",
+        Stat.NoEquipmentDrops => "No equipment drops",
+        Stat.ModifierMagnitude => "Modifier magnitude",
+        Stat.PlayerPower => "Player power",
+        _ => stat.ToString(),
+    };
+
+    /// <summary>One sentence: what the stat covers, and anything about it that would
+    /// surprise you. The trap stats say which way to weight them.</summary>
+    public static string Describe(Stat stat) => stat switch
+    {
+        Stat.Currency =>
+            "Tradeable orbs, stacked decks, altars and lockers, priced in chaos off poe.watch.",
+        Stat.Scarabs =>
+            "Scarab drops. Jackpot-shaped, so they are their own stat rather than currency.",
+        Stat.Bottles =>
+            "Messages in a Bottle: ~39c each and sellable UNOPENED. The chase — a hidden "
+            + "voyage mod that cannot be crafted for, only revealed.",
+        Stat.Strongboxes =>
+            "Strongboxes, named and generic. Rolled before opening they also pour out "
+            + "rares, so they feed any per-rare payout next to them.",
+        Stat.Openables =>
+            "The walk-up loot that is not a strongbox: barrels, treasure anchors, cages, "
+            + "the Pirate's Locker, exotic fish, and the roaming bosses.",
+        Stat.Lanterns =>
+            "Golden Lanterns and free lantern placement. Since 3.29.0b a lantern also "
+            + "grants quantity for the rest of the run, so grabbing them early pays.",
+        Stat.Sulphur =>
+            "Dead Man's Sulphur, which buys board rerolls and Allflame crafts. Untradeable, "
+            + "so its chaos value here is a judgement rather than a market price.",
+        Stat.Gold => "Gold, for the Currency Exchange and Kingsmarch.",
+        Stat.Quantity =>
+            "Item Quantity in percentage points. It multiplies most of the rest, and the "
+            + "solver already uses it to decide which tile a container gift lands on.",
+        Stat.Rarity => "Item Rarity in percentage points.",
+        Stat.Packs =>
+            "Monster population: pack size and added packs. More bodies, not better ones.",
+        Stat.Rares =>
+            "The rare-monster economy — essences, imprisoned monsters, starfish, "
+            + "possession, fracture. Rares are what per-rare border payouts are paid on.",
+        Stat.Magic =>
+            "Magic monsters: at-least-Magic upgrades, which convert the whole population, "
+            + "and extra modifiers on the ones already magic.",
+        Stat.Uniques => "Unique-item conversions and fractured bases (craft stock, not vendor fodder).",
+        Stat.ChartRefunds =>
+            "\"Chance to not be consumed\": the chart comes back to your panel after the "
+            + "voyage instead of being spent.",
+        Stat.Experience =>
+            "Experience gain. Nearly worthless if you are farming; the dump voyage burns it.",
+        Stat.Danger =>
+            "Monster difficulty that ends runs — hexproof, penetration, damage. Weight it "
+            + "NEGATIVE to steer away from charts that can kill the voyage.",
+        Stat.NoEquipmentDrops =>
+            "\"Cannot drop Equipment, Flasks or Tinctures\". The game's own tables file "
+            + "this as a REWARD and it deletes most of the loot — weight it negative "
+            + "unless you are farming currency or gold, where it costs nothing.",
+        Stat.ModifierMagnitude =>
+            "\"Increased explicit modifier magnitudes\": an amplifier on the touched "
+            + "chart's entire rolled set, rather than a payout of its own.",
+        Stat.PlayerPower =>
+            "Player power such as Soul Eater. It drops no loot, so it is priced at zero — "
+            + "right-click a chart twice to require it instead.",
+        _ => "",
+    };
 }
 
 /// <summary>One catalog line: a mod wording, the stat it feeds, and its normalized
@@ -146,22 +241,22 @@ public static class ModCatalog
             Comment: "researched 2026-07-31: ~39c each, sellable UNOPENED; a hidden-"
                      + "until-charted voyage mod, ilvl 68+, max +2 -- cannot be crafted "
                      + "for, only revealed. Container channel seats it beside quantity."),
-        new(@"(?:(\d+)|an)\s+additional Arcanist's Strongbox(?:es)?", Stat.Boxes, 25),
-        new(@"(?:(\d+)|an)\s+additional Diviner's Strongbox(?:es)?", Stat.Boxes, 25),
-        new(@"(?:(\d+)|an)\s+additional Operative's Strongbox(?:es)?", Stat.Boxes, 20,
+        new(@"(?:(\d+)|an)\s+additional Arcanist's Strongbox(?:es)?", Stat.Strongboxes, 25),
+        new(@"(?:(\d+)|an)\s+additional Diviner's Strongbox(?:es)?", Stat.Strongboxes, 25),
+        new(@"(?:(\d+)|an)\s+additional Operative's Strongbox(?:es)?", Stat.Strongboxes, 20,
             Comment: "community: the speedrun centre pick, divines of scarabs when rolled"),
-        new(@"(?:(\d+)|an)\s+additional Strongbox(?:es)?", Stat.Boxes, 8,
+        new(@"(?:(\d+)|an)\s+additional Strongbox(?:es)?", Stat.Strongboxes, 8,
             Comment: "the generic roll; named boxes have their own lines above"),
-        new(@"(?:(\d+)|an)\s+additional Clusters? of Barrels", Stat.Containers, 1.5),
-        new(@"(?:(\d+)|an)\s+additional Treasure", Stat.Containers, 5,
+        new(@"(?:(\d+)|an)\s+additional Clusters? of Barrels", Stat.Openables, 1.5),
+        new(@"(?:(\d+)|an)\s+additional Treasure", Stat.Openables, 5,
             Comment: "Treasure Anchors"),
-        new(@"(?:(\d+)|an)\s+additional cages? of Tormented Spirits", Stat.Containers, 8),
-        new(@"highly prized and exotic Fish", Stat.Containers, 8),
-        new(@"contain Friendly Jellyfish", Stat.Containers, 5),
-        new(@"a lost Pirate's Locker", Stat.Containers, 25),
-        new(@"contain a Brinerot raiding party", Stat.Containers, 12,
+        new(@"(?:(\d+)|an)\s+additional cages? of Tormented Spirits", Stat.Openables, 8),
+        new(@"highly prized and exotic Fish", Stat.Openables, 8),
+        new(@"contain Friendly Jellyfish", Stat.Openables, 5),
+        new(@"a lost Pirate's Locker", Stat.Openables, 25),
+        new(@"contain a Brinerot raiding party", Stat.Openables, 12,
             Comment: "board modifier"),
-        new(@"contain Captainsbane", Stat.Containers, 10,
+        new(@"contain Captainsbane", Stat.Openables, 10,
             Comment: "board modifier"),
         new(@"(?:(\d+)|an) Altars? to the Goddess", Stat.Currency, 12,
             Comment: "3.29.1 blessings convert common currency to rarer, party-wide"),
@@ -189,8 +284,14 @@ public static class ModCatalog
             Comment: "MORE, not increased: the stronger multiplier"),
         new(@"(\d+)% more Currency found", Stat.Currency, 2),
         new(@"(\d+)% more Scarabs found", Stat.Scarabs, 1.5),
-        new(@"(\d+)%\s+increased explicit modifier magnitudes", Stat.Meta, 1.5,
-            Comment: "multiplies the touched chart's entire rolled mods"),
+        // A FRACTION, not chaos: 0.01 per percent, so a 60% roll scores 0.6 and the
+        // solver multiplies that by the RECEIVING chart's explicit-modifier value. This
+        // mod pays nothing of its own -- it is a share of whatever it lands beside -- so
+        // the only honest unit is the share. Priced flat (it was 1.5/percent) it scored
+        // the same 90 points beside a blank chart as beside the best chart on the board,
+        // and being per-square it then steered no placement at all.
+        new(@"(\d+)%\s+increased explicit modifier magnitudes", Stat.ModifierMagnitude, 0.01,
+            Comment: "a FRACTION of the receiving chart's explicit mods, not a flat value"),
         new(@"Flasks found.*chance to have (\d+)% Quality", Stat.Quantity, 0.3),
 
         // ---- population and the rare economy ---------------------------------------
@@ -238,12 +339,12 @@ public static class ModCatalog
         new(@"Gold Found:\s*\+?(\d+)", Stat.Gold, 1),
         new(@"(\d+)%\s+increased Gold found", Stat.Gold, 1),
         new(@"(\d+)% of Equipment dropped by monsters.*converted to Gold", Stat.Gold, 1),
-        new(@"(\d+)% chance (?:for Charts? )?to not be consumed", Stat.Preserve, 3,
+        new(@"(\d+)% chance (?:for Charts? )?to not be consumed", Stat.ChartRefunds, 3,
             Comment: "a refunded adjacent chart is ~its own value x the chance"),
         new(@"gain (\d+)% increased Experience", Stat.Experience, 0.1),
-        new(@"have Soul Eater", Stat.Player, 10,
+        new(@"have Soul Eater", Stat.PlayerPower, 10,
             Comment: "player power, not loot; the required-star exists for it"),
-        new(@"cannot drop Equipment, Flasks or Tinctures", Stat.LootLock, 1,
+        new(@"cannot drop Equipment, Flasks or Tinctures", Stat.NoEquipmentDrops, 1,
             Comment: "filed as a reward by the game's own tables, deletes most loot"),
 
         // ---- danger (severities; the safe strategy weights these negative) ----------
@@ -329,8 +430,20 @@ public sealed class Strategy
                     Weight = WeightOf(e.Stat) * e.UnitValue,
                     ScalesWithBoard = e.ScalesWithBoard,
                     Comment = e.Comment,
+                    Category = e.Stat.ToString(),
                 }),
-            .. ExtraRules,
+            // Stamped as Extras structurally rather than by convention: what makes a
+            // rule "the strategy's own" is where it came from, not its wording, and
+            // several ExtraRules deliberately reuse a catalog wording at a different
+            // weight. Left to a pattern lookup they filed themselves under that stat.
+            .. ExtraRules.Select(r => new VoyageRule
+            {
+                Pattern = r.Pattern,
+                Weight = r.Weight,
+                ScalesWithBoard = r.ScalesWithBoard,
+                Comment = r.Comment,
+                Category = WeightCategories.Other,
+            }),
         ],
     };
 
@@ -364,9 +477,9 @@ public static class Strategies
             AreaLevelWeight = 0.3,   // bottles only exist on 68+ charts; break ties upward
             Weights =
             {
-                [Stat.Bottles] = 1.5, [Stat.Boxes] = 0.6, [Stat.Containers] = 0.8,
+                [Stat.Bottles] = 1.5, [Stat.Strongboxes] = 0.6, [Stat.Openables] = 0.8,
                 [Stat.Lanterns] = 0.7, [Stat.Quantity] = 1, [Stat.Rarity] = 0.3,
-                [Stat.Preserve] = 1, [Stat.LootLock] = -40,
+                [Stat.ChartRefunds] = 1, [Stat.NoEquipmentDrops] = -40,
             },
             ExtraRules =
             {
@@ -381,8 +494,63 @@ public static class Strategies
             Weights =
             {
                 [Stat.Currency] = 1, [Stat.Scarabs] = 1, [Stat.Bottles] = 1,
-                [Stat.Containers] = 1, [Stat.Meta] = 1, [Stat.Quantity] = 1,
-                [Stat.Rares] = 0.5, [Stat.LootLock] = -20,
+                [Stat.Openables] = 1, [Stat.ModifierMagnitude] = 1, [Stat.Quantity] = 1,
+                [Stat.Rares] = 0.5, [Stat.NoEquipmentDrops] = -20,
+            },
+        },
+        new()
+        {
+            Name = "scarabs",
+            Description = "Chase Scarabs: per-rare drops beside dense tiles, and Operative's boxes.",
+            // Both scarab lines in the corpus are ADJACENT-scoped and both exist as
+            // figurine mods, so where things sit decides this plan more than most --
+            // "#% more Scarabs found in adjacent Areas" and "Rare Monsters in adjacent
+            // Areas drop # additional Scarabs", chart and border alike.
+            BoardModifierWeight = 1.5,
+            // 3.29.0b gates Operative's, Diviner's and Arcanist's to spawn by default
+            // above area level 67, and an Operative's box is half this plan.
+            AreaLevelWeight = 0.5,
+            Weights =
+            {
+                [Stat.Scarabs] = 1,
+                // The scarab drop pays PER RARE, so rares are the delivery vehicle. The
+                // channel machinery already multiplies the payout by the receiving
+                // tile's rare density; this is what makes a rare-ADDING mod worth
+                // taking for its own sake.
+                [Stat.Rares] = 0.5,
+                // Strongboxes score NOTHING as boxes here, and that is deliberate rather
+                // than an omission: a box's generic loot is not scarabs. What every box
+                // is worth to this plan is that it is a rare fountain -- MonsterDensityOf
+                // already counts one as ~4 rares -- and that arrives through the channel
+                // machinery whatever the rule weight, so a box beside a per-rare scarab
+                // square feeds it for free. Only Operative's holds scarabs of its own,
+                // and that is a rule, not a stat. See ExtraRules.
+                //
+                // Scarabs out of a box ride the quantity channel like any container gift.
+                [Stat.Quantity] = 0.3,
+                [Stat.Packs] = 0.2,
+                // Cheap here, and that is informative: scarabs are not equipment, so the
+                // loot-lock costs a scarab run far less than it costs a currency one.
+                [Stat.NoEquipmentDrops] = -10,
+            },
+            ExtraRules =
+            {
+                // An Operative's Strongbox CONTAINS scarabs. The catalog can only file a
+                // mod under ONE stat, and files this one under Strongboxes at 20 -- below
+                // Arcanist's and Diviner's at 25, which is backwards for anybody farming
+                // scarabs, and flatly at odds with the note the catalog carries on it:
+                // "the speedrun centre pick, divines of scarabs when rolled".
+                //
+                // So this REPLACES the catalog's opinion for this plan rather than adding
+                // to it, which is why Strongboxes is weighted at nothing above: no line
+                // may be scored by two rules of one profile (RulesReviewTests), and a
+                // premium stacked on top of the box rule would pay this line twice.
+                //
+                // JUDGED, not measured, and named as such: the catalog's ~10c scarab at
+                // roughly four or five a box. Trim it the moment a run gives a real count.
+                Extra(@"(?:(\d+)|an)\s+additional Operative's Strongbox(?:es)?", 50,
+                      "the scarab box: ~4-5 scarabs at the catalog's ~10c anchor. Its "
+                      + "generic box loot is invisible here on purpose. Unmeasured."),
             },
         },
         new()
@@ -393,7 +561,7 @@ public static class Strategies
             Weights =
             {
                 [Stat.Rares] = 1, [Stat.Currency] = 0.2, [Stat.Scarabs] = 1.5,
-                [Stat.Packs] = 0.4, [Stat.Boxes] = 0.4,
+                [Stat.Packs] = 0.4, [Stat.Strongboxes] = 0.4,
             },
         },
         new()
@@ -404,8 +572,8 @@ public static class Strategies
             AreaLevelWeight = 0.5,
             Weights =
             {
-                [Stat.Boxes] = 1, [Stat.Quantity] = 0.5, [Stat.Rarity] = 0.2,
-                [Stat.LootLock] = -30,
+                [Stat.Strongboxes] = 1, [Stat.Quantity] = 0.5, [Stat.Rarity] = 0.2,
+                [Stat.NoEquipmentDrops] = -30,
             },
         },
         new()
@@ -415,7 +583,7 @@ public static class Strategies
             BoardModifierWeight = 1.5,
             Weights =
             {
-                [Stat.Containers] = 1, [Stat.Lanterns] = 1, [Stat.Bottles] = 0.3,
+                [Stat.Openables] = 1, [Stat.Lanterns] = 1, [Stat.Bottles] = 0.3,
                 [Stat.Quantity] = 0.3,
             },
             ExtraRules =
@@ -432,7 +600,7 @@ public static class Strategies
             BoardModifierWeight = 1.5,
             Weights =
             {
-                [Stat.Uniques] = 1, [Stat.Rarity] = 0.5, [Stat.LootLock] = -60,
+                [Stat.Uniques] = 1, [Stat.Rarity] = 0.5, [Stat.NoEquipmentDrops] = -60,
             },
             ExtraRules =
             {
@@ -465,7 +633,7 @@ public static class Strategies
             Weights =
             {
                 [Stat.Packs] = 1, [Stat.Rares] = 0.75, [Stat.Magic] = 0.05,
-                [Stat.Player] = 1,
+                [Stat.PlayerPower] = 1,
             },
         },
         new()
@@ -500,12 +668,12 @@ public static class Strategies
             Weights =
             {
                 [Stat.Currency] = -0.05, [Stat.Scarabs] = -0.8, [Stat.Bottles] = -0.3,
-                [Stat.Boxes] = -0.8, [Stat.Containers] = -0.7, [Stat.Lanterns] = -0.7,
+                [Stat.Strongboxes] = -0.8, [Stat.Openables] = -0.7, [Stat.Lanterns] = -0.7,
                 [Stat.Sulphur] = -2.5, [Stat.Gold] = -0.3, [Stat.Quantity] = -1,
                 [Stat.Rarity] = -0.3, [Stat.Packs] = -0.5, [Stat.Rares] = -1,
-                [Stat.Magic] = -0.05, [Stat.Uniques] = -1, [Stat.Preserve] = -1,
-                [Stat.Experience] = -1, [Stat.Meta] = -0.2, [Stat.Player] = -1,
-                [Stat.LootLock] = 15,   // the one positive: junk by definition
+                [Stat.Magic] = -0.05, [Stat.Uniques] = -1, [Stat.ChartRefunds] = -1,
+                [Stat.Experience] = -1, [Stat.PlayerPower] = -1,
+                [Stat.NoEquipmentDrops] = 15,   // the one positive: junk by definition
             },
             // GLOBAL multipliers get strong flat negatives rather than ScalesWithBoard:
             // a board-wide multiplier is a valuable chart, and valuable charts are
@@ -522,6 +690,12 @@ public static class Strategies
                       -5, "global pack size: a keeper"),
                 Extra(@"(\d+)%\s+increased number of (?:Rare|Magic) Monsters in all Voyage Areas",
                       -4, "global monster counts: keepers"),
+                // An amplifier is a keeper for the same reason a global is, and it needs
+                // the same treatment: its catalog value is a SHARE of the chart it lands
+                // beside, and dump's charts are junk by construction, so the share of
+                // them is a rounding error. A flat negative is the deterrent that works.
+                Extra(@"(\d+)%\s+increased explicit modifier magnitudes",
+                      -3, "an amplifier is a keeper, not fuel"),
             },
         },
     ];

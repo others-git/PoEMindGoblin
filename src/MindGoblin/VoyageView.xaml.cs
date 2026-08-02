@@ -297,19 +297,37 @@ public partial class VoyageView : UserControl, IDisposable
             var borrowed = def == 0;
 
             var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(126) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
 
+            // The LABEL, not the identifier. A slider reading "LootLock" told the user
+            // nothing about the mod that deletes their equipment, and one reading "Meta"
+            // or "Player" was worse -- so every row names itself in words and explains
+            // itself on hover. The tooltip is what makes a weight safe to move: several
+            // of these want a NEGATIVE weight and nothing on the row could say so.
             var label = new TextBlock
             {
-                Text = category,
+                Text = WeightCategories.LabelOf(category),
                 FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center,
-                ToolTip = borrowed
-                    ? $"Not part of \"{profile.Name}\" — raising it prices these mods at catalog value × the slider"
-                    : null,
+                TextTrimming = TextTrimming.CharacterEllipsis,   // the tip carries the rest
+                // Hit-testable across the whole column rather than only where the glyphs
+                // are: a tooltip you have to find the letters of is one nobody reads.
+                Background = Brushes.Transparent,
             };
+            ToolTipService.SetInitialShowDelay(label, 0);
+            ToolTipService.SetShowDuration(label, 120000);
+            var description = WeightCategories.DescriptionOf(category);
+            if (description.Length > 0 || borrowed)
+                label.ToolTip = Tip(
+                    WeightCategories.LabelOf(category),
+                    borrowed
+                        ? $"Not part of \"{profile.Name}\" — raising it prices these mods "
+                          + "at catalog value × the slider"
+                        : $"Weighted by \"{profile.Name}\"",
+                    description.Length > 0 ? [description] : [],
+                    haveDetail: true);
             row.Children.Add(label);
 
             var readout = new TextBlock
@@ -418,7 +436,7 @@ public partial class VoyageView : UserControl, IDisposable
             // bug report -- VoyageProbe decodes this file offline, overlay and all.
             try { bmp.Save(MindGoblin.Core.SettingsFolder.FileIn("last-identify.png")); }
             catch (System.Runtime.InteropServices.ExternalException) { }
-            using var pixels = new BitmapPixels(bmp);
+            var pixels = new BitmapPixels(bmp);
             var cells = new ChartPanelReader(
                 ChartPanelReader.Options.Load(), LevelReader.LoadWithUserTemplates()).Read(pixels);
 
@@ -468,7 +486,14 @@ public partial class VoyageView : UserControl, IDisposable
         _captureHotkey = _hotkeys.Register(
             System.Windows.Input.Key.C,
             HotkeyService.Mod.Control | HotkeyService.Mod.Alt,
-            () => Dispatcher.Invoke(async () => await CaptureAreaModifiersAsync()));
+            // The lambda is async void once it awaits, so it carries its own guard:
+            // HotkeyService cannot catch what escapes past the first await, and an
+            // unhandled dispatcher exception ends the app rather than the capture.
+            () => Dispatcher.Invoke(async () =>
+            {
+                try { await CaptureAreaModifiersAsync(); }
+                catch (Exception ex) { SetStatus($"Capture failed: {ex.Message}", bad: true); }
+            }));
 
         UpdateCaptureHint();
     }
@@ -702,6 +727,15 @@ public partial class VoyageView : UserControl, IDisposable
         {
             await SlurpStep(isFigurine, index);
         }
+        catch (Exception ex)
+        {
+            // async void: HotkeyService's try/catch only covers the synchronous part, so
+            // anything thrown past the first await is unhandled on the dispatcher and
+            // takes the app down mid-pass. The step is left queued -- F9 retries it.
+            SetStatus($"Figurine/chart {index} failed: {ex.Message} — F9 retries it, or Skip.",
+                      bad: true);
+            RefreshSlurpPanel();
+        }
         finally
         {
             _slurpBusy = false;
@@ -716,7 +750,12 @@ public partial class VoyageView : UserControl, IDisposable
             return;
         }
         SlurpInfo.Text = $"Copying chart {index}…";   // the press visibly landed
-        var o = ChartPanelReader.Options.Load();
+        // ForScreen, not the raw calibration: the reader scales its own copy to the
+        // screen it decoded, so hovering the unscaled coordinates put the cursor on a
+        // different cell than the one the plan numbered on any other resolution.
+        var screenBounds = ScreenCapture.PrimaryScreenBounds();
+        var o = ChartPanelReader.Options.Load()
+            .ForScreen(screenBounds.Width, screenBounds.Height);
         var (row, col) = ((index - 1) / o.Cols, (index - 1) % o.Cols);
         GameInput.HoverAt(o.OriginX + col * o.Pitch, o.OriginY + row * o.Pitch);
         await Task.Delay(140);
@@ -750,7 +789,7 @@ public partial class VoyageView : UserControl, IDisposable
         }
 
         // Stop may have disarmed the queue while the capture was in flight.
-        if (_slurp is not { Count: > 0 } || _slurp.Peek() != (isFigurine: false, index)) return;
+        if (_slurp is not { Count: > 0 } || _slurp.Peek() != (IsFigurine: false, Index: index)) return;
         _slurp.Dequeue();
         _solution = null;
         Persist();
@@ -803,12 +842,11 @@ public partial class VoyageView : UserControl, IDisposable
             }
         // A real mod line is hundreds of samples; a stray blue pixel is not a tooltip.
         if (count < 40) return null;
-        var box = new System.Drawing.Rectangle(
+        // Padded outwards, and deliberately unclamped: the caller intersects with the
+        // screen, which is the only rectangle worth clamping to.
+        return new System.Drawing.Rectangle(
             region.X + minX - 14, region.Y + minY - 10,
             maxX - minX + 28, maxY - minY + 20);
-        return System.Drawing.Rectangle.Intersect(
-            new System.Drawing.Rectangle(0, 0, int.MaxValue, int.MaxValue), box) is var _
-            ? box : box;
     }
 
     private string FigurineEdge(int index) =>
@@ -828,7 +866,10 @@ public partial class VoyageView : UserControl, IDisposable
         if (slot is null) { OnSlurpSkip(this, new RoutedEventArgs()); return; }
 
         SlurpInfo.Text = $"Reading figurine {index} ({slot.Edge})…";
-        var o = AreaModifierPanel.Options.Load();
+        var screen = ScreenCapture.PrimaryScreenBounds();
+        // The board coordinates are PIXELS, so they need the same rescale the panel
+        // rectangle gets for free by being fractional.
+        var o = AreaModifierPanel.Options.Load().ForScreen(screen.Width, screen.Height);
         var (hx, hy) = FigurinePosition(slot, o);
         GameInput.HoverAt(hx, hy);
         await Task.Delay(240);   // the tooltip fades in
@@ -841,13 +882,11 @@ public partial class VoyageView : UserControl, IDisposable
             // behind the tooltip, and clipped long mods at the region edge. The mod
             // text is MAGIC BLUE, unique on this screen: find its bounding box first
             // and read only that.
-            var screen = ScreenCapture.PrimaryScreenBounds();
             var region = System.Drawing.Rectangle.Intersect(screen,
                 new System.Drawing.Rectangle(hx - 1000, hy - 380, 1760, 600));
             System.Drawing.Rectangle? tooltip;
             using (var shot = ScreenCapture.CaptureRegion(region))
-            using (var pixels = new BitmapPixels(shot))
-                tooltip = BlueTextBounds(pixels, region);
+                tooltip = BlueTextBounds(new BitmapPixels(shot), region);
             if (tooltip is not { } found)
             {
                 SetStatus($"Figurine {index}: no tooltip found \u2014 F9 retries it "
@@ -1121,7 +1160,6 @@ public partial class VoyageView : UserControl, IDisposable
         SetTarget(row.Kind switch
                   {
                       ModifierRow.Sort.Square => Target.Square,
-                      ModifierRow.Sort.Figurine => Target.Figurine,
                       _ => Target.Chart,          // VoyageWide points at its chart
                   },
                   row.Index,
@@ -1426,8 +1464,7 @@ public partial class VoyageView : UserControl, IDisposable
         if (screenshot is not null && System.IO.File.Exists(screenshot))
         {
             using var bmp = new System.Drawing.Bitmap(screenshot);
-            using var pixels = new BitmapPixels(bmp);
-            _session.ApplyPanelRead(new ChartPanelReader().Read(pixels));
+            _session.ApplyPanelRead(new ChartPanelReader().Read(new BitmapPixels(bmp)));
         }
 
         var samples = new[]
@@ -1842,9 +1879,7 @@ public partial class VoyageView : UserControl, IDisposable
             lines.AddRange(DescribeChart(step.Chart));
         }
 
-        lines.Add(step is null ? "— board —" : "");
-        lines.Add(step is null ? "" : "— board —");
-        lines.RemoveAll(string.IsNullOrEmpty);
+        lines.Add("— board —");
 
         if (_session.SquareBoardKnown(square))
         {
@@ -2585,12 +2620,6 @@ public partial class VoyageView : UserControl, IDisposable
     }
 
     /// <summary>
-    /// The rotation the panel read implied. Charts carry a shape, not a face, so the
-    /// panel mirror shows the base orientation until the solver assigns one.
-    /// </summary>
-    private static ChartFace FaceOf(Chart chart) => new(chart.Shape, 0);
-
-    /// <summary>
     /// Everything captured, in one list: the twelve figurines and every chart that has
     /// modifier text.
     ///
@@ -2682,7 +2711,7 @@ public partial class VoyageView : UserControl, IDisposable
 
         var unread = _session.SquaresAwaitingModifiers.Count;
         ModifierHeader.Text = unread > 0
-            ? $"M O D I F I E R S      {unread} squares unread"
+            ? $"M O D I F I E R S      {unread} square{(unread == 1 ? "" : "s")} unread"
             : _steps.Count == 0
                 ? "M O D I F I E R S      solve to see chart rewards"
                 : "M O D I F I E R S";
@@ -2757,7 +2786,10 @@ public partial class VoyageView : UserControl, IDisposable
     /// </summary>
     public sealed class ModifierRow
     {
-        public enum Sort { VoyageWide, Tileset, Square, Figurine, Chart }
+        /// <summary>Figurines are deliberately absent: they reach the list through the
+        /// SQUARE they buff (EffectiveSquareModifiers), and they are re-targeted by
+        /// clicking the ring, which is where their position is the information.</summary>
+        public enum Sort { VoyageWide, Tileset, Square, Chart }
 
         public ModifierRow(Sort kind, int index, string title, string where,
                            string text, bool captured, bool selected, bool muted = false)
@@ -2770,6 +2802,30 @@ public partial class VoyageView : UserControl, IDisposable
             Captured = captured;
             Selected = selected;
             Muted = muted;
+
+            // Built once, frozen: these are read by the binding engine on every row
+            // refresh, and a fresh SolidColorBrush per read is an allocation and a
+            // missed chance to share one.
+            Accent = Frozen(
+                Selected ? Color.FromRgb(0xC8, 0xAA, 0x6E)
+                : Kind == Sort.VoyageWide ? Color.FromRgb(0xC8, 0xAA, 0x6E)
+                : Kind == Sort.Tileset && Captured ? Color.FromRgb(0xA3, 0x8D, 0x6D)
+                : Muted ? Color.FromRgb(0x2A, 0x20, 0x18)
+                : Captured ? Color.FromRgb(0x86, 0xA8, 0x6A)
+                : Color.FromRgb(0x2A, 0x20, 0x18));
+            TextBrush = Frozen(
+                Muted ? Color.FromRgb(0x5A, 0x50, 0x42)
+                : Captured ? Color.FromRgb(0xE6, 0xDB, 0xC2)
+                : Color.FromRgb(0x6B, 0x5F, 0x4E));
+            RowBackground = Frozen(
+                Selected ? Color.FromRgb(0x1F, 0x1A, 0x10) : Color.FromRgb(0x13, 0x11, 0x10));
+        }
+
+        private static Brush Frozen(Color colour)
+        {
+            var brush = new SolidColorBrush(colour);
+            brush.Freeze();
+            return brush;
         }
 
         public Sort Kind { get; }
@@ -2789,21 +2845,9 @@ public partial class VoyageView : UserControl, IDisposable
         /// <summary>Stable identity, so a rebuild can restore the selection.</summary>
         public string Key => $"{Kind}:{Index}";
 
-        public Brush Accent => new SolidColorBrush(
-            Selected ? Color.FromRgb(0xC8, 0xAA, 0x6E)
-            : Kind == Sort.VoyageWide ? Color.FromRgb(0xC8, 0xAA, 0x6E)
-            : Kind == Sort.Tileset && Captured ? Color.FromRgb(0xA3, 0x8D, 0x6D)
-            : Muted ? Color.FromRgb(0x2A, 0x20, 0x18)
-            : Captured ? Color.FromRgb(0x86, 0xA8, 0x6A)
-            : Color.FromRgb(0x2A, 0x20, 0x18));
-
-        public Brush TextBrush => new SolidColorBrush(
-            Muted ? Color.FromRgb(0x5A, 0x50, 0x42)
-            : Captured ? Color.FromRgb(0xE6, 0xDB, 0xC2)
-            : Color.FromRgb(0x6B, 0x5F, 0x4E));
-
-        public Brush RowBackground => new SolidColorBrush(
-            Selected ? Color.FromRgb(0x1F, 0x1A, 0x10) : Color.FromRgb(0x13, 0x11, 0x10));
+        public Brush Accent { get; }
+        public Brush TextBrush { get; }
+        public Brush RowBackground { get; }
     }
 
     /// <summary>One line of the summary. Shape carries the meaning, so it is prebuilt.</summary>
@@ -2854,9 +2898,17 @@ public partial class VoyageView : UserControl, IDisposable
         public double Size { get; }
         public FontFamily Font { get; }
         public Brush Brush { get; }
-        public Brush ValueBrush => new SolidColorBrush(Color.FromRgb(0xC8, 0xAA, 0x6E));
 
-        private static Brush Of(byte r, byte g, byte b) => new SolidColorBrush(Color.FromRgb(r, g, b));
+        /// <summary>One shared brush rather than one per binding read: every row has
+        /// the same value colour and none of them ever changes it.</summary>
+        public Brush ValueBrush { get; } = Of(0xC8, 0xAA, 0x6E);
+
+        private static Brush Of(byte r, byte g, byte b)
+        {
+            var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+            brush.Freeze();
+            return brush;
+        }
 
         public static SummaryRow Heading(string text) =>
             new(text, "", 15, PoeFonts.Display, Of(0xE6, 0xDB, 0xC2));

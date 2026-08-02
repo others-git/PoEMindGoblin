@@ -161,6 +161,19 @@ public sealed class VoyageRule
 
     public string? Comment { get; set; }
 
+    /// <summary>
+    /// Which weight-slider category this rule belongs to, stamped at compile time: a
+    /// <see cref="Stat"/> name for a catalog mod, <see cref="WeightCategories.Other"/>
+    /// for a strategy's own rule.
+    ///
+    /// Null in files written before the stamp existed, where the pattern lookup stands
+    /// in -- which is exactly the thing the stamp fixes. A strategy rule that reuses a
+    /// catalog WORDING (uniques' fracture line, containers' starfish) looked like that
+    /// stat's catalog by pattern, so the stat counted as one the strategy weights and
+    /// every other mod of it could never be borrowed by raising its slider.
+    /// </summary>
+    public string? Category { get; set; }
+
     [JsonIgnore]
     private Regex? _compiled;
 
@@ -409,6 +422,39 @@ public sealed class VoyageProfile
             + @"Clusters? of Barrels|cages? of Tormented Spirits|Treasure)",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
+    /// <summary>
+    /// Is this line an AMPLIFIER -- "#% increased explicit modifier magnitudes"?
+    ///
+    /// The fourth channel, and the odd one out: it pays nothing of its own. It multiplies
+    /// the EXPLICIT modifiers of whatever chart receives it, so a 60% roll beside a chart
+    /// rolling +90% quantity and +30 sulphur is worth 60% of all of that, and beside a
+    /// blank chart it is worth nothing at all. Scored flat it was counted but inert --
+    /// on a full board every square is occupied either way, so a per-square constant
+    /// decides no placement, and the amplifier never once sought out a chart worth
+    /// amplifying.
+    /// </summary>
+    public static bool IsMagnitudeAmplifier(string line) => MagnitudeAmplifier.IsMatch(line);
+
+    private static readonly Regex MagnitudeAmplifier =
+        new(@"increased explicit modifier magnitudes",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// A chart's EXPLICIT-modifier value: what an amplifier multiplies.
+    ///
+    /// Its rolled affixes and the headline stats that aggregate them -- quantity, rarity,
+    /// pack size, gold, sulphur -- and nothing else. The IMPLICIT is excluded by name:
+    /// every chart has exactly one, it is the Voyage or Adjacent modifier, and "explicit"
+    /// is precisely the word the game uses to exclude it. Area level and ChartBaseValue
+    /// are not modifiers at all.
+    ///
+    /// Scored WITHOUT a board estimate: a board-scaling global is an implicit and so is
+    /// already out, and pricing a stray one as a fraction of the board here would let an
+    /// amplifier multiply the whole voyage.
+    /// </summary>
+    public double ExplicitValue(Chart chart) =>
+        ScoreText(chart.StatLines().Concat(chart.Modifiers));
+
     /// <summary>How much QUANTITY a line grants, as a fraction -- what container
     /// payouts multiply with. Both spellings: GGG writes 'Qauntity' in the globals.</summary>
     public static double QuantityDensityOf(string line)
@@ -534,7 +580,11 @@ public sealed class VoyageRules : IDisposable
         {
             if (!File.Exists(_path))
             {
+                // Deleting the file mid-session is a reload like any other: the shipped
+                // profiles come back, and the view has to hear about it or it goes on
+                // showing a dropdown of the ones that just went away.
                 lock (_gate) _profiles = Defaults();
+                Changed?.Invoke();
                 return;
             }
             var text = File.ReadAllText(_path);
@@ -542,7 +592,8 @@ public sealed class VoyageRules : IDisposable
             lock (_gate) _profiles = loaded is { Count: > 0 } ? loaded : Defaults();
             Changed?.Invoke();
         }
-        catch (Exception ex) when (ex is JsonException or IOException)
+        catch (Exception ex) when (ex is JsonException or IOException
+                                         or UnauthorizedAccessException)
         {
             // Keep serving the last good profiles: a half-saved file mid-edit must not
             // blank the tool, but the user has to know the edit did not take.
@@ -609,8 +660,12 @@ public sealed class VoyageRules : IDisposable
         && Math.Abs(a.StrandedSquarePenalty - b.StrandedSquarePenalty) < 1e-9
         && a.MaxCharts == b.MaxCharts
         && a.Rules.Count == b.Rules.Count
+        // Category counts too: it decides which slider scales a rule and which stats can
+        // be borrowed, so a file carrying the old untagged rules is genuinely behind the
+        // shipped ones even when every weight matches.
         && a.Rules.Zip(b.Rules).All(pair => pair.First.Pattern == pair.Second.Pattern
                                             && pair.First.ScalesWithBoard == pair.Second.ScalesWithBoard
+                                            && pair.First.Category == pair.Second.Category
                                             && Math.Abs(pair.First.Weight - pair.Second.Weight) < 1e-9);
 
     /// <summary>
@@ -663,12 +718,20 @@ public sealed class VoyageRules : IDisposable
     }
 
     private CancellationTokenSource? _debounce;
+    private readonly Lock _debounceGate = new();
 
     private void DebouncedReload()
     {
-        _debounce?.Cancel();
-        _debounce = new CancellationTokenSource();
-        var token = _debounce.Token;
+        // FileSystemWatcher raises on a pool thread and an editor's truncate-then-write
+        // raises twice, so two of these can be in here at once -- unsynchronised, they
+        // could each overwrite the other's source and leave a reload nobody cancels.
+        CancellationToken token;
+        lock (_debounceGate)
+        {
+            _debounce?.Cancel();
+            _debounce = new CancellationTokenSource();
+            token = _debounce.Token;
+        }
         Task.Delay(200, token).ContinueWith(t =>
         {
             if (!t.IsCanceled) Reload();
@@ -701,7 +764,8 @@ public sealed class VoyageRules : IDisposable
 
     public void Dispose()
     {
-        _debounce?.Cancel();
+        // The watcher first: a reload scheduled after the cancel would outlive us.
         _watcher?.Dispose();
+        lock (_debounceGate) _debounce?.Cancel();
     }
 }

@@ -34,6 +34,53 @@ public class ExclusionTests
         Assert.DoesNotContain(plan, s => s.ChartNumber == 5);
     }
 
+    /// <summary>
+    /// A mark belongs to the chart, not to the panel slot.
+    ///
+    /// Panel indices are physical positions, so a re-read that finds a different chart
+    /// there is a different chart -- and it used to inherit whatever the departed one
+    /// was marked with. RemoveChart and CompleteVoyage always cleared the marks;
+    /// ApplyPanelRead quietly did not.
+    /// </summary>
+    [Fact]
+    public void AMarkLeavesWithTheChartItWasPutOn()
+    {
+        var session = Session();
+        session.CycleMark(5);                       // excluded
+        session.CycleMark(7);                       // excluded
+        session.CycleMark(7);                       // required
+        Assert.Equal([5], session.Excluded);
+        Assert.Equal([7], session.Required);
+
+        // Both spent; the panel comes back holding neither.
+        session.ApplyPanelRead(Enumerable.Range(1, 12).Where(i => i is not (5 or 7))
+            .Select(i => new ChartPanelReader.ReadCell(
+                i, (i - 1) / 6, (i - 1) % 6, true, true, true, true) { Level = 80 })
+            .ToList());
+        Assert.Empty(session.Excluded);
+        Assert.Empty(session.Required);
+
+        // A new chart drawn into slot 5 is in the pool like any other.
+        session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
+            { Level = 80 }).ToList());
+        Assert.False(session.IsExcluded(5));
+        Assert.False(session.IsRequired(7));
+    }
+
+    /// <summary>A chart that survives the re-read keeps its mark: the whole point of
+    /// merging rather than replacing.</summary>
+    [Fact]
+    public void ASurvivingChartKeepsItsMark()
+    {
+        var session = Session();
+        session.CycleMark(4);
+        session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
+            { Level = 80 }).ToList());
+        Assert.True(session.IsExcluded(4));
+    }
+
     /// <summary>One cycle on one gesture because it is ONE question -- what may the
     /// planner do with this chart -- and the three answers are mutually exclusive.
     /// Excluded-and-required must stay unrepresentable.</summary>

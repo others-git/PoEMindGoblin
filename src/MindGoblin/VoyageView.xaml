@@ -4,7 +4,8 @@
              xmlns:local="clr-namespace:MindGoblin"
              Background="#080706" Foreground="#E6DBC2"
              TextOptions.TextFormattingMode="Display"
-             TextOptions.TextRenderingMode="ClearType">
+             TextOptions.TextRenderingMode="ClearType"
+             Typography.StandardLigatures="False">
 
     <!--
         Palette and type come from the Voyage screen's own materials: bitumen ink on aged
@@ -17,6 +18,13 @@
         Georgia is the nearest installed face otherwise, and an
         engraved serif beside the drawn ornaments reads as part of the same object.
         Consolas carries the plan and the levels, which have to align in a column.
+
+        LIGATURES ARE OFF, set on the root so it inherits everywhere, tooltips included.
+        Fontin ships an EMPTY 'ffi' glyph (zero contours, full 1658-unit advance) in
+        SmallCaps, Bold and Italic alike; only Regular draws it. So any word carrying one
+        lost three letters and kept their space, and the alert headline read
+        "Free di    culty roll". Standard ligatures buy nothing at 12 to 15px, and that
+        is the whole of what turning them off costs.
     -->
     <UserControl.Resources>
         <SolidColorBrush x:Key="Abyss"     Color="#080706"/>

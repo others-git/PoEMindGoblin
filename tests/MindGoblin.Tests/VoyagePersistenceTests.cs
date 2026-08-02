@@ -55,6 +55,38 @@ public class VoyagePersistenceTests : IDisposable
                       "60% increased explicit modifier magnitudes"], session.SquareModifiers[9]);
     }
 
+    /// <summary>
+    /// A blank line in a stored square does not take the app down with it.
+    ///
+    /// Load is carefully guarded to return null on anything unusable, but FromState runs
+    /// outside that guard and the stitcher indexed line[0] unchecked -- so one "" in a
+    /// hand-edited session file threw out of the view's constructor, turning a bad edit
+    /// into an app that will not start. Every other load path degrades instead.
+    /// </summary>
+    [Fact]
+    public void BlankStoredLinesAreDroppedRatherThanThrown()
+    {
+        var state = new VoyageSessionState();
+        state.SquareModifiers["4"] = ["", "   ", "Area contains 4 additional Golden", "Lanterns"];
+        state.SquareModifiers["6"] = ["", ""];
+
+        var session = VoyageSession.FromState(state);
+
+        Assert.Equal(["Area contains 4 additional Golden Lanterns"], session.SquareModifiers[4]);
+        Assert.Empty(session.SquareModifiers[6]);
+    }
+
+    /// <summary>Untrimmed stored lines join as though they had been read cleanly.</summary>
+    [Fact]
+    public void StoredLinesAreTrimmedBeforeStitching()
+    {
+        var state = new VoyageSessionState();
+        state.SquareModifiers["2"] = ["  Area contains 2 additional Treasure  ", "  Anchors "];
+
+        Assert.Equal(["Area contains 2 additional Treasure Anchors"],
+                     VoyageSession.FromState(state).SquareModifiers[2]);
+    }
+
     [Fact]
     public void EverythingReadSurvivesARoundTrip()
     {

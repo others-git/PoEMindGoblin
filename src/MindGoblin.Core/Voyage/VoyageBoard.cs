@@ -100,6 +100,22 @@ public sealed record Chart(
     /// per-rare payouts (x the neighbour's rare density).</summary>
     public bool AdjacentPayoutOnPopulation { get; init; }
 
+    /// <summary>
+    /// This tile's EXPLICIT-modifier value: its rolled affixes and the stats that
+    /// aggregate them, priced by the profile. What an amplifier multiplies, and the
+    /// reason an amplifier is worth everything beside a fat chart and nothing beside a
+    /// blank one. Excludes the implicit -- see <see cref="VoyageProfile.ExplicitValue"/>.
+    /// </summary>
+    public double ExplicitValue { get; init; }
+
+    /// <summary>
+    /// The AMPLIFIER part of this chart's Adjacent Modifier, as a fraction: "Adjacent
+    /// Areas have 60% increased explicit modifier magnitudes" is 0.6, pre-scaled by the
+    /// synergy knob. Multiplied by the NEIGHBOUR's <see cref="ExplicitValue"/> when the
+    /// pair meets -- it pays a share of what it lands beside, never a sum of its own.
+    /// </summary>
+    public double AdjacentMagnitudeValue { get; init; }
+
     public bool HasAdjacentModifier => AdjacentValue != 0 || !string.IsNullOrEmpty(AdjacentModifier);
 
     /// <summary>

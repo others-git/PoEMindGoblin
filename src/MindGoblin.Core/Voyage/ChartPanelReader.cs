@@ -63,6 +63,18 @@ public sealed class ChartPanelReader
         public int ReferenceWidth { get; init; } = 2560;
         public int ReferenceHeight { get; init; } = 1440;
 
+        /// <summary>
+        /// The calibration as it applies to a screen of this size -- exactly what
+        /// <see cref="Read"/> uses internally.
+        ///
+        /// Exposed so a caller that HOVERS a cell lands where the reader decoded it.
+        /// The slurp used the raw options while the reader scaled its own copy, so at
+        /// any resolution but the calibrated one the charts decoded correctly and the
+        /// hover went to the wrong cell.
+        /// </summary>
+        public Options ForScreen(int width, int height) =>
+            width == ReferenceWidth && height == ReferenceHeight ? this : ScaledTo(width, height);
+
         /// <summary>Rescale the calibration to another resolution.</summary>
         public Options ScaledTo(int width, int height)
         {
@@ -225,9 +237,7 @@ public sealed class ChartPanelReader
 
     public IReadOnlyList<ReadCell> Read(IPixels pixels)
     {
-        var o = pixels.Width == _o.ReferenceWidth && pixels.Height == _o.ReferenceHeight
-            ? _o
-            : _o.ScaledTo(pixels.Width, pixels.Height);
+        var o = _o.ForScreen(pixels.Width, pixels.Height);
 
         var found = new List<ReadCell>();
         for (var row = 0; row < o.Rows; row++)

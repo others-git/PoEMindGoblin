@@ -159,9 +159,12 @@ public sealed class VoyageSession
                 $"panel-{cell.Index}", "", shape, cell.Level ?? 0, Array.Empty<string>());
         }
 
-        // A chart that is gone from the panel has been used or sold.
+        // A chart that is gone from the panel has been used or sold. Its MARKS go with
+        // it: panel indices are physical positions, so the next chart read into this one
+        // is a different chart, and inheriting the departed one's X or star would veto
+        // or force a card the user never touched.
         foreach (var stale in _charts.Keys.Where(k => !seen.Contains(k)).ToList())
-            _charts.Remove(stale);
+            RemoveChart(stale);
     }
 
     /// <summary>
@@ -235,6 +238,12 @@ public sealed class VoyageSession
     /// <summary>
     /// How far through the read the user is, as a fraction. Counts the panel as done once
     /// any chart is known, then weights the two hover checklists by their item counts.
+    ///
+    /// A square counts as done on <see cref="SquareBoardKnown"/>, exactly like the
+    /// checklist -- so this is the complement of <see cref="SquaresAwaitingModifiers"/>
+    /// and cannot disagree with it. Counting only PANEL reads was that disagreement: the
+    /// slurp reads figurines, so a completed pass emptied the checklist while the bar
+    /// stuck at charts/(charts+8) and never reached full.
     /// </summary>
     public double ReadProgress
     {
@@ -242,11 +251,12 @@ public sealed class VoyageSession
         {
             // Only squares that CAN carry a modifier count towards the read; the centre
             // of a 3x3 touches no figurine, so it is not work the user has to do.
-            var readable = Layout.Rows * Layout.Cols - SquaresWithoutFigurines.Count;
-            var total = _charts.Count + readable;
+            var unreachable = SquaresWithoutFigurines.ToHashSet();
+            var total = _charts.Count + Layout.Rows * Layout.Cols - unreachable.Count;
             if (total == 0) return 0;
             var done = _charts.Count(kv => HasDetail(kv.Value))
-                       + _squareModifiers.Keys.Count(sq => !SquaresWithoutFigurines.Contains(sq));
+                       + Enumerable.Range(1, Layout.Rows * Layout.Cols)
+                           .Count(sq => !unreachable.Contains(sq) && SquareBoardKnown(sq));
             return Math.Min(1.0, done / (double)total);
         }
     }
@@ -373,6 +383,11 @@ public sealed class VoyageSession
             var payoutAdj = channel != VoyageProfile.PayoutChannel.None;
             var containerAdj = !payoutAdj && c.AdjacentModifier is { } gift
                                && VoyageProfile.IsContainerGift(gift);
+            // The amplifier channel: pays a SHARE of the neighbour rather than a sum of
+            // its own, so it must not also keep a flat value or it would be paid twice.
+            var magnitudeAdj = !payoutAdj && !containerAdj
+                               && c.AdjacentModifier is { } amp
+                               && VoyageProfile.IsMagnitudeAmplifier(amp);
             return c with
             {
                 // Required is a value, not a constraint: the bonus makes any board that
@@ -381,9 +396,11 @@ public sealed class VoyageSession
                 // square" rule, since the layout that loses least is the optimum.
                 Value = profile.ScoreChart(c, boardEstimate)
                         + (_required.Contains(kv.Key) ? RequiredBonus : 0),
-                AdjacentValue = payoutAdj || containerAdj ? 0 : adjacent,
+                AdjacentValue = payoutAdj || containerAdj || magnitudeAdj ? 0 : adjacent,
                 AdjacentPerMonsterValue = payoutAdj ? adjacent : 0,
                 AdjacentPerQuantityValue = containerAdj ? adjacent : 0,
+                AdjacentMagnitudeValue = magnitudeAdj ? syn * adjacent : 0,
+                ExplicitValue = profile.ExplicitValue(c),
                 AdjacentPayoutOnPopulation = channel == VoyageProfile.PayoutChannel.Population,
                 MonsterDensity = syn * VoyageProfile.ChartRareDensity(c),
                 PackDensity = syn * VoyageProfile.ChartPackDensity(c),
@@ -409,7 +426,7 @@ public sealed class VoyageSession
         // constant over every layout and steers nothing. Per-monster payouts multiply
         // with the tile's pack size instead, which is what lets a Divine Orb square pull
         // the monster-dense chart onto itself. See VoyageProfile.MonsterPayoutSynergy.
-        var (flat, perRare, perPack, perQty) = BoardValueByCell(profile);
+        var (flat, perRare, perPack, perQty, amplify) = BoardValueByCell(profile);
 
         // Per-cell constants for BOTH channels, precomputed so scoring stays
         // arithmetic: the density the border itself grants a square, and the payout
@@ -451,6 +468,16 @@ public sealed class VoyageSession
               * (1 + chart.PackDensity + borderPack.GetValueOrDefault(cell))
             + perQty.GetValueOrDefault(cell)
               * (1 + chart.QuantityDensity + borderQty.GetValueOrDefault(cell))
+            // The amplifier: a SHARE of this chart's own explicit mods, so unlike the
+            // three channels above there is no flat baseline to add it to. This is the
+            // term that finally makes a magnitude square pull the fattest chart onto
+            // itself instead of paying the same beside a blank one.
+            // syn belongs on the GIVER side and exactly once per product: the chart-side
+            // amplifier gets it in AdjacentMagnitudeValue, the board side gets it here.
+            // Route applies it to the receiver instead, which is the same number -- but
+            // omitting it here made the solver and the route disagree at any synergy but
+            // 1.0, and every shipped profile hiding that at 1.0 is not a defence.
+            + syn * amplify.GetValueOrDefault(cell) * chart.ExplicitValue
             + chart.AdjacentMonsterDensity * nbrRare.GetValueOrDefault(cell)
             + chart.AdjacentPackDensity * nbrPack.GetValueOrDefault(cell)
             + chart.AdjacentQuantityDensity * nbrQty.GetValueOrDefault(cell);
@@ -498,13 +525,17 @@ public sealed class VoyageSession
     /// the flat half is position money regardless of the tile.
     /// </summary>
     private (Dictionary<Cell, double> Flat, Dictionary<Cell, double> PerRare,
-             Dictionary<Cell, double> PerPack, Dictionary<Cell, double> PerQty)
+             Dictionary<Cell, double> PerPack, Dictionary<Cell, double> PerQty,
+             Dictionary<Cell, double> Amplify)
         BoardValueByCell(VoyageProfile profile)
     {
         var flat = new Dictionary<Cell, double>();
         var perRare = new Dictionary<Cell, double>();
         var perPack = new Dictionary<Cell, double>();
         var perQty = new Dictionary<Cell, double>();
+        // Not a value like the others: a FRACTION of whatever chart lands here, which is
+        // why the profile prices this mod at 0.01 per percent rather than in chaos.
+        var amplify = new Dictionary<Cell, double>();
         foreach (var modifier in BoardModifiers())
         {
             var worth = profile.ScoreText([modifier.Description]) * profile.BoardModifierWeight;
@@ -514,12 +545,13 @@ public sealed class VoyageSession
                 VoyageProfile.PayoutChannel.Rares => perRare,
                 VoyageProfile.PayoutChannel.Population => perPack,
                 _ when VoyageProfile.IsContainerGift(modifier.Description) => perQty,
+                _ when VoyageProfile.IsMagnitudeAmplifier(modifier.Description) => amplify,
                 _ => flat,
             };
             foreach (var cell in modifier.AffectedCells)
                 into[cell] = into.GetValueOrDefault(cell) + worth;
         }
-        return (flat, perRare, perPack, perQty);
+        return (flat, perRare, perPack, perQty, amplify);
     }
 
     /// <summary>
@@ -541,6 +573,9 @@ public sealed class VoyageSession
         var rareDensity = syn * VoyageProfile.ChartRareDensity(here.Chart);
         var packDensity = syn * VoyageProfile.ChartPackDensity(here.Chart);
         var qtyDensity = syn * here.Chart.ItemQuantity / 100;
+        // The amplifier does not scale a payout, it IS a share of this tile's own mods,
+        // so its multiplier is the explicit value rather than (1 + a density).
+        var explicitHere = syn * profile.ExplicitValue(here.Chart);
 
         var result = new List<(int, string, double)>();
         foreach (var side in Enum.GetValues<Side>())
@@ -553,6 +588,7 @@ public sealed class VoyageSession
                 VoyageProfile.PayoutChannel.Rares => 1 + rareDensity,
                 VoyageProfile.PayoutChannel.Population => 1 + packDensity,
                 _ when VoyageProfile.IsContainerGift(adj) => 1 + qtyDensity,
+                _ when VoyageProfile.IsMagnitudeAmplifier(adj) => explicitHere,
                 _ => 1,
             };
             result.Add((VoyagePlan.SquareNumber(neighbour.Cell, Layout.Cols), adj, value));
@@ -575,7 +611,7 @@ public sealed class VoyageSession
         var board = new VoyageBoard(Layout.Rows, Layout.Cols);
         foreach (var placement in solution.Placements) board.Place(placement);
 
-        var (flat, perRare, perPack, perQty) = BoardValueByCell(profile);
+        var (flat, perRare, perPack, perQty, amplify) = BoardValueByCell(profile);
         var syn = profile.MonsterPayoutSynergy;
 
         // Golden Lanterns granted TO each square, from the board and from neighbours'
@@ -605,11 +641,13 @@ public sealed class VoyageSession
             var rareDensity = syn * VoyageProfile.ChartRareDensity(placement.Chart);
             var packDensity = syn * VoyageProfile.ChartPackDensity(placement.Chart);
             var qtyDensity = syn * placement.Chart.ItemQuantity / 100;
+            var explicitHere = syn * profile.ExplicitValue(placement.Chart);
             var worth = profile.ScoreChart(placement.Chart)
                         + flat.GetValueOrDefault(placement.Cell)
                         + perRare.GetValueOrDefault(placement.Cell) * (1 + rareDensity)
                         + perPack.GetValueOrDefault(placement.Cell) * (1 + packDensity)
-                        + perQty.GetValueOrDefault(placement.Cell) * (1 + qtyDensity);
+                        + perQty.GetValueOrDefault(placement.Cell) * (1 + qtyDensity)
+                        + amplify.GetValueOrDefault(placement.Cell) * explicitHere;
 
             // What the neighbours push in. Received only -- what this chart gives THEM
             // is counted when they are visited, not here. A neighbour's per-monster
@@ -624,6 +662,7 @@ public sealed class VoyageSession
                             VoyageProfile.PayoutChannel.Rares => 1 + rareDensity,
                             VoyageProfile.PayoutChannel.Population => 1 + packDensity,
                             _ when VoyageProfile.IsContainerGift(adj) => 1 + qtyDensity,
+                            _ when VoyageProfile.IsMagnitudeAmplifier(adj) => explicitHere,
                             _ => 1,
                         };
                     worth += received;

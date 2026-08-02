@@ -367,6 +367,34 @@ public class SquareModifierTests
         Assert.Equal(1.0, session.ReadProgress, 6);
     }
 
+    /// <summary>
+    /// Progress must agree with the checklist, because they answer the same question.
+    /// The slurp reads figurines, and counting only PANEL reads left a completed pass
+    /// with an empty checklist and a bar stuck below full, forever.
+    /// </summary>
+    [Fact]
+    public void ProgressReachesOneOnFigurineReadsAlone()
+    {
+        var session = new VoyageSession();
+        foreach (var slot in session.Layout.Figurines)
+            session.ApplyFigurineText(slot.Index, "Adjacent Areas contain 8 additional packs");
+
+        Assert.Empty(session.SquaresAwaitingModifiers);
+        Assert.Equal(1.0, session.ReadProgress, 6);
+    }
+
+    /// <summary>Progress is exactly the complement of the checklist, part way through
+    /// too -- one figurine read is one of the eight readable squares done.</summary>
+    [Fact]
+    public void ProgressTracksTheChecklistPartWayThrough()
+    {
+        var session = new VoyageSession();
+        session.ApplyFigurineText(1, "Adjacent Areas contain 8 additional packs");
+
+        Assert.Equal(7, session.SquaresAwaitingModifiers.Count);
+        Assert.Equal(1 / 8.0, session.ReadProgress, 6);
+    }
+
     [Fact]
     public void SquareModifiersReachTheSolverAndPullAChartOntoThatSquare()
     {
