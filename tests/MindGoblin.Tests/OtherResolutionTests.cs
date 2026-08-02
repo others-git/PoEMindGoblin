@@ -241,6 +241,36 @@ public class OtherResolutionTests
     }
 
     /// <summary>
+    /// GREEN IS NOT ENOUGH TO IDENTIFY THE PANEL. A row of skill and buff icons glows
+    /// just as hard and sits on just as regular a pitch, and the first version of the
+    /// grid search latched onto exactly that: the calibrate window opened with its grid
+    /// drawn over the top-left corner of the game, sixty cells from any chart.
+    ///
+    /// So every candidate is SCORED by decoding, and the calibration is always one of
+    /// them. Whatever Resolve returns must read the panel at least as well as the
+    /// calibration would have — that is the property, and it holds whatever else on
+    /// screen happens to be green.
+    /// </summary>
+    [Theory]
+    [InlineData("voyage-panel.png")]
+    [InlineData("voyage-panel-1080p.png")]
+    [InlineData("voyage-panel-native-1080p.png")]
+    [InlineData("voyage-panel-3291.png")]
+    public void LocatingNeverReadsWorseThanTheCalibration(string shot)
+    {
+        using var px = new BitmapPixels(Fixture(shot));
+        var reader = new ChartPanelReader();
+
+        var chosen = reader.Read(px).Count(c => c.Shape is not null);
+        var calibrated = new ChartPanelReader(
+                new ChartPanelReader.Options().ForScreen(px.Width, px.Height))
+            .Read(px).Count(c => c.Shape is not null);
+
+        Assert.True(chosen >= calibrated,
+            $"{shot}: located grid read {chosen} shapes where the calibration read {calibrated}");
+    }
+
+    /// <summary>
     /// The pixel-count thresholds must reduce to their tuned values at the reference and
     /// shrink from there. Stated as a property rather than left to the fixtures, because
     /// the next absolute somebody adds will look just as harmless as these three did.

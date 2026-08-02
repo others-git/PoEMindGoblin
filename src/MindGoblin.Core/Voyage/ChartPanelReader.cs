@@ -287,12 +287,24 @@ public sealed class ChartPanelReader
     /// <summary>The shipped measurement, as the ratios everything per-tile is kept in.</summary>
     private static readonly Options Reference = new();
 
-    public static Options? Locate(IPixels pixels, Options fallback)
+    public static Options? Locate(IPixels pixels, Options fallback) =>
+        Locate(pixels, fallback, 0);
+
+    /// <summary>
+    /// The same, restricted to the image from <paramref name="left"/> rightwards.
+    ///
+    /// The panel is not the only green thing on screen -- a row of skill and buff icons
+    /// glows just as hard, sits on just as regular a pitch, and is exactly what the first
+    /// version latched onto: the calibrator opened with its grid drawn over the top-left
+    /// corner of the game, nowhere near a chart. Searching a window and scoring the
+    /// result is how the panel is told from the decoration.
+    /// </summary>
+    private static Options? Locate(IPixels pixels, Options fallback, int left)
     {
         var greenCols = new int[pixels.Width];
         var greenRows = new int[pixels.Height];
         for (var y = 0; y < pixels.Height; y++)
-            for (var x = 0; x < pixels.Width; x++)
+            for (var x = left; x < pixels.Width; x++)
             {
                 var (r, g, b) = pixels.At(x, y);
                 if (!IsGreen(r, g, b)) continue;
@@ -403,13 +415,36 @@ public sealed class ChartPanelReader
     /// A cell that decodes to a RECOGNISED shape is the score. Cells alone would reward
     /// a grid that straddles tiles and finds green everywhere.
     /// </summary>
-    public IReadOnlyList<ReadCell> Read(IPixels pixels)
-    {
-        var calibrated = ReadWith(pixels, _o.ForScreen(pixels.Width, pixels.Height));
-        if (Locate(pixels, _o) is not { } located) return calibrated;
+    public IReadOnlyList<ReadCell> Read(IPixels pixels) => ReadWith(pixels, Resolve(pixels));
 
-        var found = ReadWith(pixels, located);
-        return Confidence(found) > Confidence(calibrated) ? found : calibrated;
+    /// <summary>
+    /// The geometry that reads this capture best: the calibration, or the grid located
+    /// in the image, or the grid located in its right-hand side.
+    ///
+    /// The panel lives on the right, and the things that impersonate it -- the skill
+    /// bar, buff icons -- live on the left, so a right-hand search is usually the one
+    /// that finds it. "Usually" is why every candidate is SCORED by decoding rather than
+    /// chosen by rule: whichever reads the most recognisable charts wins, and the
+    /// calibration is always in the running, so this can rescue a drifted grid and
+    /// cannot invent a worse one.
+    ///
+    /// Shared with the calibrate window, which used to take the located grid on trust
+    /// and drew it over the corner of the game.
+    /// </summary>
+    public Options Resolve(IPixels pixels)
+    {
+        var best = _o.ForScreen(pixels.Width, pixels.Height);
+        var score = Confidence(ReadWith(pixels, best));
+
+        foreach (var left in new[] { 0, pixels.Width / 2, pixels.Width * 2 / 3 })
+        {
+            if (Locate(pixels, _o, left) is not { } candidate) continue;
+            var found = Confidence(ReadWith(pixels, candidate));
+            if (found <= score) continue;
+            best = candidate;
+            score = found;
+        }
+        return best;
     }
 
     private static int Confidence(IReadOnlyList<ReadCell> cells) =>

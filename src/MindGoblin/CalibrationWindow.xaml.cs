@@ -62,8 +62,7 @@ public partial class CalibrationWindow : Window
             // thing that has drifted -- so the grid started visibly off the tiles and
             // the first job was always to undo that by hand. Locate finds the grid in
             // the pixels; the stored calibration is the fallback for when it cannot.
-            _options = ChartPanelReader.Locate(new BitmapPixels(_bitmap), _options)
-                       ?? _options.ForScreen(_bitmap.Width, _bitmap.Height);
+            _options = new ChartPanelReader(_options).Resolve(new BitmapPixels(_bitmap));
 
             LoadPresets();
             // The window itself takes the keys. Every button is Focusable="False", so
@@ -186,8 +185,7 @@ public partial class CalibrationWindow : Window
     {
         var shipped = new ChartPanelReader.Options();
         _options = _bitmap is null ? shipped
-            : ChartPanelReader.Locate(new BitmapPixels(_bitmap), shipped)
-              ?? shipped.ForScreen(_bitmap.Width, _bitmap.Height);
+            : new ChartPanelReader(shipped).Resolve(new BitmapPixels(_bitmap));
         Redraw();
     }
 
