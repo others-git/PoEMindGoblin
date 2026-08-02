@@ -254,8 +254,10 @@ public partial class VoyageView : UserControl, IDisposable
         if (_session.Charts.Count > 0) parts.Add($"{_session.Charts.Count} charts");
         if (_session.SquareModifiers.Count > 0)
             parts.Add($"{_session.SquareModifiers.Count} squares");
+        // "Identify Charts", not "Read panel": that is what the button says, and an action
+        // that changes its name between the control and the prose is two actions to learn.
         SetStatus($"Restored {string.Join(" and ", parts)} from your last session. "
-                  + "Read panel again if the charts have changed.");
+                  + "Identify Charts again if the charts have changed.");
     }
 
     // ---- rule profiles -----------------------------------------------------------
@@ -471,6 +473,16 @@ public partial class VoyageView : UserControl, IDisposable
             // The GAME's rectangle, not the screen's: the calibration is relative to
             // what the game draws, so capturing anything else shifts every coordinate.
             var bounds = ScreenCapture.ResolveGameBounds();
+            // Capturing scrapes the SCREEN, so anything in front of a windowed game is
+            // captured instead of it -- and the reader decodes that instead. Refuse
+            // rather than store a picture of another window as the panel.
+            if (bounds.Source == ScreenCapture.BoundsSource.Detected && GameWindow.IsCovered())
+            {
+                SetStatus("Something is covering the Path of Exile window — move it aside "
+                          + "and press Identify Charts again. A capture taken now would "
+                          + "be a picture of whatever is on top.", bad: true);
+                return false;
+            }
             using var bmp = ScreenCapture.CaptureRegion(bounds.Rect);
             // Always keep the last capture: when a read goes wrong, the pixels ARE the
             // bug report -- VoyageProbe decodes this file offline, overlay and all.
@@ -495,11 +507,12 @@ public partial class VoyageView : UserControl, IDisposable
             RefreshBoard();
             RefreshProgress();
 
-            var unread = cells.Count(c => c.Level is null);
-            SetStatus((unread == 0
-                    ? $"Read {cells.Count} charts"
-                    : $"Read {cells.Count} charts; {unread} had an unreadable level")
-                + $" · {bounds.Describe}.");
+            // The level is NOT reported as missing here. The panel read is a preview of
+            // it; the real one arrives in the copied chart text ("Item Level: 83") and
+            // ApplyChartText takes that over whatever the glyph caption said. Counting
+            // the blanks made a preview look like a fault and sent people hunting an OCR
+            // problem that the very next step overwrites.
+            SetStatus($"Read {cells.Count} charts · {bounds.Describe}.");
             return true;
         }
         catch (Exception ex)
@@ -919,7 +932,9 @@ public partial class VoyageView : UserControl, IDisposable
 
         SlurpInfo.Text = $"Reading figurine {index} ({slot.Edge})…";
         var game = ScreenCapture.ResolveGameBounds().Rect;
-        var screen = ScreenCapture.PrimaryScreenBounds();
+        // The VIRTUAL desktop: the game may be on a monitor left of the primary one,
+        // where x is negative and clipping to the primary screen leaves nothing.
+        var screen = ScreenCapture.VirtualScreenBounds();
         // The board coordinates are PIXELS, so they need the same rescale the panel
         // rectangle gets for free by being fractional -- against the GAME's size.
         var raw = AreaModifierPanel.Options.Load();
@@ -2619,9 +2634,19 @@ public partial class VoyageView : UserControl, IDisposable
                     : Color.FromRgb(0x7A, 0x6E, 0x5C)));
             }
 
+            // The level, and NOTHING where there is not one yet.
+            //
+            // It used to print "··" for an unknown level, which put a placeholder on every
+            // tile of a freshly identified panel -- thirteen little marks that read as
+            // thirteen failed reads. They are not failures. The level arrives with the
+            // COPIED CHART TEXT ("Item Level: 83"), which ApplyChartText takes over
+            // whatever the tiny glyph caption managed, so before the detail is loaded there
+            // is simply nothing to say yet. The number appearing IS the sign the detail
+            // landed, alongside the glyph turning verdigris. A space, not an empty string,
+            // so the row keeps its height and the tiles do not resize as the pass fills in.
             stack.Children.Add(new TextBlock
             {
-                Text = chart.AreaLevel > 0 ? chart.AreaLevel.ToString() : "··",
+                Text = chart.AreaLevel > 0 ? chart.AreaLevel.ToString() : " ",
                 FontFamily = new FontFamily("Consolas"),
                 FontSize = 9,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x7A, 0x6E, 0x5C)),
@@ -2675,10 +2700,15 @@ public partial class VoyageView : UserControl, IDisposable
                 DescribeChart(chart), hasDetail);
         }
 
+        // "need detail", not "without modifiers": the second is how the session stores it,
+        // and it also reads like a verdict -- a chart the app looked at and found bare.
+        // What it actually means is work not done yet, which is a thing the user can act on.
+        var awaiting = _session.ChartsAwaitingDetail.Count;
         PanelHeader.Text = _session.Charts.Count == 0
             ? "C H A R T S"
-            : $"C H A R T S      {_session.Charts.Count} read · "
-              + $"{_session.ChartsAwaitingDetail.Count} without modifiers";
+            : awaiting == 0
+                ? $"C H A R T S      {_session.Charts.Count} charts"
+                : $"C H A R T S      {_session.Charts.Count} charts · {awaiting} need detail";
     }
 
     /// <summary>
@@ -2738,9 +2768,17 @@ public partial class VoyageView : UserControl, IDisposable
             var lines = read ? _session.EffectiveSquareModifiers(square) : [];
 
             // Three states, not two: unreachable squares are not work left to do, so they
-            // must not read as "Not read" and sit there looking unfinished.
+            // must not read as unfinished.
+            //
+            // An unread square says NOTHING rather than "Not read". On a fresh session
+            // that is nine rows repeating the same two words down the whole column, at
+            // full row height, saying what the dark accent bar and the header's "8 squares
+            // unread" both already say. Blanking it halves the column and lets the squares
+            // that DO have modifiers be the thing the eye lands on -- which is the question
+            // this list exists to answer. The row stays selectable, and the empty line is
+            // collapsed by the template rather than left as a gap.
             var text = unreachable.Contains(square) ? "No figurine reaches this square"
-                : !read ? "Not read"
+                : !read ? ""
                 : lines.Count == 0 ? "No modifiers"
                 : string.Join("\n", lines);
 
@@ -2903,6 +2941,11 @@ public partial class VoyageView : UserControl, IDisposable
 
         /// <summary>Nothing to do here — shown for completeness, not as outstanding work.</summary>
         public bool Muted { get; }
+
+        /// <summary>Is there a body line at all? An unread square has none, and the
+        /// template collapses it rather than leaving the row padded around a blank.</summary>
+        public Visibility TextVisibility =>
+            string.IsNullOrEmpty(Text) ? Visibility.Collapsed : Visibility.Visible;
 
         /// <summary>Stable identity, so a rebuild can restore the selection.</summary>
         public string Key => $"{Kind}:{Index}";

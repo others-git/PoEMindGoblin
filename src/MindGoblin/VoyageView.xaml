@@ -437,6 +437,15 @@
                                   ToolTip="Guided pass: the app names each chart and square, you copy it in game"/>
                     <TextBlock x:Name="CaptureHint" Foreground="#86A86A" FontSize="12"
                                VerticalAlignment="Center" Margin="12,0,0,0"/>
+                    <!-- capture | plan | sail
+                         Twelve controls at one visual weight is a wall, and the wall hid a
+                         real sequence: you CAPTURE what the game is showing, you say how to
+                         value it, then you act on the answer. Two hairlines are the whole of
+                         what marks it, and deliberately not numbered steps, because the
+                         three groups are not walked in order. Weights and Edit rules both
+                         tune the selected strategy, so they belong beside it rather than in
+                         front of Solve; Stash search spends the solve and Dive again ends
+                         the voyage, so they follow it in the order they are actually used. -->
                     <Rectangle Width="1" Height="22" Fill="{StaticResource Silt}" Margin="18,0"/>
                     <TextBlock Text="Strategy" Foreground="{StaticResource Shade}"
                                VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -451,13 +460,15 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                    <Button Content="Edit rules" Click="OnEditRules" Margin="8,0,0,0"
+                    <Button x:Name="WeightsBtn" Content="Weights" Click="OnToggleWeights" Margin="8,0,0,0"
+                            ToolTip="Category emphasis sliders for the selected profile. 10 is the shipped baseline."/>
+                    <Button Content="Edit rules" Click="OnEditRules" Margin="6,0,0,0"
                             ToolTip="Opens the rule file. Saved edits apply immediately."/>
                     <Button Content="Restore rules" Click="OnRestoreRules" Margin="6,0,0,0"
                             ToolTip="Replace every profile with the shipped ones, discarding your edits."/>
-                    <Button x:Name="WeightsBtn" Content="Weights" Click="OnToggleWeights" Margin="6,0,0,0"
-                            ToolTip="Category emphasis sliders for the selected profile. 10 is the shipped baseline."/>
-                    <Button x:Name="SolveBtn" Content="Solve" Click="OnSolve" Margin="18,0,0,0"
+
+                    <Rectangle Width="1" Height="22" Fill="{StaticResource Silt}" Margin="18,0"/>
+                    <Button x:Name="SolveBtn" Content="Solve" Click="OnSolve"
                             Style="{StaticResource Primary}"/>
                     <!-- The pre-dive ritual, floated over the toolbar after every solve:
                          boxes get juiced BEFORE they are opened, and the orbs cannot be
@@ -478,6 +489,8 @@
                                        FontSize="14" Foreground="#E7D7AB"/>
                         </Border>
                     </Popup>
+                    <Button Content="Stash search" Click="OnCopyStashSearch" Margin="8,0,0,0"
+                            ToolTip="Copy an in-game search string that highlights the solved board's charts in your chart stash"/>
                     <Button x:Name="DiveBtn" Content="Dive again" Click="OnNextVoyage" Margin="8,0,0,0"
                             ToolTip="Voyage complete: spend the placed charts, clear the board, and re-read the rerolled border"/>
                     <!-- The post-dive twin of the alch note: the border rerolled, and a
@@ -497,8 +510,6 @@
                                        FontSize="14" Foreground="#E7D7AB"/>
                         </Border>
                     </Popup>
-                    <Button Content="Stash search" Click="OnCopyStashSearch" Margin="8,0,0,0"
-                            ToolTip="Copy an in-game search string that highlights the solved board's charts in your chart stash"/>
                     <!-- The solve runs on a worker for up to 3 s; this is the sign that
                          the silence is work, not a hang. -->
                     <ProgressBar x:Name="SolveBusy" Width="88" Height="5" IsIndeterminate="True"
@@ -567,6 +578,7 @@
                                                    Foreground="{StaticResource Shade}"/>
                                     </Grid>
                                     <TextBlock Text="{Binding Text}" FontSize="12"
+                                               Visibility="{Binding TextVisibility}"
                                                Foreground="{Binding TextBrush}"
                                                TextWrapping="Wrap" Margin="0,4,0,0"/>
                                 </StackPanel>
@@ -802,7 +814,7 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock x:Name="Status" Text="Open the Voyage screen in game, then Read panel."
+                    <TextBlock x:Name="Status" Text="Open the Voyage screen in game, then Identify Charts."
                                Foreground="{StaticResource Ash}" TextTrimming="CharacterEllipsis"
                                VerticalAlignment="Center"/>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
