@@ -35,6 +35,63 @@ public static class GameWindow
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT { public int X, Y; }
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(POINT point);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr hWnd, uint flags);
+
+    private const uint GA_ROOT = 2;
+
+    /// <summary>
+    /// Is something DRAWN OVER the game?
+    ///
+    /// Capturing is SCREEN scraping: CopyFromScreen copies whatever is at those
+    /// coordinates, so a window in front of a windowed game is captured instead of it
+    /// and the reader decodes that. A code editor's green diff highlighting decoded as
+    /// eighteen Crossings -- the panel is not there and every pixel says something is.
+    ///
+    /// Asking whether the game is FOREGROUND was the obvious test and a useless one:
+    /// the user presses Identify inside this app, so this app is in front every single
+    /// time and the warning fired always. What matters is not which window has focus but
+    /// what is on top of the PIXELS about to be copied -- so ask the desktop directly, at
+    /// points spread across the game's own client area. One sample coming back as the
+    /// game is enough; a second monitor showing this app covers nothing.
+    /// </summary>
+    public static bool IsCovered()
+    {
+        if (Handle() is not { } hwnd) return false;          // not running: not this problem
+        if (!GetClientRect(hwnd, out var rect)) return false;
+
+        var origin = new POINT { X = rect.Left, Y = rect.Top };
+        if (!ClientToScreen(hwnd, ref origin)) return false;
+        var width = rect.Right - rect.Left;
+        var height = rect.Bottom - rect.Top;
+        if (width <= 0 || height <= 0) return false;
+
+        foreach (var (fx, fy) in new[] { (0.5, 0.5), (0.8, 0.3), (0.8, 0.7), (0.2, 0.5) })
+        {
+            var point = new POINT
+            {
+                X = origin.X + (int)(width * fx),
+                Y = origin.Y + (int)(height * fy),
+            };
+            if (GetAncestor(WindowFromPoint(point), GA_ROOT) == hwnd) return false;
+        }
+        return true;
+    }
+
+    /// <summary>The game's main window, or null when it is not running.</summary>
+    private static IntPtr? Handle()
+    {
+        foreach (var process in Process.GetProcesses())
+            using (process)
+                if (MindGoblin.Core.Voyage.GameProcess.IsGame(process.ProcessName)
+                    && process.MainWindowHandle != IntPtr.Zero)
+                    return process.MainWindowHandle;
+        return null;
+    }
+
     /// <summary>
     /// The game's client rectangle in SCREEN coordinates, or null when the game is not
     /// running -- which is not an error worth shouting about, only a reason to fall back.

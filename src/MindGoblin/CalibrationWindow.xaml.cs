@@ -197,6 +197,13 @@ public partial class CalibrationWindow : Window
         try
         {
             var bounds = ScreenCapture.ResolveGameBounds();
+            if (bounds.Source == ScreenCapture.BoundsSource.Detected && GameWindow.IsCovered())
+            {
+                Advise("Something is covering the Path of Exile window. Move it aside, then "
+                       + "press Recapture — a capture taken now would be a picture of "
+                       + "whatever is on top of the game.");
+                return;
+            }
             using var shot = ScreenCapture.CaptureRegion(bounds.Rect);
 
             // The old bitmap holds the FILE open, so it goes before the new one lands on
@@ -261,8 +268,9 @@ public partial class CalibrationWindow : Window
             ? $"No charts detected in {slots} cells"
             : $"{cells.Count} of {slots} cells hold a chart · "
               + string.Join("  ", cells.GroupBy(c => c.Shape).OrderByDescending(g => g.Count())
-                  .Select(g => $"{g.Key}×{g.Count()}"))
-              + $" · {cells.Count(c => c.Level is null)} unreadable levels";
+                  .Select(g => $"{g.Key}×{g.Count()}"));
+        // Levels are deliberately absent: what matters here is whether the GRID is on
+        // the glyphs, and the level comes from the chart text later regardless.
 
         // An almost-empty panel decodes to almost nothing whether the calibration is
         // perfect or hopeless, and reads as "it didn't notice my charts" either way.

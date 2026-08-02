@@ -323,7 +323,8 @@ public sealed class ChartPanelReader
 
         // Gaps between tiles are whole multiples of the pitch -- a sparsely filled panel
         // leaves holes -- so each gap votes for gap/round(gap/prior) and the median wins.
-        var pitch = Pitch([.. columns, .. rows], scaled.Pitch);
+        var pitch = Pitch([.. columns.Select(t => t.Centre), .. rows.Select(t => t.Centre)],
+                          scaled.Pitch);
         if (pitch < 8 || pitch > scaled.Pitch * 2 || pitch < scaled.Pitch / 2) return null;
 
         // EVERYTHING PER-TILE COMES OFF THE MEASURED PITCH, not off the resolution.
@@ -335,13 +336,27 @@ public sealed class ChartPanelReader
         // whole, since a crop changes the resolution and not the pitch.
         var k = pitch / Reference.Pitch;
         var offset = (int)Math.Round(Reference.GlyphOffsetY * k);
+
+        // THE WINDOW IS SIZED FROM THE MEASURED TILE, not from the pitch.
+        //
+        // Scaling the reference GlyphHalf assumes the tile keeps the same size WITHIN
+        // its cell at every UI scale -- the same assumption that had already proved
+        // false for the panel origin and for the caption height. Where it is wrong the
+        // window clips the tile on one side and the reader answers Corner for
+        // everything, which is what eight of ten charts came back as. The reference
+        // window is 1.385x the reference tile; that ratio is what carries over.
+        var tile = Median([.. columns.Select(t => t.Size), .. rows.Select(t => t.Size)]);
+        var half = tile > 0
+            ? (int)Math.Round(tile * 0.69)
+            : (int)Math.Round(Reference.GlyphHalf * k);
+
         return scaled with
         {
-            OriginX = columns[0],
-            OriginY = rows[0] - offset,
+            OriginX = columns[0].Centre,
+            OriginY = rows[0].Centre - offset,
             Pitch = pitch,
             GlyphOffsetY = offset,
-            GlyphHalf = Math.Max(6, (int)Math.Round(Reference.GlyphHalf * k)),
+            GlyphHalf = Math.Max(6, half),
             OccupiedThreshold = Math.Max(20, (int)Math.Round(Reference.OccupiedThreshold * k * k)),
             EdgeMargin = Math.Max(1, (int)Math.Round(Reference.EdgeMargin * k)),
             OpenThreshold = Math.Max(1, (int)(Reference.OpenThreshold * k)),
@@ -356,7 +371,7 @@ public sealed class ChartPanelReader
     /// width of a path, not the spacing of the grid. Bands closer together than half a
     /// pitch belong to the same tile and are merged before anything is measured.
     /// </summary>
-    private static List<int> Tiles(int[] ink, int minInk, double prior)
+    private static List<(int Centre, int Size)> Tiles(int[] ink, int minInk, double prior)
     {
         var bands = new List<(int Start, int End)>();
         var start = -1;
@@ -367,21 +382,31 @@ public sealed class ChartPanelReader
             else if (!on && start >= 0) { bands.Add((start, i - 1)); start = -1; }
         }
 
-        var tiles = new List<int>();
+        var tiles = new List<(int Centre, int Size)>();
         var groupStart = -1;
         var groupEnd = -1;
         foreach (var (s, e) in bands)
         {
             if (groupStart >= 0 && s - groupEnd > prior * 0.5)
             {
-                if (groupEnd - groupStart >= 4) tiles.Add((groupStart + groupEnd) / 2);
+                if (groupEnd - groupStart >= 4)
+                    tiles.Add(((groupStart + groupEnd) / 2, groupEnd - groupStart + 1));
                 groupStart = -1;
             }
             if (groupStart < 0) groupStart = s;
             groupEnd = Math.Max(groupEnd, e);
         }
-        if (groupStart >= 0 && groupEnd - groupStart >= 4) tiles.Add((groupStart + groupEnd) / 2);
+        if (groupStart >= 0 && groupEnd - groupStart >= 4)
+            tiles.Add(((groupStart + groupEnd) / 2, groupEnd - groupStart + 1));
         return tiles;
+    }
+
+    /// <summary>The middle value, so one merged pair cannot move it.</summary>
+    private static double Median(List<int> values)
+    {
+        if (values.Count == 0) return 0;
+        values.Sort();
+        return values[values.Count / 2];
     }
 
     /// <summary>The spacing every gap agrees on, taken as a median so one merged pair

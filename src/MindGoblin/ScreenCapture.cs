@@ -37,10 +37,26 @@ public sealed class ScreenCapture
     private static extern int GetSystemMetrics(int nIndex);
 
     private const int SM_CXSCREEN = 0, SM_CYSCREEN = 1;
+    private const int SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77;
+    private const int SM_CXVIRTUALSCREEN = 78, SM_CYVIRTUALSCREEN = 79;
 
     /// <summary>Size of the primary screen, for turning fractional layouts into pixels.</summary>
     public static Rectangle PrimaryScreenBounds() =>
         new(0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+
+    /// <summary>
+    /// Every monitor, as one rectangle -- and it DOES NOT START AT 0,0.
+    ///
+    /// A monitor to the left of the primary one has negative x, and a game windowed
+    /// there is at, say, (-1986, 253). The whole app reasoned in primary-screen
+    /// coordinates, so it asked for that rectangle and got black: CopyFromScreen does
+    /// not clip to a monitor, it just copies whatever is at coordinates that are not
+    /// there. The calibrator then drew its grid over a blank capture and no amount of
+    /// locating the panel could rescue pixels that were never in the image.
+    /// </summary>
+    public static Rectangle VirtualScreenBounds() =>
+        new(GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN),
+            GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN));
 
     /// <summary>Where a game rectangle came from, so the UI can say so rather than
     /// leaving the user to wonder which resolution the plan was built against.</summary>
