@@ -193,7 +193,9 @@ public class ChartPanelReaderTests
         var scaled = o.ScaledTo(1920, 1080);
         Assert.Equal(1326, scaled.OriginX);          // 1768 * 0.75
         Assert.Equal(314, scaled.OriginY);           // 419 * 0.75
-        Assert.Equal(50, scaled.Pitch);              // 67 * 0.75
+        // EXACT, not rounded. Pitch is multiplied by the row and column, so a rounded
+        // 50 has drifted 2.25px by the tenth row and clips the far arm off the glyph.
+        Assert.Equal(50.25, scaled.Pitch, 6);        // 67 * 0.75
         Assert.Equal(1920, scaled.ReferenceWidth);
     }
 }

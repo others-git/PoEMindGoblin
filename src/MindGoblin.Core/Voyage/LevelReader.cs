@@ -73,6 +73,10 @@ public sealed class LevelReader
                 TextLeft = (int)Math.Round(TextLeft * s),
                 TextRight = (int)Math.Round(TextRight * s),
                 PrefixWidth = (int)Math.Round(PrefixWidth * s),
+                // Slack for baseline drift, in PIXELS, so it shrinks with the caption.
+                // Left fixed it was proportionally three times the search it was tuned
+                // to be, which is search the templates have to be slid through.
+                BaselinePad = Math.Max(1, (int)Math.Round(BaselinePad * s)),
                 ReferenceWidth = width,
                 ReferenceHeight = height,
             };
@@ -91,6 +95,32 @@ public sealed class LevelReader
             var n = 0;
             foreach (var b in m) if (b) n++;
             return n;
+        }
+
+        /// <summary>
+        /// The same digit at another size, by nearest-neighbour sampling of the mask.
+        ///
+        /// The class remarks say glyphs cannot be RE-RENDERED, because PoE's font is not
+        /// installed to render them from -- and that still holds. Resampling a mask
+        /// carved from a real capture is a different claim: it is the same glyph, just
+        /// coarser, and it either matches the screen's digits inside MaxError or it does
+        /// not. Whether it does is a measurement, not an opinion, and the fixtures make
+        /// it one. Without this a 1080p player gets no chart levels at all, which costs
+        /// every tier-sensitive plan.
+        /// </summary>
+        public DigitTemplate ScaledTo(int height)
+        {
+            if (height == Height || height <= 0) return this;
+            var width = Math.Max(1, (int)Math.Round(Width * height / (double)Height));
+            var mask = new bool[height, width];
+            for (var y = 0; y < height; y++)
+                for (var x = 0; x < width; x++)
+                {
+                    var sy = Math.Min(Height - 1, (int)((y + 0.5) * Height / height));
+                    var sx = Math.Min(Width - 1, (int)((x + 0.5) * Width / width));
+                    mask[y, x] = Mask[sy, sx];
+                }
+            return new DigitTemplate(Digit, mask);
         }
 
         public static DigitTemplate FromRows(char digit, IReadOnlyList<string> rows)
@@ -142,7 +172,9 @@ public sealed class LevelReader
         var strip = ExtractDigits(px, o, cx, cellTop);
         if (strip is null) return null;
 
-        var text = Decode(strip, o);
+        // The templates were carved at the reference caption height; resample them to
+        // this screen's, or nothing fits and every level reads blank.
+        var text = Decode(strip, o, TemplatesFor(o.TextHeight));
         return int.TryParse(text, out var level) ? level : null;
     }
 
@@ -194,9 +226,26 @@ public sealed class LevelReader
     /// Walk left to right, consuming whichever template fits best at each position.
     /// Returns null the moment nothing fits -- a partial number is not a number.
     /// </summary>
-    public string? Decode(bool[,] digits, Options? options = null)
+    /// <summary>
+    /// The templates at a caption height, cached: Read is called per cell and resampling
+    /// ten masks sixty times a capture is work for nothing.
+    /// </summary>
+    private IReadOnlyList<DigitTemplate> TemplatesFor(int textHeight)
+    {
+        if (_scaledFor == textHeight) return _scaled!;
+        _scaled = [.. _templates.Select(t => t.ScaledTo(textHeight))];
+        _scaledFor = textHeight;
+        return _scaled;
+    }
+
+    private IReadOnlyList<DigitTemplate>? _scaled;
+    private int _scaledFor = -1;
+
+    public string? Decode(bool[,] digits, Options? options = null,
+                          IReadOnlyList<DigitTemplate>? templates = null)
     {
         var o = options ?? _o;
+        var pool = templates ?? _templates;
         var height = digits.GetLength(0);
         var width = digits.GetLength(1);
         var pad = height - o.TextHeight;
@@ -210,7 +259,7 @@ public sealed class LevelReader
 
             DigitTemplate? best = null;
             var bestError = double.MaxValue;
-            foreach (var t in _templates)
+            foreach (var t in pool)
             {
                 if (x + t.Width > width || t.Ink == 0) continue;
 

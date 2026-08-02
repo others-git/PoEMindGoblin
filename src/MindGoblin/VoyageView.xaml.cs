@@ -802,8 +802,8 @@ public partial class VoyageView : UserControl, IDisposable
         var (row, col) = ((index - 1) / o.Cols, (index - 1) % o.Cols);
         // Client-relative like everything else, plus the window origin -- this is the
         // one place that has to know where on the DESKTOP the game happens to sit.
-        GameInput.HoverAt(game.X + o.OriginX + col * o.Pitch,
-                          game.Y + o.OriginY + row * o.Pitch);
+        GameInput.HoverAt(game.X + (int)Math.Round(o.OriginX + col * o.Pitch),
+                          game.Y + (int)Math.Round(o.OriginY + row * o.Pitch));
         await Task.Delay(140);
         if (!GameInput.SendCopy())
         {
@@ -870,7 +870,7 @@ public partial class VoyageView : UserControl, IDisposable
     /// heuristic -- the chart stash is dark too.
     /// </summary>
     private static System.Drawing.Rectangle? BlueTextBounds(
-        BitmapPixels pixels, System.Drawing.Rectangle region)
+        BitmapPixels pixels, System.Drawing.Rectangle region, double scale)
     {
         int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1, count = 0;
         for (var y = 0; y < pixels.Height; y += 2)
@@ -887,12 +887,18 @@ public partial class VoyageView : UserControl, IDisposable
                 }
             }
         // A real mod line is hundreds of samples; a stray blue pixel is not a tooltip.
-        if (count < 40) return null;
+        // Scaled by AREA, because that is what a sample count is: the same tooltip on a
+        // 1080p screen offers barely half the samples, and a fixed 40 quietly asked a
+        // smaller picture for twice the evidence before it would believe there was a
+        // tooltip there at all.
+        if (count < Math.Max(8, (int)Math.Round(40 * scale * scale))) return null;
         // Padded outwards, and deliberately unclamped: the caller intersects with the
         // screen, which is the only rectangle worth clamping to.
+        var padX = (int)Math.Round(14 * scale);
+        var padY = (int)Math.Round(10 * scale);
         return new System.Drawing.Rectangle(
-            region.X + minX - 14, region.Y + minY - 10,
-            maxX - minX + 28, maxY - minY + 20);
+            region.X + minX - padX, region.Y + minY - padY,
+            maxX - minX + 2 * padX, maxY - minY + 2 * padY);
     }
 
     private string FigurineEdge(int index) =>
@@ -916,7 +922,13 @@ public partial class VoyageView : UserControl, IDisposable
         var screen = ScreenCapture.PrimaryScreenBounds();
         // The board coordinates are PIXELS, so they need the same rescale the panel
         // rectangle gets for free by being fractional -- against the GAME's size.
-        var o = AreaModifierPanel.Options.Load().ForScreen(game.Width, game.Height);
+        var raw = AreaModifierPanel.Options.Load();
+        var o = raw.ForScreen(game.Width, game.Height);
+        // The tooltip search box is measured in pixels too, so it scales with the rest.
+        // Left fixed it swept a third of a 1080p screen looking for blue text and found
+        // whatever else was blue on the way.
+        var s = Math.Min(game.Width / (double)raw.ReferenceWidth,
+                         game.Height / (double)raw.ReferenceHeight);
         var (cx, cy) = FigurinePosition(slot, o);
         var (hx, hy) = (game.X + cx, game.Y + cy);
         GameInput.HoverAt(hx, hy);
@@ -931,10 +943,12 @@ public partial class VoyageView : UserControl, IDisposable
             // text is MAGIC BLUE, unique on this screen: find its bounding box first
             // and read only that.
             var region = System.Drawing.Rectangle.Intersect(screen,
-                new System.Drawing.Rectangle(hx - 1000, hy - 380, 1760, 600));
+                new System.Drawing.Rectangle(
+                    hx - (int)Math.Round(1000 * s), hy - (int)Math.Round(380 * s),
+                    (int)Math.Round(1760 * s), (int)Math.Round(600 * s)));
             System.Drawing.Rectangle? tooltip;
             using (var shot = ScreenCapture.CaptureRegion(region))
-                tooltip = BlueTextBounds(new BitmapPixels(shot), region);
+                tooltip = BlueTextBounds(new BitmapPixels(shot), region, s);
             if (tooltip is not { } found)
             {
                 SetStatus($"Figurine {index}: no tooltip found \u2014 F9 retries it "
@@ -943,8 +957,8 @@ public partial class VoyageView : UserControl, IDisposable
                 return;
             }
             var box = System.Drawing.Rectangle.Intersect(screen, found);
-            var raw = await ScreenOcr.ReadRegionAsync(box, upscale: 3, blueText: true);
-            var mods = AreaModifierPanel.TooltipLines(raw);
+            var lines = await ScreenOcr.ReadRegionAsync(box, upscale: 3, blueText: true);
+            var mods = AreaModifierPanel.TooltipLines(lines);
             if (mods.Count == 0)
             {
                 SetStatus($"Figurine {index}: no tooltip read \u2014 F9 retries it "

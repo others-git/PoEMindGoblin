@@ -194,7 +194,7 @@ public partial class CalibrationWindow : Window
     private void Redraw()
     {
         OriginLabel.Text = $"{_options.OriginX},{_options.OriginY}";
-        PitchLabel.Text = _options.Pitch.ToString();
+        PitchLabel.Text = _options.Pitch.ToString("0.##");
         if (_bitmap is null) return;
 
         // No clone: BitmapPixels borrows, so the window keeps its capture across redraws.
@@ -230,8 +230,11 @@ public partial class CalibrationWindow : Window
         for (var row = 0; row < _options.Rows; row++)
             for (var col = 0; col < _options.Cols; col++)
             {
-                var cx = _options.OriginX + col * _options.Pitch;
-                var cy = _options.OriginY + row * _options.Pitch + _options.GlyphOffsetY;
+                // Rounded exactly where the reader rounds, so the box the user nudges
+                // sits on the pixel the decode actually samples.
+                var cx = (int)Math.Round(_options.OriginX + col * _options.Pitch);
+                var cy = (int)Math.Round(_options.OriginY + row * _options.Pitch)
+                         + _options.GlyphOffsetY;
                 var hit = occupied.TryGetValue((row, col), out var cell);
                 var box = new Rectangle
                 {

@@ -111,6 +111,25 @@ once that captured a live boss fight instead of the app. Use `--render`.
 * **An empty Area Modifiers panel has three meanings** — placeholder (nothing hovered),
   genuinely no modifiers, or the capture missed the panel. The panel's *heading* tells them
   apart, and conflating them either stalls the read or records a failed capture as fact.
+* **EVERY PIXEL CONSTANT IN A READER MUST SCALE, AND A COUNT SCALES DIFFERENTLY FROM A
+  LENGTH.** The calibration is measured at 2560x1440 and rescaled; anything left fixed
+  silently means something *stricter* on a smaller screen. Three of them together decoded
+  eight of twenty-four charts wrongly at 1080p — Crossings as Junctions, Straights as
+  Ends — and each looked harmless alone:
+  `LongestRun`'s density floor (a Crossing's dark arm leaves few green pixels in its
+  column, so under a fixed floor the run SPLIT at the arm, the box collapsed to half the
+  tile, and "the east edge" got measured at the centre); `OpenThreshold` (asking a picture
+  with half the scan lines for the same count of them); and `Pitch`, which is *multiplied*
+  by row and column — round it once and the error accumulates a cell down the panel.
+  Lengths scale with `s`, sample COUNTS with `s²`, and thresholds must round DOWN or they
+  tighten as the picture shrinks. `ShapesDecodeIdenticallyAtEveryResolution` pins it.
+* **The level TEMPLATES cannot be re-rendered, only resampled.** They are carved from a
+  real capture (no installed font matches Fontin), so at another resolution they are
+  resampled to the caption height — and a resampled mask is exactly the kind of thing this
+  reader distrusts, so the rule is enforced directly: whatever it reads must match the
+  reference, and everything else reads null. Below 1440p most levels still read blank; a
+  missing level is recoverable, a fabricated one corrupts the plan. Closing that gap needs
+  templates carved from a NATIVE capture at that resolution (`Learn`), not better maths.
 * **Windows OCR reads PoE prose well and small numerals badly** — it read `L:76` as
   `L.'j6`. Chart levels go through template matching; only modifier text goes through OCR.
 * **PoE's font (Fontin) is not on Windows.** A sweep of every system `.ttf` at every

@@ -30,7 +30,8 @@ public class CalibrationScalingTests
 
         Assert.Equal((int)Math.Round(o.OriginX * 0.75), scaled.OriginX);
         Assert.Equal((int)Math.Round(o.OriginY * 0.75), scaled.OriginY);
-        Assert.Equal((int)Math.Round(o.Pitch * 0.75), scaled.Pitch);
+        // Unrounded: rounding a pitch that gets multiplied by row and column accumulates.
+        Assert.Equal(o.Pitch * 0.75, scaled.Pitch, 6);
         Assert.Equal(1920, scaled.ReferenceWidth);
     }
 

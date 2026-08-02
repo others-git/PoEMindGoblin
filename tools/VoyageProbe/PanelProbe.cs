@@ -94,8 +94,11 @@ public static class PanelProbe
         {
             for (var col = 0; col < scaled.Cols; col++)
             {
-                var cx = scaled.OriginX + col * scaled.Pitch;
-                var cy = scaled.OriginY + row * scaled.Pitch + scaled.GlyphOffsetY;
+                // Rounded where the reader rounds: the overlay has to sit on the pixel
+                // the decode sampled, not half a cell away from it.
+                var cx = (int)Math.Round(scaled.OriginX + col * scaled.Pitch);
+                var cy = (int)Math.Round(scaled.OriginY + row * scaled.Pitch)
+                         + scaled.GlyphOffsetY;
                 var h = scaled.GlyphHalf;
                 var cell = cells.FirstOrDefault(c => c.Row == row && c.Col == col);
                 g.DrawRectangle(cell is null ? empty : found, cx - h, cy - h, h * 2, h * 2);

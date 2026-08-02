@@ -36,7 +36,18 @@ public sealed class ChartPanelReader
         public int OriginY { get; init; } = 419;
 
         /// <summary>Cell-to-cell spacing. Square in practice.</summary>
-        public int Pitch { get; init; } = 67;
+        /// <summary>
+        /// Cell-to-cell spacing, FRACTIONAL on purpose.
+        ///
+        /// It is multiplied by the row and column, so any rounding here compounds across
+        /// the grid instead of staying put. At 1080p the true pitch is 50.25 and an
+        /// integer 50 has drifted 2.25 pixels by the tenth row -- on a 28-pixel glyph
+        /// window that is enough to push the tile off-centre and clip the arm on the far
+        /// side, which decoded Crossings as Junctions and Straights as Ends. Eight of
+        /// twenty-four charts came out with the wrong shape, and the wrongness grew with
+        /// the row and column exactly as an accumulating error does.
+        /// </summary>
+        public double Pitch { get; init; } = 67;
 
         public int Rows { get; init; } = 10;
         public int Cols { get; init; } = 6;
@@ -85,10 +96,19 @@ public sealed class ChartPanelReader
             {
                 OriginX = (int)Math.Round(OriginX * sx),
                 OriginY = (int)Math.Round(OriginY * sy),
-                Pitch = (int)Math.Round(Pitch * s),
+                Pitch = Pitch * s,          // never rounded: see the remarks on Pitch
                 GlyphHalf = Math.Max(6, (int)Math.Round(GlyphHalf * s)),
                 GlyphOffsetY = (int)Math.Round(GlyphOffsetY * s),
                 OccupiedThreshold = Math.Max(20, (int)Math.Round(OccupiedThreshold * s * s)),
+                // Both are PIXEL COUNTS measured on the reference glyph, so they have to
+                // shrink with it or they mean something stricter on every smaller screen.
+                // A tile's arm spans about four scan lines at 1440p and two at 1080p;
+                // demanding two either way is demanding twice as much of the smaller
+                // picture, and it read Straights as Ends because one line was all that
+                // survived. Truncated, and floored at one: a threshold that rounds UP as
+                // the picture shrinks is the failure this is fixing.
+                EdgeMargin = Math.Max(1, (int)Math.Round(EdgeMargin * s)),
+                OpenThreshold = Math.Max(1, (int)(OpenThreshold * s)),
                 ReferenceWidth = width,
                 ReferenceHeight = height,
             };
@@ -214,7 +234,20 @@ public sealed class ChartPanelReader
     /// rather than stray glow. Ties go to the earlier run; a fleck loses either way.</summary>
     private static (int Min, int Max) LongestRun(int[] counts)
     {
-        const int floor = 3;
+        // THE FLOOR IS A FRACTION OF THE WINDOW, NOT A PIXEL COUNT.
+        //
+        // It exists to stop a detached fleck of glow joining the glyph's bounding box.
+        // As a hardcoded 3 it did that at the calibrated 1440p and quietly did something
+        // else at 1080p: the dark arm of a Crossing runs the full height of the tile, so
+        // the column it occupies holds only a few green pixels, and on a smaller tile
+        // that fell under 3. The run SPLIT at the arm, the box collapsed to one half of
+        // the glyph, and "the east edge" was then measured at the tile's centre -- where
+        // there is no opening. Crossings came back as Junctions and Straights as Ends,
+        // losing whichever side the box had been cut off from.
+        //
+        // A twelfth of the window reproduces the 3 that was tuned at 1440p exactly, and
+        // means the same thing at every other size.
+        var floor = Math.Max(2, counts.Length / 12);
         int bestMin = 0, bestMax = -1, runStart = -1;
         for (var i = 0; i <= counts.Length; i++)
         {
@@ -244,8 +277,10 @@ public sealed class ChartPanelReader
         {
             for (var col = 0; col < o.Cols; col++)
             {
-                var cx = o.OriginX + col * o.Pitch;
-                var cellY = o.OriginY + row * o.Pitch;
+                // Rounded HERE and only here, so the error stays under half a pixel
+                // instead of accumulating a cell at a time down the panel.
+                var cx = (int)Math.Round(o.OriginX + col * o.Pitch);
+                var cellY = (int)Math.Round(o.OriginY + row * o.Pitch);
                 var cy = cellY + o.GlyphOffsetY;
                 if (ReadCellAt(pixels, o, cx, cy, row, col) is not { } cell) continue;
                 // Only bother with the caption once a glyph is confirmed -- an empty cell

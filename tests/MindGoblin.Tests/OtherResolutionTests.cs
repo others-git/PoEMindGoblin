@@ -103,4 +103,116 @@ public class OtherResolutionTests
         Assert.Equal(24, cells.Count);
         Assert.All(cells, c => Assert.NotNull(c.Level));
     }
+
+    /// <summary>
+    /// THE REPORTED BUG. Every chart must decode to the SAME SHAPE at 1080p as at the
+    /// resolution the reader was calibrated against — a Crossing read as a Corner sends
+    /// a chart to a square whose connections it does not have, and the plan is then
+    /// wrong in a way the board drawing makes look deliberate.
+    ///
+    /// Three absolutes did it, all of them pixel counts tuned on the reference glyph and
+    /// left fixed while the glyph shrank:
+    ///   * LongestRun's density floor. The dark arm of a Crossing runs the tile's full
+    ///     height, so its column holds few green pixels; under the floor the run SPLIT at
+    ///     the arm, the bounding box collapsed to one half of the tile, and "the east
+    ///     edge" was measured at the centre — where there is no opening.
+    ///   * OpenThreshold, which asked a picture with half the scan lines for the same
+    ///     count of them.
+    ///   * Pitch, rounded then multiplied, drifting a cell's worth down the panel.
+    /// </summary>
+    [Fact]
+    public void ShapesDecodeIdenticallyAtEveryResolution()
+    {
+        using var reference = new BitmapPixels(Fixture("voyage-panel.png"));
+        using var smaller = new BitmapPixels(Fixture(SmallerScreen));
+
+        var expected = new ChartPanelReader().Read(reference).ToDictionary(c => c.Index);
+        var actual = new ChartPanelReader().Read(smaller).ToDictionary(c => c.Index);
+
+        Assert.Equal(expected.Keys.Order(), actual.Keys.Order());
+
+        var wrong = expected.Keys
+            .Where(i => expected[i].Shape != actual[i].Shape)
+            .Select(i => $"#{i}: {expected[i].Shape} became {actual[i].Shape}")
+            .ToList();
+        Assert.True(wrong.Count == 0, string.Join("; ", wrong));
+    }
+
+    /// <summary>The openings themselves, not just the shape they add up to: a Crossing
+    /// that keeps its name while losing a rotation would still be placed wrongly.</summary>
+    [Fact]
+    public void EveryOpeningSurvivesTheRescale()
+    {
+        using var reference = new BitmapPixels(Fixture("voyage-panel.png"));
+        using var smaller = new BitmapPixels(Fixture(SmallerScreen));
+
+        var expected = new ChartPanelReader().Read(reference).ToDictionary(c => c.Index);
+        var actual = new ChartPanelReader().Read(smaller).ToDictionary(c => c.Index);
+
+        foreach (var i in expected.Keys)
+        {
+            var a = expected[i];
+            var b = actual[i];
+            Assert.True(a.North == b.North && a.East == b.East
+                        && a.South == b.South && a.West == b.West,
+                $"#{i} openings changed: {a} became {b}");
+        }
+    }
+
+    /// <summary>
+    /// A LEVEL IS NEVER FABRICATED. The templates are resampled to the screen's caption
+    /// height so a smaller screen can read levels at all, and resampling is the one thing
+    /// this reader was built to distrust — so the standing rule is checked directly:
+    /// whatever it does read must agree with the reference, and the rest must read null.
+    /// A missing level is recoverable; a wrong one silently corrupts a plan.
+    /// </summary>
+    [Fact]
+    public void ARescaledTemplateNeverReadsTheWrongLevel()
+    {
+        using var reference = new BitmapPixels(Fixture("voyage-panel.png"));
+        using var smaller = new BitmapPixels(Fixture(SmallerScreen));
+
+        var expected = new ChartPanelReader().Read(reference).ToDictionary(c => c.Index);
+        var actual = new ChartPanelReader().Read(smaller).ToDictionary(c => c.Index);
+
+        var wrong = expected.Keys
+            .Where(i => actual[i].Level is not null && actual[i].Level != expected[i].Level)
+            .Select(i => $"#{i}: {expected[i].Level} read as {actual[i].Level}")
+            .ToList();
+        Assert.True(wrong.Count == 0, string.Join("; ", wrong));
+
+        // And it must read SOME of them, or the resampling is not earning its place.
+        Assert.True(actual.Values.Any(c => c.Level is not null),
+                    "no level decoded at all on the smaller screen");
+    }
+
+    /// <summary>
+    /// The pixel-count thresholds must reduce to their tuned values at the reference and
+    /// shrink from there. Stated as a property rather than left to the fixtures, because
+    /// the next absolute somebody adds will look just as harmless as these three did.
+    /// </summary>
+    [Theory]
+    [InlineData(2560, 1440)]
+    [InlineData(1920, 1080)]
+    [InlineData(3840, 2160)]
+    public void PixelThresholdsScaleWithThePicture(int width, int height)
+    {
+        var reference = new ChartPanelReader.Options();
+        var scaled = reference.ScaledTo(width, height);
+        var s = Math.Min(width / 2560.0, height / 1440.0);
+
+        Assert.Equal(reference.Pitch * s, scaled.Pitch, 6);
+        Assert.True(scaled.OpenThreshold >= 1);
+        Assert.True(scaled.EdgeMargin >= 1);
+        if (s < 1)
+        {
+            Assert.True(scaled.OpenThreshold <= reference.OpenThreshold);
+            Assert.True(scaled.EdgeMargin <= reference.EdgeMargin);
+        }
+        if (s == 1)
+        {
+            Assert.Equal(reference.OpenThreshold, scaled.OpenThreshold);
+            Assert.Equal(reference.EdgeMargin, scaled.EdgeMargin);
+        }
+    }
 }
