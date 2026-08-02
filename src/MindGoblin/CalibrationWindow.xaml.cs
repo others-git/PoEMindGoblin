@@ -56,7 +56,14 @@ public partial class CalibrationWindow : Window
             // rescales its own copy to whatever it is decoding, so calibrating in the
             // stored reference space meant a nudge of 1 moved the drawn box by 1 and
             // the actual decode by the scale factor -- the two never agreeing.
-            _options = _options.ForScreen(_bitmap.Width, _bitmap.Height);
+            // SEEDED FROM THE CAPTURE, not from the stored numbers.
+            //
+            // It opened on the calibration rescaled to the screen, which is exactly the
+            // thing that has drifted -- so the grid started visibly off the tiles and
+            // the first job was always to undo that by hand. Locate finds the grid in
+            // the pixels; the stored calibration is the fallback for when it cannot.
+            _options = ChartPanelReader.Locate(new BitmapPixels(_bitmap), _options)
+                       ?? _options.ForScreen(_bitmap.Width, _bitmap.Height);
 
             LoadPresets();
             // The window itself takes the keys. Every button is Focusable="False", so
@@ -174,11 +181,13 @@ public partial class CalibrationWindow : Window
         Redraw();
     }
 
+    /// <summary>Back to the grid found in the capture, which is where it opened.</summary>
     private void OnReset(object sender, RoutedEventArgs e)
     {
-        _options = _bitmap is null
-            ? new ChartPanelReader.Options()
-            : new ChartPanelReader.Options().ForScreen(_bitmap.Width, _bitmap.Height);
+        var shipped = new ChartPanelReader.Options();
+        _options = _bitmap is null ? shipped
+            : ChartPanelReader.Locate(new BitmapPixels(_bitmap), shipped)
+              ?? shipped.ForScreen(_bitmap.Width, _bitmap.Height);
         Redraw();
     }
 

@@ -268,9 +268,155 @@ public sealed class ChartPanelReader
     /// <summary>The path itself is drawn in near-black.</summary>
     private static bool IsDark(int r, int g, int b) => r + g + b < 150;
 
+    /// <summary>
+    /// Find the panel grid IN THE IMAGE, instead of trusting a scaled constant.
+    ///
+    /// The calibration is measured at one resolution and rescaled, and that assumes the
+    /// game's UI scales linearly with it. Measured against a native 1080p capture it does
+    /// not: the grid landed 10-20px from where the arithmetic put it, which was enough to
+    /// drop three tiles entirely and read every remaining shape wrongly -- while still
+    /// hitting the right CELLS, so the panel looked plausible and was quietly wrong.
+    ///
+    /// The tiles are the most distinctive thing on the screen: saturated green, on a
+    /// fixed pitch, in up to six columns and ten rows. That is enough to recover the
+    /// origin and the pitch directly, which needs no calibration and cannot drift with a
+    /// patch that moves the panel. Returns null when the panel is too sparse to be sure
+    /// -- one lone chart says nothing about spacing -- and the caller keeps the
+    /// calibration it already had.
+    /// </summary>
+    /// <summary>The shipped measurement, as the ratios everything per-tile is kept in.</summary>
+    private static readonly Options Reference = new();
+
+    public static Options? Locate(IPixels pixels, Options fallback)
+    {
+        var greenCols = new int[pixels.Width];
+        var greenRows = new int[pixels.Height];
+        for (var y = 0; y < pixels.Height; y++)
+            for (var x = 0; x < pixels.Width; x++)
+            {
+                var (r, g, b) = pixels.At(x, y);
+                if (!IsGreen(r, g, b)) continue;
+                greenCols[x]++;
+                greenRows[y]++;
+            }
+
+        // A tile is several pixels of green stacked up; stray UI green is one or two.
+        var scaled = fallback.ForScreen(pixels.Width, pixels.Height);
+        var minInk = Math.Max(3, (int)Math.Round(4 * pixels.Height / 1440.0));
+        // The calibration is the PRIOR for how far apart tiles are, never the answer:
+        // it only has to be close enough to tell one tile from the next.
+        var columns = Tiles(greenCols, minInk, scaled.Pitch);
+        var rows = Tiles(greenRows, minInk, scaled.Pitch);
+        if (columns.Count < 3 || rows.Count < 2) return null;
+
+        // Gaps between tiles are whole multiples of the pitch -- a sparsely filled panel
+        // leaves holes -- so each gap votes for gap/round(gap/prior) and the median wins.
+        var pitch = Pitch([.. columns, .. rows], scaled.Pitch);
+        if (pitch < 8 || pitch > scaled.Pitch * 2 || pitch < scaled.Pitch / 2) return null;
+
+        // EVERYTHING PER-TILE COMES OFF THE MEASURED PITCH, not off the resolution.
+        //
+        // The tile is what these numbers describe, and the pitch is the tile's size --
+        // measured, here, rather than inferred from a screen dimension that only
+        // predicts it if the game's UI scales exactly linearly, which it does not. This
+        // also makes the reader indifferent to a capture that is cropped rather than
+        // whole, since a crop changes the resolution and not the pitch.
+        var k = pitch / Reference.Pitch;
+        var offset = (int)Math.Round(Reference.GlyphOffsetY * k);
+        return scaled with
+        {
+            OriginX = columns[0],
+            OriginY = rows[0] - offset,
+            Pitch = pitch,
+            GlyphOffsetY = offset,
+            GlyphHalf = Math.Max(6, (int)Math.Round(Reference.GlyphHalf * k)),
+            OccupiedThreshold = Math.Max(20, (int)Math.Round(Reference.OccupiedThreshold * k * k)),
+            EdgeMargin = Math.Max(1, (int)Math.Round(Reference.EdgeMargin * k)),
+            OpenThreshold = Math.Max(1, (int)(Reference.OpenThreshold * k)),
+        };
+    }
+
+    /// <summary>
+    /// Tile centres along one axis.
+    ///
+    /// A tile's own green is BROKEN UP by the dark path drawn across it, so the raw ink
+    /// bands are sub-tile features -- taking the smallest gap between them measured the
+    /// width of a path, not the spacing of the grid. Bands closer together than half a
+    /// pitch belong to the same tile and are merged before anything is measured.
+    /// </summary>
+    private static List<int> Tiles(int[] ink, int minInk, double prior)
+    {
+        var bands = new List<(int Start, int End)>();
+        var start = -1;
+        for (var i = 0; i <= ink.Length; i++)
+        {
+            var on = i < ink.Length && ink[i] >= minInk;
+            if (on && start < 0) start = i;
+            else if (!on && start >= 0) { bands.Add((start, i - 1)); start = -1; }
+        }
+
+        var tiles = new List<int>();
+        var groupStart = -1;
+        var groupEnd = -1;
+        foreach (var (s, e) in bands)
+        {
+            if (groupStart >= 0 && s - groupEnd > prior * 0.5)
+            {
+                if (groupEnd - groupStart >= 4) tiles.Add((groupStart + groupEnd) / 2);
+                groupStart = -1;
+            }
+            if (groupStart < 0) groupStart = s;
+            groupEnd = Math.Max(groupEnd, e);
+        }
+        if (groupStart >= 0 && groupEnd - groupStart >= 4) tiles.Add((groupStart + groupEnd) / 2);
+        return tiles;
+    }
+
+    /// <summary>The spacing every gap agrees on, taken as a median so one merged pair
+    /// or one stray band cannot move it.</summary>
+    private static double Pitch(IReadOnlyList<int> centres, double prior)
+    {
+        var votes = new List<double>();
+        for (var i = 1; i < centres.Count; i++)
+        {
+            double gap = centres[i] - centres[i - 1];
+            if (gap <= 0) continue;
+            var steps = Math.Max(1, Math.Round(gap / prior));
+            votes.Add(gap / steps);
+        }
+        if (votes.Count == 0) return 0;
+        votes.Sort();
+        return votes[votes.Count / 2];
+    }
+
+    /// <summary>
+    /// Decode with the calibration AND with the grid found in the image, and keep
+    /// whichever read the panel better.
+    ///
+    /// Locating the grid is the right answer when the calibration has drifted -- which
+    /// it has at every resolution but the measured one -- but it is a heuristic over
+    /// green pixels and there is no reason to trust it blind. Scoring both and taking
+    /// the winner cannot do worse than the calibration alone, which is the property that
+    /// matters: this reader is the first thing the app does, and a clever failure here
+    /// looks exactly like an empty panel.
+    ///
+    /// A cell that decodes to a RECOGNISED shape is the score. Cells alone would reward
+    /// a grid that straddles tiles and finds green everywhere.
+    /// </summary>
     public IReadOnlyList<ReadCell> Read(IPixels pixels)
     {
-        var o = _o.ForScreen(pixels.Width, pixels.Height);
+        var calibrated = ReadWith(pixels, _o.ForScreen(pixels.Width, pixels.Height));
+        if (Locate(pixels, _o) is not { } located) return calibrated;
+
+        var found = ReadWith(pixels, located);
+        return Confidence(found) > Confidence(calibrated) ? found : calibrated;
+    }
+
+    private static int Confidence(IReadOnlyList<ReadCell> cells) =>
+        cells.Count(c => c.Shape is not null);
+
+    private IReadOnlyList<ReadCell> ReadWith(IPixels pixels, Options o)
+    {
 
         var found = new List<ReadCell>();
         for (var row = 0; row < o.Rows; row++)

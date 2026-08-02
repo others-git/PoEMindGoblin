@@ -187,6 +187,60 @@ public class OtherResolutionTests
     }
 
     /// <summary>
+    /// A NATIVE 1080p capture, from the player who reported the bug — not a downscale of
+    /// the 1440p one. It matters that this is real: the resampled fixture agreed with the
+    /// reference once the thresholds were fixed, while this one still failed, because the
+    /// game's UI does not scale linearly with the resolution. The grid landed 10-20px
+    /// from where the arithmetic put it, which dropped three tiles outright and read
+    /// every remaining shape wrongly — while still hitting the right CELLS, so the panel
+    /// looked plausible and was quietly wrong.
+    ///
+    /// It is also CROPPED, which is the point of locating the grid rather than computing
+    /// it: a crop changes the resolution and not the pitch, and the reader now measures
+    /// the pitch.
+    /// </summary>
+    [Fact]
+    public void ANativeCaptureReadsEveryChartWithoutCalibration()
+    {
+        using var px = new BitmapPixels(Fixture("voyage-panel-native-1080p.png"));
+        var cells = new ChartPanelReader().Read(px).ToDictionary(c => c.Index);
+
+        // Thirteen charts, in the cells the game shows them in.
+        Assert.Equal(13, cells.Count);
+        Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8, 9, 41, 42, 54, 57], cells.Keys.Order());
+
+        // And the shapes are the ones on screen -- read off the capture by eye, because
+        // a decode that agrees only with itself proves nothing.
+        Assert.Equal(ChartShape.Straight, cells[1].Shape);
+        Assert.Equal(ChartShape.Corner, cells[2].Shape);
+        Assert.Equal(ChartShape.Corner, cells[3].Shape);
+        Assert.Equal(ChartShape.Junction, cells[4].Shape);
+        Assert.Equal(ChartShape.Corner, cells[5].Shape);
+        Assert.Equal(ChartShape.End, cells[6].Shape);
+        Assert.Equal(ChartShape.Junction, cells[7].Shape);
+        Assert.Equal(ChartShape.Junction, cells[8].Shape);
+        Assert.Equal(ChartShape.Straight, cells[9].Shape);
+        Assert.All(cells.Values, c => Assert.NotNull(c.Shape));
+    }
+
+    /// <summary>
+    /// Locating the grid must never make the calibrated case worse. It is a heuristic
+    /// over green pixels and this reader is the first thing the app does, so the decode
+    /// runs both ways and keeps the better one — the property being pinned here is that
+    /// the reference capture is unharmed by the machinery that rescued the other.
+    /// </summary>
+    [Fact]
+    public void LocatingTheGridDoesNotDisturbTheMeasuredResolution()
+    {
+        using var px = new BitmapPixels(Fixture("voyage-panel.png"));
+        var cells = new ChartPanelReader().Read(px);
+
+        Assert.Equal(24, cells.Count);
+        Assert.All(cells, c => Assert.NotNull(c.Shape));
+        Assert.All(cells, c => Assert.NotNull(c.Level));
+    }
+
+    /// <summary>
     /// The pixel-count thresholds must reduce to their tuned values at the reference and
     /// shrink from there. Stated as a property rather than left to the fixtures, because
     /// the next absolute somebody adds will look just as harmless as these three did.
