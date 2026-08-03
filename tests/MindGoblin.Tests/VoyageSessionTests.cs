@@ -107,6 +107,31 @@ public class VoyageSessionTests
         Assert.Equal(3, Assert.Single(s.ByPanelIndex.Keys));
     }
 
+    /// <summary>
+    /// The reroll button's half of the work: the border rerolls for sulphur, not only on
+    /// completion, so forgetting it must not cost the charts. BOTH border sources go --
+    /// leaving the square reads would strand stale board modifiers on any square a fresh
+    /// figurine capture did not cover, which is the direction nobody would look.
+    /// </summary>
+    [Fact]
+    public void ClearingTheBorderKeepsEveryChart()
+    {
+        var s = new VoyageSession();
+        s.ApplyPanelRead(Crossings(4));
+        s.ApplyChartText(1, "Storm Hollow\nMonster Pack Size: +30%");
+        s.ApplyFigurineText(2, "Adjacent Areas have increased Quantity");
+        s.ApplySquareModifiers(3, ["Area contains 4 additional Golden Lanterns"]);
+
+        Assert.Equal(2, s.ClearBorderReadings());
+
+        Assert.Empty(s.Figurines);
+        Assert.Empty(s.SquareModifiers);
+        Assert.Empty(s.BoardModifiers());
+        Assert.Equal(4, s.Charts.Count);
+        Assert.Equal("Storm Hollow", s.ByPanelIndex[1].Name);   // hover detail survives
+        Assert.Equal(0, s.ClearBorderReadings());               // idempotent
+    }
+
     [Fact]
     public void TheMeasuredShapeBeatsAnythingTheTextClaims()
     {

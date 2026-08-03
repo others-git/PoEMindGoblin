@@ -1653,6 +1653,48 @@ public partial class VoyageView : UserControl, IDisposable
     }
 
     /// <summary>
+    /// The border rerolled: forget every reading of it and arm the slurp to walk the new
+    /// one. Charts are deliberately untouched -- rerolling the border does not spend or
+    /// change a single chart, and re-reading forty of them would be the opposite of a
+    /// convenience.
+    ///
+    /// The old plan goes with the readings. It was scored against border modifiers that
+    /// no longer exist, so leaving it on screen beside an empty border would show a board
+    /// whose value nothing on the panel supports any more.
+    /// </summary>
+    private void OnRerollBorder(object sender, RoutedEventArgs e)
+    {
+        var dropped = _session.ClearBorderReadings();
+        _solution = null;
+        _steps = [];
+        _badges = new Dictionary<int, VoyageSession.SquareBadges>();
+        _summary.Clear();
+        SolveInfo.Text = "";
+        _alertsOpen = false;
+
+        // Squares are the read target again, and the skip list was about the border that
+        // just went away -- a square skipped last time is not skipped on a new one.
+        _skipped.Clear();
+        SetTarget(Target.Square, 0);
+        Persist();
+        RefreshPanel();
+        RefreshBoard();
+        RebuildModifiers();
+        RefreshProgress();
+
+        SetStatus(dropped == 0
+            ? "Border was already unread — arming the slurp."
+            : $"Border cleared ({dropped} reading{(dropped == 1 ? "" : "s")} dropped). "
+              + "Charts kept.");
+
+        // Arming routes through OnSlurpChanged, which identifies first and stands the
+        // slurp down by itself if the game is not on screen -- so a failed arm leaves a
+        // cleared border and says why, rather than a half-armed one.
+        if (SlurpBtn.IsChecked == true) SlurpBtn.IsChecked = false;
+        SlurpBtn.IsChecked = true;
+    }
+
+    /// <summary>
     /// What the solved board is worth.
     ///
     /// This replaced a list that repeated the plan -- nine rows of "square 1 <- chart 23"

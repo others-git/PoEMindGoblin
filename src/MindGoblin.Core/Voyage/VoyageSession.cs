@@ -1029,9 +1029,27 @@ public sealed class VoyageSession
         foreach (var index in placedCharts)
             if (RemoveChart(index)) spent++;
 
+        ClearBorderReadings();
+        return spent;
+    }
+
+    /// <summary>
+    /// Forget the whole border, keeping every chart. What the reroll button needs: the
+    /// border rerolls for sulphur as well as on completion, and after a reroll every
+    /// reading of it is stale while the panel is untouched.
+    ///
+    /// Clears BOTH sources, because both are the border. Leaving the square reads behind
+    /// would leave stale board modifiers on any square a fresh figurine capture did not
+    /// happen to cover -- figurines take precedence per cell, so the staleness would
+    /// survive exactly where nobody looked.
+    /// </summary>
+    /// <returns>How many readings were dropped.</returns>
+    public int ClearBorderReadings()
+    {
+        var dropped = _squareModifiers.Count + _figurines.Count;
         _squareModifiers.Clear();
         _figurines.Clear();
-        return spent;
+        return dropped;
     }
 
     /// <summary>Capture everything read so far, for writing to disk.</summary>
