@@ -24,11 +24,22 @@ public enum Stat
     /// <summary>Scarab drops. Their own stat: jackpot-shaped, worth chasing alone.</summary>
     Scarabs,
 
-    /// <summary>Messages in Bottles: ~39c each, sellable unopened. The chase.</summary>
+    /// <summary>Messages in Bottles: the chase. Sellable UNOPENED because it is
+    /// Stackable Currency with "Right click to open" -- a mechanical reason, not a
+    /// convention. The ~39c is UNVERIFIED: poe.watch does not track the item at all.
+    /// The outcome table is known (Mageblood, Headhunter, Hinekora's Lock, Divine
+    /// stacks, Broken Mirror...), which carries the GRAIL tier on its own.</summary>
     Bottles,
 
-    /// <summary>Strongboxes, named and generic. Dredged currency rolls them mid-voyage
-    /// since 3.29.1, so their rare-fountain half also rides the rare channel.</summary>
+    /// <summary>Strongboxes, named and generic; their rare-fountain half also rides the
+    /// rare channel. Two corrections from the 2026-08-03 pass: 3.29.1 says dredged
+    /// currency may be USED ON strongboxes and essences -- nothing about spawn rates,
+    /// so "rolls them mid-voyage" was a drifted paraphrase -- and the ~4 rares per box
+    /// is OUR estimate with no reachable source. What IS confirmed: Vesper's
+    /// ScatterObjects1 carries `map strongboxes are rare [1]`, so chart strongboxes are
+    /// Rare rarity by default once unlocked, and area quantity DOES multiply their
+    /// contents (the "quantity does not affect strongboxes" folklore is about gear).
+    /// </summary>
     Strongboxes,
 
     /// <summary>The other openables: barrels, anchors, cages, fish, jellyfish, and the
@@ -39,8 +50,13 @@ public enum Stat
     Lanterns,
 
     /// <summary>Dead Man's Sulphur, in judged chaos-equivalents (~5c per point scale
-    /// kept from the field-tuned era; sulphur is untradeable so this is a JUDGMENT,
-    /// not a market fact). Per-rare drop = 300/rare x 10 rares (observed).</summary>
+    /// kept from the field-tuned era). It DOES trade -- 0.01c, 44 listings (poe.watch,
+    /// Allflame, 2026-08-03) -- so ~5c is a UTILITY judgement about what a board reroll
+    /// is worth to the plan, not a market price, and the two must not be conflated.
+    /// Area-HARVESTED from coral by lantern, not a monster drop: exactly one figurine
+    /// ("Rare Monsters in adjacent Areas drop Dead Man's Sulphur") makes monsters yield
+    /// it, and it is the only sulphur term a rare-count multiplier may touch.
+    /// Per-rare drop = 300/rare x 10 rares (observed).</summary>
     Sulphur,
 
     /// <summary>Gold: found%, stat points, equipment conversion.</summary>
@@ -136,8 +152,9 @@ public static class StatText
         Stat.Scarabs =>
             "Scarab drops. Jackpot-shaped, so they are their own stat rather than currency.",
         Stat.Bottles =>
-            "Messages in a Bottle: ~39c each and sellable UNOPENED. The chase — a hidden "
-            + "voyage mod that cannot be crafted for, only revealed.",
+            "Messages in a Bottle: sellable UNOPENED, and they open into the likes of "
+            + "Mageblood and Hinekora's Lock. The chase — a hidden voyage mod that "
+            + "cannot be crafted for, only revealed.",
         Stat.Strongboxes =>
             "Strongboxes, named and generic. Rolled before opening they also pour out "
             + "rares, so they feed any per-rare payout next to them.",
@@ -148,8 +165,8 @@ public static class StatText
             "Golden Lanterns and free lantern placement. Since 3.29.0b a lantern also "
             + "grants quantity for the rest of the run, so grabbing them early pays.",
         Stat.Sulphur =>
-            "Dead Man's Sulphur, which buys board rerolls and Allflame crafts. Untradeable, "
-            + "so its chaos value here is a judgement rather than a market price.",
+            "Dead Man's Sulphur, which buys board rerolls and Allflame crafts. It trades "
+            + "for almost nothing, so the value here is what a reroll is worth to you.",
         Stat.Gold => "Gold, for the Currency Exchange and Kingsmarch.",
         Stat.Quantity =>
             "Item Quantity in percentage points. It multiplies most of the rest, and the "
@@ -467,10 +484,16 @@ public sealed class Strategy
 }
 
 /// <summary>
-/// The shipped strategies: the twelve old profiles re-expressed as weight presets over
-/// the normalized catalog. Where a profile encoded a market fact, that fact moved into
-/// the catalog and the weight became 1; where it encoded preference, the preference is
-/// the weight. Tileset lessons ride in ExtraRules verbatim.
+/// The shipped strategies: weight presets over the normalized catalog. Where a profile
+/// encoded a market fact, that fact moved into the catalog and the weight became 1;
+/// where it encoded preference, the preference is the weight. Tileset lessons ride in
+/// ExtraRules verbatim.
+///
+/// SIX of them, deliberately. Seven presets were retired as objectives nobody here
+/// sails, and retiring one is never just a deletion: the catalog still prices what it
+/// scored, so the stat needs a home or a reward ends up valued by nobody, and anything
+/// DERIVED from the shipped set (the trap-stat signs were, once) quietly loses its
+/// evidence. Check what a preset is carrying before removing it.
 /// </summary>
 public static class Strategies
 {
@@ -539,61 +562,6 @@ public static class Strategies
         },
         new()
         {
-            Name = "scarabs",
-            Description = "Chase Scarabs: per-rare drops beside dense tiles, and Operative's boxes.",
-            // Both scarab lines in the corpus are ADJACENT-scoped and both exist as
-            // figurine mods, so where things sit decides this plan more than most --
-            // "#% more Scarabs found in adjacent Areas" and "Rare Monsters in adjacent
-            // Areas drop # additional Scarabs", chart and border alike.
-            BoardModifierWeight = 1.5,
-            // 3.29.0b gates Operative's, Diviner's and Arcanist's to spawn by default
-            // above area level 67, and an Operative's box is half this plan.
-            AreaLevelWeight = 0.5,
-            Weights =
-            {
-                [Stat.Scarabs] = 1,
-                // The scarab drop pays PER RARE, so rares are the delivery vehicle. The
-                // channel machinery already multiplies the payout by the receiving
-                // tile's rare density; this is what makes a rare-ADDING mod worth
-                // taking for its own sake.
-                [Stat.Rares] = 0.5,
-                // Strongboxes score NOTHING as boxes here, and that is deliberate rather
-                // than an omission: a box's generic loot is not scarabs. What every box
-                // is worth to this plan is that it is a rare fountain -- MonsterDensityOf
-                // already counts one as ~4 rares -- and that arrives through the channel
-                // machinery whatever the rule weight, so a box beside a per-rare scarab
-                // square feeds it for free. Only Operative's holds scarabs of its own,
-                // and that is a rule, not a stat. See ExtraRules.
-                //
-                // Scarabs out of a box ride the quantity channel like any container gift.
-                [Stat.Quantity] = 0.3,
-                [Stat.Packs] = 0.2,
-                // Cheap here, and that is informative: scarabs are not equipment, so the
-                // loot-lock costs a scarab run far less than it costs a currency one.
-                [Stat.NoEquipmentDrops] = -10,
-            },
-            ExtraRules =
-            {
-                // An Operative's Strongbox CONTAINS scarabs. The catalog can only file a
-                // mod under ONE stat, and files this one under Strongboxes at 20 -- below
-                // Arcanist's and Diviner's at 25, which is backwards for anybody farming
-                // scarabs, and flatly at odds with the note the catalog carries on it:
-                // "the speedrun centre pick, divines of scarabs when rolled".
-                //
-                // So this REPLACES the catalog's opinion for this plan rather than adding
-                // to it, which is why Strongboxes is weighted at nothing above: no line
-                // may be scored by two rules of one profile (RulesReviewTests), and a
-                // premium stacked on top of the box rule would pay this line twice.
-                //
-                // JUDGED, not measured, and named as such: the catalog's ~10c scarab at
-                // roughly four or five a box. Trim it the moment a run gives a real count.
-                Extra(@"(?:(\d+)|an)\s+additional Operative's Strongbox(?:es)?", 50,
-                      "the scarab box: ~4-5 scarabs at the catalog's ~10c anchor. Its "
-                      + "generic box loot is invisible here on purpose. Unmeasured."),
-            },
-        },
-        new()
-        {
             Name = "rare monsters",
             Description = "Essences, possession, fractures and everything that rides a rare.",
             BoardModifierWeight = 1.5,
@@ -601,60 +569,6 @@ public static class Strategies
             {
                 [Stat.Rares] = 1, [Stat.Currency] = 0.2, [Stat.Scarabs] = 1.5,
                 [Stat.Packs] = 0.4, [Stat.Strongboxes] = 0.4,
-            },
-        },
-        new()
-        {
-            Name = "strongbox",
-            Description = "Crack every box: Diviner's and Operative's first.",
-            BoardModifierWeight = 1.5,
-            AreaLevelWeight = 0.5,
-            Weights =
-            {
-                [Stat.Strongboxes] = 1, [Stat.Quantity] = 0.5, [Stat.Rarity] = 0.2,
-                [Stat.NoEquipmentDrops] = -30,
-            },
-        },
-        new()
-        {
-            Name = "containers",
-            Description = "Barrels, lanterns, spirits, Sunken Loot and the rest of the openables.",
-            BoardModifierWeight = 1.5,
-            Weights =
-            {
-                [Stat.Openables] = 1, [Stat.Lanterns] = 1, [Stat.Bottles] = 0.3,
-                [Stat.Quantity] = 0.3,
-            },
-            ExtraRules =
-            {
-                Extra(@"(?:(\d+)|an)\s+additional Giant Starfish", 4,
-                      "loot-bearing rares count as openables here"),
-                Extra(@"Area: Anchorfield", 25, "observed: dense Sunken Loot chests"),
-            },
-        },
-        new()
-        {
-            Name = "gold",
-            Description = "Maximise Gold for the Currency Exchange and Kingsmarch.",
-            Weights = { [Stat.Gold] = 1, [Stat.Packs] = 0.4 },
-            ExtraRules =
-            {
-                Extra(@"Area: Clam-infested Shelf", 20,
-                      "measured: a LOOT room of gold piles and treasure clams"),
-            },
-        },
-        new()
-        {
-            Name = "pack size",
-            Description = "Maximise monsters, including what neighbours receive.",
-            BoardModifierWeight = 1.5,
-            // Rares at 0.75: any monster count is population here (imprisoned rides
-            // the same stat at catalog value -- the old hand-tuned 4 became 1.5, a
-            // documented drift the factorization buys simplicity with).
-            Weights =
-            {
-                [Stat.Packs] = 1, [Stat.Rares] = 0.75, [Stat.Magic] = 0.05,
-                [Stat.PlayerPower] = 1,
             },
         },
         new()

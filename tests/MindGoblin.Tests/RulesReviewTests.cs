@@ -28,23 +28,23 @@ public class RulesReviewTests
     [InlineData("currency", "Rare Monsters in Area drop an additional Scarab")]
     [InlineData("currency", "Rare Monsters in adjacent Areas drop an additional Exalted Orb")]
     [InlineData("currency", "Area contains an Altar to the Goddess")]
-    [InlineData("strongbox", "Adjacent Areas contain an additional Diviner's Strongbox")]
-    [InlineData("strongbox", "Adjacent Areas contain an additional Strongbox")]
-    [InlineData("containers", "Adjacent Areas contain an additional Golden Lantern")]
-    [InlineData("containers", "Adjacent Areas contain an additional Cluster of Barrels")]
-    [InlineData("containers", "Adjacent Areas contain an additional cage of Tormented Spirits")]
-    [InlineData("containers", "Adjacent Areas contain an additional Message in a Bottle")]
-    [InlineData("containers", "Adjacent Areas contain an additional Treasure Anchor")]
+    [InlineData("bottles", "Adjacent Areas contain an additional Diviner's Strongbox")]
+    [InlineData("bottles", "Adjacent Areas contain an additional Strongbox")]
+    [InlineData("bottles", "Adjacent Areas contain an additional Golden Lantern")]
+    [InlineData("bottles", "Adjacent Areas contain an additional Message in a Bottle")]
+    [InlineData("currency", "Adjacent Areas contain an additional Cluster of Barrels")]
+    [InlineData("currency", "Adjacent Areas contain an additional cage of Tormented Spirits")]
+    [InlineData("currency", "Adjacent Areas contain an additional Treasure Anchor")]
     // Monsters are where currency comes from, so a currency plan that scores added
     // packs at zero is not a currency plan: "13 additional packs of Octopi" lost
     // outright to 19 Clusters of Barrels because the pack rules compiled away.
     [InlineData("currency", "Adjacent Areas contain an additional pack of Octopi")]
-    [InlineData("pack size", "Adjacent Areas contain an additional pack of Sea Beasts")]
-    [InlineData("gold", "Adjacent Areas contain an additional pack of Crabs")]
+    [InlineData("currency", "Adjacent Areas contain an additional pack of Crabs")]
     [InlineData("magic monsters", "Adjacent Areas contain an additional pack of the Drowned")]
+    [InlineData("rare monsters", "Adjacent Areas contain an additional pack of Sea Beasts")]
     [InlineData("rare monsters", "Adjacent Areas contain an additional Imprisoned Monster")]
-    [InlineData("scarabs", "Rare Monsters in Area drop an additional Scarab")]
-    [InlineData("scarabs", "Adjacent Areas contain an additional Operative's Strongbox")]
+    [InlineData("rare monsters", "Rare Monsters in Area drop an additional Scarab")]
+    [InlineData("rare monsters", "Adjacent Areas contain an additional Operative's Strongbox")]
     public void ARollOfOneStillScores(string profile, string line) =>
         Assert.True(Profile(profile).ScoreText([line]) > 0,
                     $"'{line}' scores zero under '{profile}'");
@@ -166,9 +166,10 @@ public class RulesReviewTests
 
     /// <summary>
     /// "Profiles differ from the shipped rules" must notice the PROFILE-LEVEL knobs too.
-    /// SameRules compared only the rule list, so when the strongbox profile gained
-    /// AreaLevelWeight from the 3.29.0b research, every existing rule file silently kept
-    /// scoring area level at zero and the app said nothing.
+    /// SameRules compared only the rule list, so when a profile gained AreaLevelWeight
+    /// from the 3.29.0b research, every existing rule file silently kept scoring area
+    /// level at zero and the app said nothing. "bottles" is the surviving profile that
+    /// carries such a knob.
     /// </summary>
     [Fact]
     public void AChangedProfileKnobCountsAsOutdated()
@@ -179,12 +180,12 @@ public class RulesReviewTests
         {
             var file = Path.Combine(dir, "voyage-rules.json");
             var mine = VoyageRules.Defaults();
-            mine.Single(p => p.Name == "strongbox").AreaLevelWeight = 0;   // the old file
+            mine.Single(p => p.Name == "bottles").AreaLevelWeight = 0;   // the old file
 
             File.WriteAllText(file, System.Text.Json.JsonSerializer.Serialize(mine));
             using var rules = new VoyageRules(file);
 
-            Assert.Contains("strongbox", rules.CompareWithDefaults().Outdated);
+            Assert.Contains("bottles", rules.CompareWithDefaults().Outdated);
         }
         finally
         {

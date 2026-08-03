@@ -31,15 +31,15 @@ public class RulesUpgradeTests : IDisposable
     [Fact]
     public void ANewProfileIsAddedToAnExistingFile()
     {
-        WriteOldFile("sulphur", "currency", "gold");
+        WriteOldFile("sulphur", "currency");
 
         using var rules = new VoyageRules(_path);
-        Assert.DoesNotContain(rules.Profiles, p => p.Name == "strongbox");
+        Assert.DoesNotContain(rules.Profiles, p => p.Name == "bottles");
 
         var added = rules.AddMissingDefaults();
 
-        Assert.Contains("strongbox", added);
-        Assert.Contains(rules.Profiles, p => p.Name == "strongbox");
+        Assert.Contains("bottles", added);
+        Assert.Contains(rules.Profiles, p => p.Name == "bottles");
         Assert.Equal(VoyageRules.Defaults().Count, rules.Profiles.Count);
     }
 
@@ -74,15 +74,15 @@ public class RulesUpgradeTests : IDisposable
     public void ATunedProfileIsReportedAsDifferingFromTheShippedOne()
     {
         // The user cannot otherwise tell that a rule fix exists but is not in effect.
-        WriteOldFile("sulphur", "gold");
+        WriteOldFile("sulphur", "currency");
         using var rules = new VoyageRules(_path);
-        rules.Profiles.Single(p => p.Name == "gold").Rules.Clear();
+        rules.Profiles.Single(p => p.Name == "currency").Rules.Clear();
         rules.Save();
 
         using var reopened = new VoyageRules(_path);
         var status = reopened.CompareWithDefaults();
 
-        Assert.Contains("gold", status.Outdated);
+        Assert.Contains("currency", status.Outdated);
         Assert.DoesNotContain("sulphur", status.Outdated);
         Assert.True(status.AnythingToDo);
     }
@@ -123,24 +123,21 @@ public class RulesUpgradeTests : IDisposable
         using (var rules = new VoyageRules(_path)) rules.AddMissingDefaults();
 
         using var reopened = new VoyageRules(_path);
-        Assert.Contains(reopened.Profiles, p => p.Name == "strongbox");
+        Assert.Contains(reopened.Profiles, p => p.Name == "bottles");
     }
 
     [Fact]
     public void TheFewOriginalProfilesGainTheEverythingElse()
     {
         // Exactly the situation on disk: a file written when there were a handful.
-        WriteOldFile("sulphur", "pack size", "gold");
+        WriteOldFile("sulphur", "currency");
         using var rules = new VoyageRules(_path);
 
         var added = rules.AddMissingDefaults();
 
-        Assert.Contains("strongbox", added);
-        Assert.Contains("containers", added);
-        Assert.Contains("currency", added);
-        Assert.Contains("rare monsters", added);
-        Assert.Contains("scarabs", added);
         Assert.Contains("bottles", added);
+        Assert.Contains("rare monsters", added);
         Assert.Contains("magic monsters", added);
+        Assert.Contains("dump", added);
     }
 }

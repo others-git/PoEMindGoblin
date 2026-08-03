@@ -108,17 +108,16 @@ public class WeightCategoryTests
     /// <summary>
     /// A strategy's OWN rule is Extras even when it reuses a catalog wording.
     ///
-    /// Two shipped strategies deliberately do: containers counts starfish as openables
-    /// rather than as rares, and scarabs REPLACES the catalog's opinion of an Operative's
-    /// Strongbox -- 20 as a box, 50 as the thing that holds scarabs. Filed by pattern they
-    /// looked like that stat's catalog, which made the stat count as one the strategy
-    /// weights -- so raising its slider scaled that single rule and could never borrow the
-    /// rest of the stat, the exact thing the slider exists to do.
+    /// dump deliberately does: the amplifier's catalog value is a SHARE of the chart it
+    /// lands beside, and dump's charts are junk by construction, so it replaces that with
+    /// a flat negative under the identical pattern. Filed by pattern the rule looked like
+    /// that stat's catalog, which made ModifierMagnitude count as a stat dump weights --
+    /// so raising its slider scaled that single rule and could never borrow the rest of
+    /// the stat, the exact thing the slider exists to do.
     /// </summary>
     [Theory]
-    [InlineData("containers", @"(?:(\d+)|an)\s+additional Giant Starfish", "Rares")]
-    [InlineData("scarabs", @"(?:(\d+)|an)\s+additional Operative's Strongbox(?:es)?",
-                "Strongboxes")]
+    [InlineData("dump", @"(\d+)%\s+increased explicit modifier magnitudes",
+                "ModifierMagnitude")]
     public void AStrategysOwnRuleIsExtrasEvenWhenItSharesACatalogWording(
         string profileName, string pattern, string donorStat)
     {
@@ -146,26 +145,40 @@ public class WeightCategoryTests
     }
 
     /// <summary>
-    /// The consequence: scarabs can now borrow the box economy, and borrowing does NOT
-    /// stack a second copy of the Operative's line the strategy already prices itself.
+    /// The consequence: a strategy that prices one line its own way can still borrow the
+    /// rest of that stat, and borrowing does NOT stack a second copy of the line it
+    /// already has. Built here rather than taken from the shipped set, because which
+    /// strategies ship changes and this is a guarantee about Blended.
     /// </summary>
     [Fact]
     public void BorrowingAStatDoesNotDuplicateARuleTheProfileAlreadyHas()
     {
         const string operatives = @"(?:(\d+)|an)\s+additional Operative's Strongbox(?:es)?";
-        var scarabs = Shipped("scarabs");
-        var scarabBox = "Adjacent Areas contain 3 additional Operative's Strongboxes";
+        // Stamped Other, exactly as a strategy's own Extras rule is, so the pattern
+        // lookup cannot file it back under the stat whose wording it shares.
+        var own = new VoyageProfile
+        {
+            Name = "own-price",
+            Rules =
+            [
+                new VoyageRule
+                {
+                    Pattern = operatives, Weight = 50, Category = WeightCategories.Other,
+                },
+            ],
+        };
+        var ownBox = "Adjacent Areas contain 3 additional Operative's Strongboxes";
         var plainBox = "Adjacent Areas contain 3 additional Diviner's Strongboxes";
-        Assert.Equal(0, scarabs.ScoreText([plainBox]));
+        Assert.Equal(0, own.ScoreText([plainBox]));
 
-        var blended = WeightCategories.Blended(scarabs,
+        var blended = WeightCategories.Blended(own,
             new Dictionary<string, int> { ["Strongboxes"] = WeightCategories.Baseline },
             VoyageRules.Defaults());
 
         // the rest of the box catalog arrives at catalog value...
         Assert.Equal(75, blended.ScoreText([plainBox]), 6);   // 25 x 3
-        // ...and the one rule scarabs already had is still priced once, its own way
-        Assert.Equal(scarabs.ScoreText([scarabBox]), blended.ScoreText([scarabBox]), 6);
+        // ...and the one rule the profile already had is still priced once, its own way
+        Assert.Equal(own.ScoreText([ownBox]), blended.ScoreText([ownBox]), 6);
         Assert.Single(blended.Rules, r => r.Pattern == operatives);
     }
 
@@ -174,9 +187,11 @@ public class WeightCategoryTests
     [Fact]
     public void AStatLeftAtItsDefaultIsNeverBorrowed()
     {
-        var scarabs = Shipped("scarabs");
-        var blended = WeightCategories.Blended(scarabs,
-            new Dictionary<string, int> { ["Scarabs"] = 15 }, VoyageRules.Defaults());
+        // "magic monsters" prices no box at all, so a raised Magic slider must leave the
+        // box economy at zero rather than dragging the whole catalog in behind it.
+        var magic = Shipped("magic monsters");
+        var blended = WeightCategories.Blended(magic,
+            new Dictionary<string, int> { ["Magic"] = 15 }, VoyageRules.Defaults());
 
         Assert.Equal(0,
             blended.ScoreText(["Adjacent Areas contain 3 additional Diviner's Strongboxes"]));

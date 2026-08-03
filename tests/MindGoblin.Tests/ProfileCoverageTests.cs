@@ -146,9 +146,9 @@ public class ProfileCoverageTests
     public void TheSingularWordingsScoreTheSameAsTheirNumberedForm()
     {
         // A roll of one must not be worth nothing just because the game drops the digit.
-        var containers = VoyageRules.Defaults().Single(p => p.Name == "containers");
-        var singular = containers.ScoreText(["Adjacent Areas contain an additional cage of Tormented Spirits"]);
-        var numbered = containers.ScoreText(["Adjacent Areas contain 1 additional cages of Tormented Spirits"]);
+        var currency = VoyageRules.Defaults().Single(p => p.Name == "currency");
+        var singular = currency.ScoreText(["Adjacent Areas contain an additional cage of Tormented Spirits"]);
+        var numbered = currency.ScoreText(["Adjacent Areas contain 1 additional cages of Tormented Spirits"]);
         Assert.True(singular > 0, "the singular wording scores nothing");
         Assert.Equal(numbered, singular);
     }
@@ -202,13 +202,14 @@ public class ProfileCoverageTests
     }
 
     [Fact]
-    public void TheStrongboxProfilePrefersTheValuableTypes()
+    public void TheBoxWeightingProfilePrefersTheValuableTypes()
     {
         // Arcanist's, Diviner's and Operative's boxes are the ones worth planning a board
-        // around; the plain roll gives random types.
-        var strongbox = VoyageRules.Defaults().Single(p => p.Name == "strongbox");
+        // around; the plain roll gives random types. The dedicated strongbox preset was
+        // retired, but the ordering is the CATALOG's, so it has to survive with it.
+        var bottles = VoyageRules.Defaults().Single(p => p.Name == "bottles");
 
-        double Score(string line) => strongbox.ScoreText([line]);
+        double Score(string line) => bottles.ScoreText([line]);
 
         var plain = Score("Adjacent Areas contain 3 additional Strongboxes");
         foreach (var kind in new[] { "Arcanist's", "Diviner's", "Operative's" })
@@ -224,8 +225,8 @@ public class ProfileCoverageTests
     {
         // "additional Strongboxes" must not also match "additional Diviner's
         // Strongboxes", or the good types are paid for twice over.
-        var strongbox = VoyageRules.Defaults().Single(p => p.Name == "strongbox");
-        var plainRule = strongbox.Rules.Single(r => r.Pattern.Contains(@"additional Strongbox"));
+        var bottles = VoyageRules.Defaults().Single(p => p.Name == "bottles");
+        var plainRule = bottles.Rules.Single(r => r.Pattern.Contains(@"additional Strongbox"));
 
         Assert.Equal(0, plainRule.Score("Adjacent Areas contain 3 additional Diviner's Strongboxes"));
         Assert.Equal(0, plainRule.Score("Adjacent Areas contain an additional Diviner's Strongbox"));
@@ -234,13 +235,14 @@ public class ProfileCoverageTests
     }
 
     [Fact]
-    public void TheStrongboxProfileValuesTheQuantityThatFillsTheBoxes()
+    public void TheBoxWeightingProfileValuesTheQuantityThatFillsTheBoxes()
     {
         // Box contents roll against area quantity, so a tile's own quantity is part of
-        // what a strongbox is worth.
-        var strongbox = VoyageRules.Defaults().Single(p => p.Name == "strongbox");
+        // what a strongbox is worth -- which is why the profile that plans around boxes
+        // has to weight both.
+        var bottles = VoyageRules.Defaults().Single(p => p.Name == "bottles");
         var chart = new Chart("id", "x", ChartShape.Crossing, 80, []) { ItemQuantity = 96 };
-        Assert.True(strongbox.ScoreChart(chart) > 0);
+        Assert.True(bottles.ScoreChart(chart) > 0);
     }
 
     [Fact]
@@ -250,7 +252,7 @@ public class ProfileCoverageTests
         // filed as a reward line because it is about the payout -- but it is a negative
         // one, and a profile that ignored it would rank a gutted chart normally.
         const string line = "Monsters in all Voyage Areas cannot drop Equipment, Flasks or Tinctures";
-        foreach (var name in new[] { "bottles", "currency", "scarabs", "strongbox" })
+        foreach (var name in new[] { "bottles", "currency" })
         {
             var profile = VoyageRules.Defaults().Single(p => p.Name == name);
             Assert.True(profile.ScoreText([line]) < 0, $"{name} does not penalise it");
@@ -299,12 +301,13 @@ public class ProfileCoherenceTests
         VoyageRules.Defaults().Single(p => p.Name == name);
 
     [Theory]
-    // Every profile whose objective is "more monsters" -- rares and magic monsters both
-    // spawn out of packs, so pack size multiplies whatever the profile is really after.
-    [InlineData("pack size")]
+    // Every profile that gets paid out of monsters -- rares and magic monsters both spawn
+    // out of packs, and currency comes off the monsters too, so pack size multiplies what
+    // all three are really after.
+    [InlineData("currency")]
     [InlineData("rare monsters")]
     [InlineData("magic monsters")]
-    public void MonsterProfilesValuePackSize(string name)
+    public void MonsterFedProfilesValuePackSize(string name)
     {
         var profile = Profile(name);
 
@@ -317,9 +320,9 @@ public class ProfileCoherenceTests
     }
 
     [Fact]
-    public void MorePacksBeatsFewerForEveryMonsterProfile()
+    public void MorePacksBeatsFewerForEveryMonsterFedProfile()
     {
-        foreach (var name in new[] { "pack size", "rare monsters", "magic monsters" })
+        foreach (var name in new[] { "currency", "rare monsters", "magic monsters" })
         {
             var profile = Profile(name);
             var small = new Chart("s", "s", ChartShape.Crossing, 80, []) { MonsterPackSize = 14 };

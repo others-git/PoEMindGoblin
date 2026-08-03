@@ -78,11 +78,11 @@ public class TilesetTests
     [Fact]
     public void TheShippedRuleValuesTheObservedTileset()
     {
-        var containers = VoyageRules.Defaults().Single(p => p.Name == "containers");
+        var bottles = VoyageRules.Defaults().Single(p => p.Name == "bottles");
         var anchorfield = new Chart("a", "a", ChartShape.Crossing, 81, []) { AreaName = "Anchorfield" };
         var elsewhere = new Chart("b", "b", ChartShape.Crossing, 81, []) { AreaName = "Abyssal Plain" };
 
-        Assert.True(containers.ScoreChart(anchorfield) > containers.ScoreChart(elsewhere));
+        Assert.True(bottles.ScoreChart(anchorfield) > bottles.ScoreChart(elsewhere));
     }
 
     [Fact]

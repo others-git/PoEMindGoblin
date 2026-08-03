@@ -65,13 +65,13 @@ public class VoyageProfileTests
     {
         // There is no single best board -- that is why the objective is a profile.
         var sulphur = VoyageRules.Defaults().First(p => p.Name == "sulphur");
-        var packs = VoyageRules.Defaults().First(p => p.Name == "pack size");
+        var rares = VoyageRules.Defaults().First(p => p.Name == "rare monsters");
 
         var sulphurChart = Chart("40% increased Dead Man's Sulphur found in this Area");
         var packChart = Chart("25% increased Pack Size");
 
         Assert.True(sulphur.ScoreChart(sulphurChart) > sulphur.ScoreChart(packChart));
-        Assert.True(packs.ScoreChart(packChart) > packs.ScoreChart(sulphurChart));
+        Assert.True(rares.ScoreChart(packChart) > rares.ScoreChart(sulphurChart));
     }
 
     [Fact]
@@ -227,6 +227,6 @@ public class VoyageRulesFileTests : IDisposable
     {
         using var rules = new VoyageRules(File_);
         Assert.NotNull(rules.Find("SULPHUR"));
-        Assert.NotNull(rules.Find("Pack Size"));
+        Assert.NotNull(rules.Find("Rare Monsters"));
     }
 }

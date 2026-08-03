@@ -68,7 +68,7 @@ public class RealModifierScoringTests
     [InlineData("60% increased number of Rare Monsters in adjacent Areas")]
     [InlineData("Adjacent Areas contain 5 additional Imprisoned Monsters")]
     public void PackSizeRollsAllScore(string line) =>
-        Assert.True(ScoreLine("pack size", line) > 0, line);
+        Assert.True(ScoreLine("rare monsters", line) > 0, line);
 
     [Theory]
     [InlineData("Adjacent Areas contain 3 additional Strongboxes")]
@@ -81,12 +81,10 @@ public class RealModifierScoringTests
     [InlineData("Adjacent Areas contain an additional cage of Tormented Spirits")]
     public void LootRollsAllScore(string line)
     {
-        // Split across three profiles now: strongboxes are worth planning a board around,
-        // the rest of the openables are their own objective, and unique conversions are
-        // tradeable value, so they sit with the currency plan.
-        Assert.True(ScoreLine("strongbox", line) > 0 || ScoreLine("containers", line) > 0
-                    || ScoreLine("currency", line) > 0,
-                    line);
+        // Split across two profiles now: boxes and lanterns feed the bottles plan, while
+        // barrels, anchors, cages and unique conversions are tradeable value and sit with
+        // the currency plan.
+        Assert.True(ScoreLine("bottles", line) > 0 || ScoreLine("currency", line) > 0, line);
     }
 
     [Fact]
@@ -94,8 +92,8 @@ public class RealModifierScoringTests
     {
         // The number in the text has to reach the score, or a 14-pack roll ranks level
         // with an 8-pack one and placement stops meaning anything.
-        var small = ScoreLine("pack size", "Adjacent Areas contain 8 additional packs of Crabs");
-        var large = ScoreLine("pack size", "Adjacent Areas contain 14 additional packs of Crabs");
+        var small = ScoreLine("rare monsters", "Adjacent Areas contain 8 additional packs of Crabs");
+        var large = ScoreLine("rare monsters", "Adjacent Areas contain 14 additional packs of Crabs");
         Assert.True(large > small, $"{large} should beat {small}");
     }
 
@@ -110,17 +108,15 @@ public class RealModifierScoringTests
     public void DangerousModsArePenalisedWhenTheDangerSliderIsRaised(string line) =>
         Assert.True(DangerAware().ScoreText([line]) < 0, line);
 
-    [Theory]
-    // The profiles that weight area level, and why each does: bottles only roll on 68+
-    // charts, and 3.29.0b gates Diviner's, Arcanist's and Operative's boxes above 67.
-    [InlineData("bottles")]
-    [InlineData("scarabs")]
-    [InlineData("strongbox")]
-    public void TheTierGatedProfilesPreferAHigherAreaLevel(string name)
+    [Fact]
+    public void TheTierGatedProfilePrefersAHigherAreaLevel()
     {
+        // "bottles" is the last upright profile that weights area level, and the reason is
+        // mechanical rather than a preference: the bottle mod is hidden-until-charted and
+        // only rolls on ilvl 68+, so a low chart cannot carry the thing the plan is for.
         var low = new Chart("a", "a", ChartShape.Crossing, 68, []);
         var high = low with { AreaLevel = 83 };
-        Assert.True(Profile(name).ScoreChart(high) > Profile(name).ScoreChart(low), name);
+        Assert.True(Profile("bottles").ScoreChart(high) > Profile("bottles").ScoreChart(low));
     }
 
     [Fact]
@@ -159,7 +155,7 @@ public class RealModifierScoringTests
         Assert.Equal(90, chart.Sulphur);
         Assert.Equal(96, chart.ItemQuantity);
         Assert.Equal(450, Profile("sulphur").ScoreChart(chart));      // 90 x 5, counted once
-        Assert.Equal(25.5, Profile("containers").ScoreAdjacent(chart)); // 17 barrels x 1.5
+        Assert.Equal(25.5, Profile("currency").ScoreAdjacent(chart)); // 17 barrels x 1.5
 
         // ...and the danger it rolled reaches the score too. "34(20-34)% more Monster
         // Life" is a prefix like any other, so a board asked about danger has to come out
