@@ -520,6 +520,15 @@ public static class Strategies
                 [Stat.Currency] = 1, [Stat.Scarabs] = 1, [Stat.Bottles] = 1,
                 [Stat.Openables] = 1, [Stat.ModifierMagnitude] = 1, [Stat.Quantity] = 1,
                 [Stat.Rares] = 0.5, [Stat.NoEquipmentDrops] = -20,
+                // MONSTERS are where currency comes from, so a plan that ignores added
+                // packs is not a currency plan. Left unweighted, every pack-adding mod
+                // compiled away to nothing and "13 additional packs of Octopi" scored
+                // ZERO against 19 Clusters of Barrels at 28.5 -- the solver took the
+                // barrels, which is the right answer to the wrong question. Near
+                // pack-size's own 1.0 because almost all of a pack's ~3c is the loot it
+                // drops; the ~10% of packs that arrive rare-led are counted separately
+                // on the rare channel, so this is not double-paying for them.
+                [Stat.Packs] = 0.8,
             },
         },
         new()

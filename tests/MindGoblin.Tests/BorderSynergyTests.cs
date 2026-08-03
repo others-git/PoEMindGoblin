@@ -139,6 +139,24 @@ public class BorderSynergyTests
                     $"a +150% {stat} tile must be worth more to a conversion than a blank one");
     }
 
+    /// <summary>
+    /// A big pack gift beats a big container gift under CURRENCY, because the monsters
+    /// are what drop the currency. Field-reported: 13 additional packs of Octopi scored
+    /// zero against 19 Clusters of Barrels at 28.5, so the solver seated the barrels on
+    /// the three-neighbour square and the packs in a corner.
+    /// </summary>
+    [Fact]
+    public void AddedPacksOutscoreBarrelsUnderCurrency()
+    {
+        var currency = VoyageRules.Defaults().Single(p => p.Name == "currency");
+
+        var packs = currency.ScoreText(["Adjacent Areas contain 13 additional packs of Octopi"]);
+        var barrels = currency.ScoreText(["Adjacent Areas contain 19 additional Clusters of Barrels"]);
+
+        Assert.True(packs > barrels,
+                    $"13 packs scored {packs:0.#}, 19 barrel clusters {barrels:0.#}");
+    }
+
     /// <summary>The other half of that claim: a CONTAINER gift is not fed by monsters.
     /// Barrels are stocked when the area is built, so pack size does nothing for them,
     /// and the two channels must not be collapsed into one.</summary>

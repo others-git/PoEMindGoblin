@@ -35,6 +35,10 @@ public class RulesReviewTests
     [InlineData("containers", "Adjacent Areas contain an additional cage of Tormented Spirits")]
     [InlineData("containers", "Adjacent Areas contain an additional Message in a Bottle")]
     [InlineData("containers", "Adjacent Areas contain an additional Treasure Anchor")]
+    // Monsters are where currency comes from, so a currency plan that scores added
+    // packs at zero is not a currency plan: "13 additional packs of Octopi" lost
+    // outright to 19 Clusters of Barrels because the pack rules compiled away.
+    [InlineData("currency", "Adjacent Areas contain an additional pack of Octopi")]
     [InlineData("pack size", "Adjacent Areas contain an additional pack of Sea Beasts")]
     [InlineData("gold", "Adjacent Areas contain an additional pack of Crabs")]
     [InlineData("magic monsters", "Adjacent Areas contain an additional pack of the Drowned")]
