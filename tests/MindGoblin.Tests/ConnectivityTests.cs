@@ -137,7 +137,7 @@ public class ConnectivityTests
             { Level = 80 }).ToList());
 
         var solution = session.Solve(
-            VoyageRules.Defaults().Single(p => p.Name == "high tier"), TimeSpan.FromSeconds(2));
+            VoyageRules.Defaults().Single(p => p.Name == "strongbox"), TimeSpan.FromSeconds(2));
 
         Assert.Equal(9, solution.Placements.Count);
         Assert.Empty(solution.StrandedCells);
@@ -235,7 +235,7 @@ public class StrandingIsForbiddenTests
     /// The sequence is transcribed from the panel that failed, in panel order, because
     /// the ORDER is what bites: grouped by shape the seed places nine Crossings and
     /// succeeds trivially, while interleaved -- the way a real stash looks -- the dive
-    /// wanders. Before the fix sulphur and high tier strand here.
+    /// wanders. Before the fix sulphur and several other profiles strand here.
     /// </summary>
     [Fact]
     public void AFullPanelOfMixedShapesNeverStrandsUnderAnyShippedProfile()

@@ -108,21 +108,23 @@ public class WeightCategoryTests
     /// <summary>
     /// A strategy's OWN rule is Extras even when it reuses a catalog wording.
     ///
-    /// Two shipped strategies deliberately do: uniques prices the fracture line at 0.4
-    /// where the catalog says 0.5, and containers counts starfish as openables. Filed by
-    /// pattern they looked like that stat's catalog, which made the stat count as one the
-    /// strategy weights -- so raising its slider scaled that single rule and could never
-    /// borrow the rest of the stat, the exact thing the slider exists to do.
+    /// Two shipped strategies deliberately do: containers counts starfish as openables
+    /// rather than as rares, and scarabs REPLACES the catalog's opinion of an Operative's
+    /// Strongbox -- 20 as a box, 50 as the thing that holds scarabs. Filed by pattern they
+    /// looked like that stat's catalog, which made the stat count as one the strategy
+    /// weights -- so raising its slider scaled that single rule and could never borrow the
+    /// rest of the stat, the exact thing the slider exists to do.
     /// </summary>
     [Theory]
-    [InlineData("uniques", @"Rare Monsters.*(\d+)% chance to Fracture on death")]
-    [InlineData("containers", @"(?:(\d+)|an)\s+additional Giant Starfish")]
+    [InlineData("containers", @"(?:(\d+)|an)\s+additional Giant Starfish", "Rares")]
+    [InlineData("scarabs", @"(?:(\d+)|an)\s+additional Operative's Strongbox(?:es)?",
+                "Strongboxes")]
     public void AStrategysOwnRuleIsExtrasEvenWhenItSharesACatalogWording(
-        string profileName, string pattern)
+        string profileName, string pattern, string donorStat)
     {
         var rule = Shipped(profileName).Rules.Single(r => r.Pattern == pattern);
         Assert.Equal(WeightCategories.Other, WeightCategories.CategoryOf(rule));
-        Assert.DoesNotContain("Rares", WeightCategories.CategoriesIn(Shipped(profileName)));
+        Assert.DoesNotContain(donorStat, WeightCategories.CategoriesIn(Shipped(profileName)));
     }
 
     /// <summary>Catalog rules still carry their own stat, stamped rather than looked up.</summary>
@@ -144,27 +146,27 @@ public class WeightCategoryTests
     }
 
     /// <summary>
-    /// The consequence: uniques can now borrow the rare economy, and borrowing does NOT
-    /// stack a second copy of the fracture line the strategy already prices itself.
+    /// The consequence: scarabs can now borrow the box economy, and borrowing does NOT
+    /// stack a second copy of the Operative's line the strategy already prices itself.
     /// </summary>
     [Fact]
     public void BorrowingAStatDoesNotDuplicateARuleTheProfileAlreadyHas()
     {
-        var uniques = Shipped("uniques");
-        var fracture = "Rare Monsters in this Area have 20% chance to Fracture on death";
-        var essences = "Rare Monsters in Area are imprisoned by Essences";
-        Assert.Equal(0, uniques.ScoreText([essences]));
+        const string operatives = @"(?:(\d+)|an)\s+additional Operative's Strongbox(?:es)?";
+        var scarabs = Shipped("scarabs");
+        var scarabBox = "Adjacent Areas contain 3 additional Operative's Strongboxes";
+        var plainBox = "Adjacent Areas contain 3 additional Diviner's Strongboxes";
+        Assert.Equal(0, scarabs.ScoreText([plainBox]));
 
-        var blended = WeightCategories.Blended(uniques,
-            new Dictionary<string, int> { ["Rares"] = WeightCategories.Baseline },
+        var blended = WeightCategories.Blended(scarabs,
+            new Dictionary<string, int> { ["Strongboxes"] = WeightCategories.Baseline },
             VoyageRules.Defaults());
 
-        // the rest of the rare catalog arrives...
-        Assert.Equal(40, blended.ScoreText([essences]), 6);
-        // ...and the one rule uniques already had is still priced once, its own way
-        Assert.Equal(uniques.ScoreText([fracture]), blended.ScoreText([fracture]), 6);
-        Assert.Single(blended.Rules,
-            r => r.Pattern == @"Rare Monsters.*(\d+)% chance to Fracture on death");
+        // the rest of the box catalog arrives at catalog value...
+        Assert.Equal(75, blended.ScoreText([plainBox]), 6);   // 25 x 3
+        // ...and the one rule scarabs already had is still priced once, its own way
+        Assert.Equal(scarabs.ScoreText([scarabBox]), blended.ScoreText([scarabBox]), 6);
+        Assert.Single(blended.Rules, r => r.Pattern == operatives);
     }
 
     /// <summary>Borrowing has to stay opt-in: touching one slider must not quietly pull
@@ -172,11 +174,12 @@ public class WeightCategoryTests
     [Fact]
     public void AStatLeftAtItsDefaultIsNeverBorrowed()
     {
-        var uniques = Shipped("uniques");
-        var blended = WeightCategories.Blended(uniques,
-            new Dictionary<string, int> { ["Uniques"] = 15 }, VoyageRules.Defaults());
+        var scarabs = Shipped("scarabs");
+        var blended = WeightCategories.Blended(scarabs,
+            new Dictionary<string, int> { ["Scarabs"] = 15 }, VoyageRules.Defaults());
 
-        Assert.Equal(0, blended.ScoreText(["Rare Monsters in Area are imprisoned by Essences"]));
+        Assert.Equal(0,
+            blended.ScoreText(["Adjacent Areas contain 3 additional Diviner's Strongboxes"]));
     }
 
     /// <summary>
@@ -278,11 +281,12 @@ public class WeightCategoryTests
     }
 
     /// <summary>
-    /// The two statements of a trap must not drift apart: the sentence telling the user
-    /// to weight it negative, and the sign a slider applies. The sign is DERIVED from
-    /// the shipped strategies rather than hand-listed, so a new strategy pricing Danger
-    /// positive -- or a trap added to the catalog that no strategy prices at all --
-    /// fails here rather than quietly making the planner chase run-enders.
+    /// The two statements of a trap must not drift apart: the sentence telling the user to
+    /// weight it negative, and the sign a slider applies. The sign used to be DERIVED from
+    /// what the shipped strategies happened to price, which made it hostage to the preset
+    /// list -- retiring the only strategy that weighted Danger deleted the evidence that
+    /// Danger is a trap, and the slider went back to making Hexproof a reward. It is an
+    /// explicit set now, and this is what holds it to what the tooltip says.
     /// </summary>
     [Fact]
     public void EveryTrapStatIsWeightedNegativeInWordsAndInSign()

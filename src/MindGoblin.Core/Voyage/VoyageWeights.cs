@@ -85,14 +85,20 @@ public static class WeightCategories
     /// The dump is excluded by the same test the borrow path uses, because it inverts
     /// EVERY stat -- and being inverted it never borrows at all.
     /// </summary>
+    /// <summary>
+    /// The trap stats: catalog values are SEVERITIES, so a slider on one has to enter
+    /// negative or asking for "more danger awareness" would ask for more danger.
+    ///
+    /// Stated outright rather than derived from what the shipped strategies happen to
+    /// price. Derived, it was hostage to the strategy list: retiring the one profile
+    /// that weighted Danger deleted the evidence that Danger is a trap, and a borrowed
+    /// Danger slider silently went back to making Hexproof a REWARD. A convention this
+    /// load-bearing must not be an accident of which presets survive.
+    /// <c>EveryTrapStatIsWeightedNegativeInWordsAndInSign</c> holds it to what
+    /// <see cref="StatText.Describe"/> tells the user.
+    /// </summary>
     private static readonly HashSet<Stat> NegativeByConvention =
-        Strategies.Shipped()
-            .Where(s => s.ChartBaseValue <= 0)
-            .SelectMany(s => s.Weights)
-            .GroupBy(w => w.Key)
-            .Where(g => g.All(w => w.Value < 0))
-            .Select(g => g.Key)
-            .ToHashSet();
+        [Stat.Danger, Stat.NoEquipmentDrops];
 
     /// <summary>Which way a slider on this stat points: a trap is steered AWAY from, so
     /// its borrowed rules enter negative at the slider's magnitude.</summary>
@@ -165,8 +171,8 @@ public static class WeightCategories
         if (profile.ChartBaseValue <= 0)
         {
             // A borrowed mod the profile ALREADY carries would score twice -- and it is
-            // not hypothetical: uniques prices the fracture line at 0.4 where the
-            // catalog says 0.5, deliberately, and borrowing Rares would stack both.
+            // not hypothetical: scarabs prices the Operative's Strongbox at 50 where the
+            // catalog says 20, deliberately, and borrowing Strongboxes would stack both.
             var carried = profile.Rules.Select(r => r.Pattern).ToHashSet(StringComparer.Ordinal);
             foreach (var stat in Enum.GetValues<Stat>())
             {

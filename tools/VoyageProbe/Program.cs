@@ -8,8 +8,12 @@ if (args.Length > 2 && args[1] == "--budget") return BudgetProbe.Run(args[0], ar
 if (args.Length > 2 && args[1] == "--save") return SaveProbe.Run(args[0], args[2]);
 
 // probe <screenshot.png> [profile] [overlay-out.png]
+//
+// The default names a profile that must EXIST: PanelProbe falls back to the first
+// rule in the file when the name misses, so a retired default does not fail, it
+// silently plans with whatever sorts first and reports that as the answer.
 if (args.Length > 0)
-    return PanelProbe.Run(args[0], args.Length > 1 ? args[1] : "high tier",
+    return PanelProbe.Run(args[0], args.Length > 1 ? args[1] : "currency",
                           args.Length > 2 ? args[2] : null);
 
 

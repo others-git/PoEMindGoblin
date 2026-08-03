@@ -168,7 +168,7 @@ public sealed class VoyageRule
     ///
     /// Null in files written before the stamp existed, where the pattern lookup stands
     /// in -- which is exactly the thing the stamp fixes. A strategy rule that reuses a
-    /// catalog WORDING (uniques' fracture line, containers' starfish) looked like that
+    /// catalog WORDING (scarabs' Operative's Strongbox, containers' starfish) looked like that
     /// stat's catalog by pattern, so the stat counted as one the strategy weights and
     /// every other mod of it could never be borrowed by raising its slider.
     /// </summary>

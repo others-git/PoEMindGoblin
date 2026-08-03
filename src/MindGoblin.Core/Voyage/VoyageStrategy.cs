@@ -513,7 +513,7 @@ public static class Strategies
         new()
         {
             Name = "currency",
-            Description = "Maximise raw currency: orb payouts, scarabs, decks, altars.",
+            Description = "Maximise tradeable value: orb payouts, scarabs, decks, altars, uniques.",
             BoardModifierWeight = 1.5,
             Weights =
             {
@@ -529,6 +529,12 @@ public static class Strategies
                 // drops; the ~10% of packs that arrive rare-led are counted separately
                 // on the rare channel, so this is not double-paying for them.
                 [Stat.Packs] = 0.8,
+                // Unique conversions sell, so they are tradeable value like everything
+                // else here. They live on this profile because the dedicated "uniques"
+                // preset was retired and a reward NO profile scores fails the build --
+                // the catalog still knows what a fractured base is worth even though
+                // nobody plans a voyage around one any more.
+                [Stat.Uniques] = 0.5,
             },
         },
         new()
@@ -628,24 +634,6 @@ public static class Strategies
         },
         new()
         {
-            Name = "uniques",
-            Description = "Unique conversions, fractured bases and rarity.",
-            BoardModifierWeight = 1.5,
-            Weights =
-            {
-                [Stat.Uniques] = 1, [Stat.Rarity] = 0.5, [Stat.NoEquipmentDrops] = -60,
-            },
-            ExtraRules =
-            {
-                Extra(@"Rare Monsters.*(\d+)% chance to Fracture on death", 0.4,
-                      "fractured RARES feed the same hunt"),
-                Extra(@"Area: (?:Hazardous Depths|Kishara's Rest)", 15,
-                      "market-backed: both charts trade expensive; rumours are "
-                      + "unique-shaped (Rotmother loot box, a boss at Kishara's Rest)"),
-            },
-        },
-        new()
-        {
             Name = "gold",
             Description = "Maximise Gold for the Currency Exchange and Kingsmarch.",
             Weights = { [Stat.Gold] = 1, [Stat.Packs] = 0.4 },
@@ -678,13 +666,6 @@ public static class Strategies
             {
                 [Stat.Magic] = 1, [Stat.Packs] = 0.5, [Stat.Quantity] = 0.3,
             },
-        },
-        new()
-        {
-            Name = "high tier",
-            Description = "Highest area level the build survives: danger counts against.",
-            AreaLevelWeight = 1.0,
-            Weights = { [Stat.Danger] = -1 },
         },
         new()
         {

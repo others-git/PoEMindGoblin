@@ -31,7 +31,7 @@ public class RulesUpgradeTests : IDisposable
     [Fact]
     public void ANewProfileIsAddedToAnExistingFile()
     {
-        WriteOldFile("sulphur", "currency", "high tier");
+        WriteOldFile("sulphur", "currency", "gold");
 
         using var rules = new VoyageRules(_path);
         Assert.DoesNotContain(rules.Profiles, p => p.Name == "strongbox");
@@ -127,10 +127,10 @@ public class RulesUpgradeTests : IDisposable
     }
 
     [Fact]
-    public void TheFourOriginalProfilesGainTheEverythingElse()
+    public void TheFewOriginalProfilesGainTheEverythingElse()
     {
-        // Exactly the situation on disk: a file written when there were four.
-        WriteOldFile("sulphur", "pack size", "high tier");
+        // Exactly the situation on disk: a file written when there were a handful.
+        WriteOldFile("sulphur", "pack size", "gold");
         using var rules = new VoyageRules(_path);
 
         var added = rules.AddMissingDefaults();
@@ -139,8 +139,8 @@ public class RulesUpgradeTests : IDisposable
         Assert.Contains("containers", added);
         Assert.Contains("currency", added);
         Assert.Contains("rare monsters", added);
-        Assert.Contains("uniques", added);
-        Assert.Contains("gold", added);
+        Assert.Contains("scarabs", added);
+        Assert.Contains("bottles", added);
         Assert.Contains("magic monsters", added);
     }
 }

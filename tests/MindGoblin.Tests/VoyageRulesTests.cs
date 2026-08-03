@@ -75,9 +75,15 @@ public class VoyageProfileTests
     }
 
     [Fact]
-    public void SafeProfilePenalisesDangerousMods()
+    public void ARaisedDangerSliderPenalisesDangerousMods()
     {
-        var safe = VoyageRules.Defaults().First(p => p.Name == "high tier");
+        // No shipped strategy weights Danger, so this guarantee now rides the slider: the
+        // catalog stores danger as a positive SEVERITY, and borrowing it at catalog sign
+        // would rank the chart most likely to end the voyage ABOVE the clean one.
+        var safe = WeightCategories.Blended(
+            VoyageRules.Defaults().First(p => p.Name == "sulphur"),
+            new Dictionary<string, int> { ["Danger"] = WeightCategories.Max },
+            VoyageRules.Defaults());
         var nasty = Chart("Monsters cannot be Taunted", "Monsters reflect Physical Damage");
         var clean = Chart("30% increased Dead Man's Sulphur found in this Area");
         Assert.True(safe.ScoreChart(clean) > safe.ScoreChart(nasty));

@@ -35,7 +35,7 @@ public class VoyagePipelineTests
     {
         var session = ReadRealPanel();
         var solution = session.Solve(
-            VoyageRules.Defaults().Single(p => p.Name == "high tier"), TimeSpan.FromSeconds(5));
+            VoyageRules.Defaults().Single(p => p.Name == "strongbox"), TimeSpan.FromSeconds(5));
 
         Assert.Equal(9, solution.Placements.Count);
 
@@ -51,7 +51,7 @@ public class VoyagePipelineTests
         // missing, the plan cannot be followed no matter how good the layout is.
         var session = ReadRealPanel();
         var plan = session.Plan(session.Solve(
-            VoyageRules.Defaults().Single(p => p.Name == "high tier"), TimeSpan.FromSeconds(5)));
+            VoyageRules.Defaults().Single(p => p.Name == "strongbox"), TimeSpan.FromSeconds(5)));
 
         Assert.Equal(9, plan.Count);
         Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8, 9], plan.Select(s => s.Square));
@@ -65,7 +65,7 @@ public class VoyagePipelineTests
     {
         var session = ReadRealPanel();
         var solution = session.Solve(
-            VoyageRules.Defaults().Single(p => p.Name == "high tier"), TimeSpan.FromSeconds(5));
+            VoyageRules.Defaults().Single(p => p.Name == "strongbox"), TimeSpan.FromSeconds(5));
         var plan = session.Plan(solution);
 
         // The rotation printed must be the rotation solved for -- an off-by-90 would be
@@ -106,12 +106,13 @@ public class VoyagePipelineTests
     {
         var session = ReadRealPanel();
 
-        var safe = session.Plan(session.Solve(
-            VoyageRules.Defaults().Single(p => p.Name == "high tier"), TimeSpan.FromSeconds(3)));
+        var levelled = session.Plan(session.Solve(
+            VoyageRules.Defaults().Single(p => p.Name == "strongbox"), TimeSpan.FromSeconds(3)));
 
-        // "high tier" weights area level; a flat profile has nothing to prefer, so the two
-        // must not agree by construction.
-        var levels = safe.ToDictionary(s => s.Square, s => session.ByPanelIndex[s.ChartNumber].AreaLevel);
+        // "strongbox" weights area level -- 3.29.0b gates the good boxes above 67 -- and a
+        // panel read carries nothing else to score, so the levels it picks are the only
+        // evidence the profile reached the solver at all.
+        var levels = levelled.ToDictionary(s => s.Square, s => session.ByPanelIndex[s.ChartNumber].AreaLevel);
         Assert.True(levels.Values.Average() >= 80,
             $"the level-weighted profile picked an average level of {levels.Values.Average():0.#}");
     }

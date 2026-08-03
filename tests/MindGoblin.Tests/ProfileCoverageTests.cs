@@ -168,25 +168,32 @@ public class ProfileCoverageTests
     }
 
     [Fact]
-    public void TheSafeProfilePenalisesTheDangerousHalfOfTheTable()
+    public void ARaisedDangerSliderPenalisesTheDangerousHalfOfTheTable()
     {
         // Not all of it -- plenty of monster mods are survivable and should not drag a
-        // chart down. But if it covered only a handful, "high tier" would be decorative.
-        var safe = VoyageRules.Defaults().Single(p => p.Name == "high tier");
+        // chart down. But if it covered only a handful, the Danger slider would be
+        // decorative: no shipped strategy weights the stat, so borrowing it from the
+        // catalog is the ONLY way a plan can see the difficulty table at all.
+        var safe = WeightCategories.Blended(
+            VoyageRules.Defaults().Single(p => p.Name == "sulphur"),
+            new Dictionary<string, int> { ["Danger"] = WeightCategories.Max },
+            VoyageRules.Defaults());
         var penalised = Corpus("difficulty")
             .Count(line => Fillings(line).Any(f => safe.ScoreText([f]) < 0));
 
         Assert.True(penalised >= 15,
-            $"safe only penalises {penalised} of {Corpus("difficulty").Count} difficulty lines");
+            $"the danger slider only penalises {penalised} of {Corpus("difficulty").Count} difficulty lines");
     }
 
     [Fact]
     public void NoProfileRewardsADifficultyLine()
     {
-        // A positive score on a monster mod would make a chart look better for being
-        // more dangerous. The "high tier" profile is the only one meant to have an opinion.
+        // A positive score on a monster mod would make a chart look better for being more
+        // dangerous. Every shipped profile is subject to this now: the one preset that was
+        // allowed an opinion on difficulty has been retired, and Danger reaches a plan only
+        // through the slider, which enters negative by convention.
         var offenders = new List<string>();
-        foreach (var profile in VoyageRules.Defaults().Where(p => p.Name != "high tier"))
+        foreach (var profile in VoyageRules.Defaults())
             foreach (var line in Corpus("difficulty"))
                 if (profile.ScoreText([WithValues(line)]) > 0)
                     offenders.Add($"{profile.Name} scores +{profile.ScoreText([WithValues(line)])}: {line}");
@@ -243,7 +250,7 @@ public class ProfileCoverageTests
         // filed as a reward line because it is about the payout -- but it is a negative
         // one, and a profile that ignored it would rank a gutted chart normally.
         const string line = "Monsters in all Voyage Areas cannot drop Equipment, Flasks or Tinctures";
-        foreach (var name in new[] { "uniques", "strongbox" })
+        foreach (var name in new[] { "bottles", "currency", "scarabs", "strongbox" })
         {
             var profile = VoyageRules.Defaults().Single(p => p.Name == name);
             Assert.True(profile.ScoreText([line]) < 0, $"{name} does not penalise it");

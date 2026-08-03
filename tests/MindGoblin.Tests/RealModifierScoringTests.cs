@@ -15,6 +15,20 @@ public class RealModifierScoringTests
     private static double ScoreLine(string profile, string line) =>
         Profile(profile).ScoreText([line]);
 
+    /// <summary>
+    /// A profile that has been asked about danger.
+    ///
+    /// No shipped strategy weights Danger any more, but the stat did not retire with the
+    /// preset that used it: the slider is how a user says "steer me away from run-enders",
+    /// and it is the one place a stat arrives without a strategy's opinion attached. The
+    /// catalog stores danger as a positive SEVERITY, so borrowing it at the wrong sign
+    /// would ask for MORE hexproof -- which is why these lines still need pinning.
+    /// </summary>
+    private static VoyageProfile DangerAware() =>
+        WeightCategories.Blended(Profile("sulphur"),
+            new Dictionary<string, int> { ["Danger"] = WeightCategories.Max },
+            VoyageRules.Defaults());
+
     [Theory]
     // Global sulphur, all three rolls.
     [InlineData("15% increased Dead Man's Sulphur found in all Voyage Areas")]
@@ -67,10 +81,11 @@ public class RealModifierScoringTests
     [InlineData("Adjacent Areas contain an additional cage of Tormented Spirits")]
     public void LootRollsAllScore(string line)
     {
-        // Split across two profiles now: strongboxes are worth planning a board around,
-        // the rest of the openables are their own objective.
+        // Split across three profiles now: strongboxes are worth planning a board around,
+        // the rest of the openables are their own objective, and unique conversions are
+        // tradeable value, so they sit with the currency plan.
         Assert.True(ScoreLine("strongbox", line) > 0 || ScoreLine("containers", line) > 0
-                    || ScoreLine("uniques", line) > 0,
+                    || ScoreLine("currency", line) > 0,
                     line);
     }
 
@@ -92,15 +107,20 @@ public class RealModifierScoringTests
     [InlineData("Monsters steal Power, Frenzy and Endurance charges on Hit")]
     [InlineData("52% more Monster Life")]
     [InlineData("Area has patches of Shocked Ground which increase Damage taken by 10%")]
-    public void DangerousModsArePenalisedByTheSafeProfile(string line) =>
-        Assert.True(ScoreLine("high tier", line) < 0, line);
+    public void DangerousModsArePenalisedWhenTheDangerSliderIsRaised(string line) =>
+        Assert.True(DangerAware().ScoreText([line]) < 0, line);
 
-    [Fact]
-    public void TheSafeProfileStillPrefersHigherTier()
+    [Theory]
+    // The profiles that weight area level, and why each does: bottles only roll on 68+
+    // charts, and 3.29.0b gates Diviner's, Arcanist's and Operative's boxes above 67.
+    [InlineData("bottles")]
+    [InlineData("scarabs")]
+    [InlineData("strongbox")]
+    public void TheTierGatedProfilesPreferAHigherAreaLevel(string name)
     {
         var low = new Chart("a", "a", ChartShape.Crossing, 68, []);
         var high = low with { AreaLevel = 83 };
-        Assert.True(Profile("high tier").ScoreChart(high) > Profile("high tier").ScoreChart(low));
+        Assert.True(Profile(name).ScoreChart(high) > Profile(name).ScoreChart(low), name);
     }
 
     [Fact]
@@ -140,6 +160,11 @@ public class RealModifierScoringTests
         Assert.Equal(96, chart.ItemQuantity);
         Assert.Equal(450, Profile("sulphur").ScoreChart(chart));      // 90 x 5, counted once
         Assert.Equal(25.5, Profile("containers").ScoreAdjacent(chart)); // 17 barrels x 1.5
-        Assert.True(Profile("high tier").ScoreChart(chart) < 78);          // level, less the danger
+
+        // ...and the danger it rolled reaches the score too. "34(20-34)% more Monster
+        // Life" is a prefix like any other, so a board asked about danger has to come out
+        // BELOW the same board that was not asked -- the parse and the rule have to agree
+        // on the wording for that to happen at all.
+        Assert.True(DangerAware().ScoreChart(chart) < Profile("sulphur").ScoreChart(chart));
     }
 }
