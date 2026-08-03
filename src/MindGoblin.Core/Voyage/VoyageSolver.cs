@@ -469,12 +469,39 @@ public sealed class VoyageSolver
         var plain = BuildNeutralOrdering();
         Solution? best = null;
 
-        foreach (var closed in new[] { BorderRule.All, BorderRule.NorthAndWest, BorderRule.None })
+        var rules = new[] { BorderRule.All, BorderRule.NorthAndWest, BorderRule.None };
+        var orderings = new[] { plain, _ordering };
+
+        // EVERY dive gets its own slice of the clock, because the cheap one is only
+        // usually cheap. On a real 56-chart panel the plain dive under BorderRule.All
+        // could not close the border at all and spent the entire seed budget failing,
+        // so all five remaining dives were skipped on the clock and the seed reported
+        // "no connected board exists" -- which drops the stranding constraint and hands
+        // back a board with a dead corner. The score-ordered dive found a joined board
+        // for that same panel in about a MILLISECOND; it simply never got to run.
+        //
+        // The slice is the remaining time divided by the dives still to try, so an
+        // early cheap success leaves the rest of the budget to the dives after it and
+        // the last dive inherits everything left over. No dive can starve the others,
+        // and the total is still bounded by the seed's share of the budget.
+        var divesLeft = rules.Length * orderings.Length;
+
+        foreach (var closed in rules)
         {
-            foreach (var ordering in new[] { plain, _ordering })
+            foreach (var ordering in orderings)
             {
-                if (sw.Elapsed > deadline) return best;
-                if (SeedConnected(closed, ordering, sw, deadline) is not { } seed) continue;
+                var remaining = deadline - sw.Elapsed;
+                if (remaining <= TimeSpan.Zero) return best;
+                var slice = sw.Elapsed + (remaining / divesLeft);
+                divesLeft--;
+
+                var dive = SeedConnected(closed, ordering, sw, slice);
+                if (Trace)
+                    Console.Error.WriteLine(
+                        $"    seed {closed,-13} {(ordering == plain ? "plain" : "score")} "
+                        + $"{(dive is null ? "FAIL" : "ok  ")} "
+                        + $"slice={slice.TotalMilliseconds:0}ms t={sw.Elapsed.TotalMilliseconds:0}ms");
+                if (dive is not { } seed) continue;
                 if (best is null || seed.Value > best.Value) best = seed;
             }
 
@@ -576,11 +603,29 @@ public sealed class VoyageSolver
                 return index != _pinCellIndex
                        && _allowEmpty && LeavingEmptyIsLegal(board, cell) && Dive(index + 1);
 
+            // At most ONE chart per shape at this cell, taking whichever the ordering
+            // put first. Connectivity is a property of the SHAPE, so trying a second
+            // Crossing here re-explores a subproblem already refuted -- and on a real
+            // 56-chart panel that is eleven identical dives per cell, which is what
+            // made this "cheap existence proof" spend its whole clock and report that
+            // no connected board existed on a panel that plainly had one. Every
+            // profile then lost the stranding constraint and could answer with a dead
+            // corner: sulphur left three squares unreachable.
+            //
+            // Feasibility-preserving, not a heuristic: charts of one shape are
+            // interchangeable for connectivity, so any board needing a later Crossing
+            // here has a twin using this one, with the two Crossings swapped. Value is
+            // preserved too -- the ordering means the skipped charts are the ones this
+            // dive rates WORSE, and the polish re-picks the occupants afterwards.
+            var triedShapes = 0;
             foreach (var i in ordering[index])
             {
                 if (used[i]) continue;
                 if (!PinAllows(i, index)) continue;
                 var chart = _charts[i];
+                var shapeBit = 1 << (int)chart.Shape;
+                if ((triedShapes & shapeBit) != 0) continue;
+                triedShapes |= shapeBit;
 
                 foreach (var rotation in ChartFace.DistinctRotations(chart.Shape))
                 {

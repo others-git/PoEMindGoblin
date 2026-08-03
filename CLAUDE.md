@@ -192,6 +192,19 @@ league is newer than any model's cutoff.
   existence in a handful of nodes; score order finds a well-valued incumbent but wanders.
   Returning the first success failed both ways round — score-first blew the clock,
   plain-first handed back a board the search could not improve on (sulphur 3515 → 2250).
+* **The seed dives over SHAPES, not charts, and every dive gets its own slice of the
+  clock.** Connectivity depends only on a chart's shape, so trying a second Crossing at
+  a cell re-refutes a subproblem already refuted — eleven times over on a 56-chart panel.
+  The "cheap existence proof" then spent its ENTIRE clock failing, the five remaining
+  dives were skipped on the clock, and a seed that fails silently drops the stranding
+  constraint: sulphur answered with squares 1, 2 and 3 unreachable, at half the score of
+  the joined board (1905 → 4046). Deduping by shape is feasibility-preserving — charts of
+  one shape are interchangeable, so any board needing a later Crossing has a twin using
+  this one — and the dive that had been failing after 900ms now succeeds in 26ms.
+  `AFullPanelOfMixedShapesNeverStrandsUnderAnyShippedProfile` pins it, and it only bites
+  with the shapes INTERLEAVED the way a real stash looks: grouped by shape the seed
+  places nine Crossings and succeeds trivially, which is why an all-Crossing panel test
+  never caught this.
 * **A recursive budget guard must SPEND the budget, not just return false.** Returning
   false only fails the current branch: the loops above carry on and each candidate still
   pays its placement checks. The seed's clock check did that, so six dives each ground

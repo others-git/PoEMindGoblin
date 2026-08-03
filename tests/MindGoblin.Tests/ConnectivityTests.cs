@@ -223,4 +223,52 @@ public class StrandingIsForbiddenTests
                         $"{profile.Name} stranded {solution.StrandedCells.Count} squares");
         }
     }
+
+    /// <summary>
+    /// A FULL panel of MIXED shapes -- the case the all-Crossing panel above cannot
+    /// reach. Connectivity depends only on a chart's shape, so a seed that tries every
+    /// CHART at a cell re-explores each refuted subproblem once per duplicate: eleven
+    /// times over on a 56-chart panel. The existence proof then spent its entire clock
+    /// failing, every profile silently lost the stranding constraint, and a real
+    /// sulphur solve came back with squares 1, 2 and 3 unreachable.
+    ///
+    /// The sequence is transcribed from the panel that failed, in panel order, because
+    /// the ORDER is what bites: grouped by shape the seed places nine Crossings and
+    /// succeeds trivially, while interleaved -- the way a real stash looks -- the dive
+    /// wanders. Before the fix sulphur and high tier strand here.
+    /// </summary>
+    [Fact]
+    public void AFullPanelOfMixedShapesNeverStrandsUnderAnyShippedProfile()
+    {
+        // X Crossing, J Junction, C Corner, E End, S Straight.
+        const string panel = "EESCEJJJJCSCEJEXSCEXSCEXJXCEXJXSXCJJJXXCJXXCJJSXCEXEXXCC";
+
+        var session = new VoyageSession();
+        session.ApplyPanelRead(panel.Select((glyph, i) =>
+        {
+            var (n, e, s, w) = glyph switch
+            {
+                'X' => (true, true, true, true),
+                'J' => (true, true, true, false),
+                'C' => (true, true, false, false),
+                'S' => (true, false, true, false),
+                _ => (true, false, false, false),
+            };
+            return new ChartPanelReader.ReadCell(i + 1, i / 6, i % 6, n, e, s, w) { Level = 80 };
+        }).ToList());
+
+        // Hover detail, so the profiles score something and their orderings diverge --
+        // an unscored panel makes every chart identical and hides the bug.
+        foreach (var i in Enumerable.Range(1, panel.Length))
+            session.ApplyChartText(i,
+                $"Chart {i}\nAnchorfield\nItem Quantity: +{20 + i % 40}%\n"
+                + $"Dead Man's Sulphur: +{i % 25}\nMonster Pack Size: +{i % 30}%");
+
+        foreach (var profile in VoyageRules.Defaults())
+        {
+            var solution = session.Solve(profile, TimeSpan.FromSeconds(1));
+            Assert.True(solution.StrandedCells.Count == 0,
+                        $"{profile.Name} stranded {solution.StrandedCells.Count} squares");
+        }
+    }
 }
