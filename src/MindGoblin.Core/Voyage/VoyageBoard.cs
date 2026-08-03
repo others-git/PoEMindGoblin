@@ -95,6 +95,18 @@ public sealed record Chart(
     /// a neighbouring square carries a container payout.</summary>
     public double AdjacentQuantityDensity { get; init; }
 
+    /// <summary>
+    /// Value of a drop CONVERSION this chart's Adjacent Modifier gives its neighbours
+    /// ("Basic Currency items dropped by Monsters ... will instead drop as Stacked
+    /// Decks"). Two-factor, alone among the channels: what it converts is monster
+    /// drops, so the count rides on the neighbour's MONSTERS and on the Quantity that
+    /// multiplies what they drop. Scored on quantity alone it ignored pack size
+    /// entirely -- a +150% pack tile paid a conversion exactly what a blank one did,
+    /// so the solver had no reason to feed it monsters and bought barrels instead,
+    /// whose loot no monster drops and which the conversion therefore cannot touch.
+    /// </summary>
+    public double AdjacentConversionValue { get; init; }
+
     /// <summary>Which channel this chart's per-monster ADJACENT payout scales with:
     /// true for population payouts (x the neighbour's pack density), false for
     /// per-rare payouts (x the neighbour's rare density).</summary>

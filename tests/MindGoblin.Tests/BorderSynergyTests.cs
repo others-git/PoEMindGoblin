@@ -96,14 +96,66 @@ public class BorderSynergyTests
         var quantity = 3;
         session.ApplyChartText(quantity,
             "Drowned Shelf\nAnchorfield\nItem Quantity: +200%");
-        session.ApplySquareModifiers(1,
-            ["Basic Currency items dropped by Monsters in this Area "
-             + "will instead drop as Stacked Decks"]);
+        session.ApplySquareModifiers(1, [Conversion]);
 
         var currency = VoyageRules.Defaults().Single(p => p.Name == "currency");
         var plan = session.Plan(session.Solve(currency, TimeSpan.FromSeconds(3)));
 
         Assert.Equal(1, Assert.Single(plan, s => s.ChartNumber == quantity).Square);
+    }
+
+    private const string Conversion =
+        "Basic Currency items dropped by Monsters in this Area "
+        + "will instead drop as Stacked Decks";
+
+    /// <summary>
+    /// MONSTERS are what a monster-drop conversion converts, so pack size feeds it as
+    /// surely as quantity does. On quantity alone a +150% pack tile paid a conversion
+    /// exactly what a BLANK tile did, so the solver had no reason to feed the square
+    /// monsters and spent the board on barrels instead -- whose loot no monster drops
+    /// and which a monster-drop conversion therefore cannot touch.
+    /// </summary>
+    [Theory]
+    [InlineData("Monster Pack Size: +150%")]
+    [InlineData("Item Quantity: +150%")]
+    public void AConversionIsFedByMonstersAndByQuantityAlike(string stat)
+    {
+        double Conversion_Worth(bool withConversion)
+        {
+            var session = Session(out _, out _);
+            session.ApplyChartText(1, $"Feeder\nAnchorfield\n{stat}");
+            if (withConversion) session.ApplySquareModifiers(1, [Conversion]);
+            var currency = VoyageRules.Defaults().Single(p => p.Name == "currency");
+            return session.Solve(currency, TimeSpan.FromSeconds(2)).Value;
+        }
+
+        var blank = Session(out _, out _);
+        blank.ApplySquareModifiers(1, [Conversion]);
+        var currencyProfile = VoyageRules.Defaults().Single(p => p.Name == "currency");
+        var onBlank = blank.Solve(currencyProfile, TimeSpan.FromSeconds(2)).Value
+                      - Session(out _, out _).Solve(currencyProfile, TimeSpan.FromSeconds(2)).Value;
+
+        Assert.True(Conversion_Worth(true) - Conversion_Worth(false) > onBlank,
+                    $"a +150% {stat} tile must be worth more to a conversion than a blank one");
+    }
+
+    /// <summary>The other half of that claim: a CONTAINER gift is not fed by monsters.
+    /// Barrels are stocked when the area is built, so pack size does nothing for them,
+    /// and the two channels must not be collapsed into one.</summary>
+    [Fact]
+    public void AContainerGiftIsNotFedByPackSize()
+    {
+        double Worth(string stat)
+        {
+            var session = Session(out _, out _);
+            session.ApplyChartText(1, $"Feeder\nAnchorfield\n{stat}");
+            session.ApplySquareModifiers(1, ["Area contains 5 additional Clusters of Barrels"]);
+            var currency = VoyageRules.Defaults().Single(p => p.Name == "currency");
+            return session.Solve(currency, TimeSpan.FromSeconds(2)).Value;
+        }
+
+        // Quantity rolls against a barrel's contents; pack size never touches them.
+        Assert.True(Worth("Item Quantity: +150%") > Worth("Monster Pack Size: +150%"));
     }
 
     [Theory]

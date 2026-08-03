@@ -442,11 +442,16 @@ public sealed class VoyageSession
             var channel = c.AdjacentModifier is { } adj
                 ? VoyageProfile.PayoutChannelOf(adj) : VoyageProfile.PayoutChannel.None;
             var payoutAdj = channel != VoyageProfile.PayoutChannel.None;
-            var containerAdj = !payoutAdj && c.AdjacentModifier is { } gift
+            // Conversions before containers: both ride the receiver's quantity, but a
+            // conversion ALSO rides its monsters, and testing the wider predicate first
+            // would file it as a container and lose the pack half.
+            var conversionAdj = !payoutAdj && c.AdjacentModifier is { } conv
+                                && VoyageProfile.IsDropConversion(conv);
+            var containerAdj = !payoutAdj && !conversionAdj && c.AdjacentModifier is { } gift
                                && VoyageProfile.ScalesWithReceiverQuantity(gift);
             // The amplifier channel: pays a SHARE of the neighbour rather than a sum of
             // its own, so it must not also keep a flat value or it would be paid twice.
-            var magnitudeAdj = !payoutAdj && !containerAdj
+            var magnitudeAdj = !payoutAdj && !containerAdj && !conversionAdj
                                && c.AdjacentModifier is { } amp
                                && VoyageProfile.IsMagnitudeAmplifier(amp);
             return c with
@@ -459,9 +464,11 @@ public sealed class VoyageSession
                         + (_required.Contains(kv.Key)
                            || (bottleCentre is null && kv.Key == bottleSeat)
                             ? RequiredBonus : 0),
-                AdjacentValue = payoutAdj || containerAdj || magnitudeAdj ? 0 : adjacent,
+                AdjacentValue = payoutAdj || containerAdj || conversionAdj || magnitudeAdj
+                    ? 0 : adjacent,
                 AdjacentPerMonsterValue = payoutAdj ? adjacent : 0,
                 AdjacentPerQuantityValue = containerAdj ? adjacent : 0,
+                AdjacentConversionValue = conversionAdj ? adjacent : 0,
                 AdjacentMagnitudeValue = magnitudeAdj ? syn * adjacent : 0,
                 ExplicitValue = profile.ExplicitValue(c),
                 AdjacentPayoutOnPopulation = channel == VoyageProfile.PayoutChannel.Population,
@@ -489,7 +496,7 @@ public sealed class VoyageSession
         // constant over every layout and steers nothing. Per-monster payouts multiply
         // with the tile's pack size instead, which is what lets a Divine Orb square pull
         // the monster-dense chart onto itself. See VoyageProfile.MonsterPayoutSynergy.
-        var (flat, perRare, perPack, perQty, amplify) = BoardValueByCell(profile);
+        var (flat, perRare, perPack, perQty, perConvert, amplify) = BoardValueByCell(profile);
 
         // Per-cell constants for BOTH channels, precomputed so scoring stays
         // arithmetic: the density the border itself grants a square, and the payout
@@ -531,6 +538,13 @@ public sealed class VoyageSession
               * (1 + chart.PackDensity + borderPack.GetValueOrDefault(cell))
             + perQty.GetValueOrDefault(cell)
               * (1 + chart.QuantityDensity + borderQty.GetValueOrDefault(cell))
+            // The conversion upgrades what THIS tile's monsters drop, so it is the one
+            // channel carrying two factors: how many monsters, and the quantity
+            // multiplying what they drop. On quantity alone a +150% pack tile paid it
+            // exactly what a blank one did.
+            + perConvert.GetValueOrDefault(cell)
+              * (1 + chart.PackDensity + borderPack.GetValueOrDefault(cell)
+                   + chart.QuantityDensity + borderQty.GetValueOrDefault(cell))
             // The amplifier: a SHARE of this chart's own explicit mods, so unlike the
             // three channels above there is no flat baseline to add it to. This is the
             // term that finally makes a magnitude square pull the fattest chart onto
@@ -611,13 +625,16 @@ public sealed class VoyageSession
     /// </summary>
     private (Dictionary<Cell, double> Flat, Dictionary<Cell, double> PerRare,
              Dictionary<Cell, double> PerPack, Dictionary<Cell, double> PerQty,
-             Dictionary<Cell, double> Amplify)
+             Dictionary<Cell, double> Convert, Dictionary<Cell, double> Amplify)
         BoardValueByCell(VoyageProfile profile)
     {
         var flat = new Dictionary<Cell, double>();
         var perRare = new Dictionary<Cell, double>();
         var perPack = new Dictionary<Cell, double>();
         var perQty = new Dictionary<Cell, double>();
+        // The two-factor channel: a conversion upgrades what this tile's MONSTERS drop,
+        // so both its pack density and the quantity multiplying their drops count.
+        var perConvert = new Dictionary<Cell, double>();
         // Not a value like the others: a FRACTION of whatever chart lands here, which is
         // why the profile prices this mod at 0.01 per percent rather than in chaos.
         var amplify = new Dictionary<Cell, double>();
@@ -629,6 +646,7 @@ public sealed class VoyageSession
             {
                 VoyageProfile.PayoutChannel.Rares => perRare,
                 VoyageProfile.PayoutChannel.Population => perPack,
+                _ when VoyageProfile.IsDropConversion(modifier.Description) => perConvert,
                 _ when VoyageProfile.ScalesWithReceiverQuantity(modifier.Description) => perQty,
                 _ when VoyageProfile.IsMagnitudeAmplifier(modifier.Description) => amplify,
                 _ => flat,
@@ -636,7 +654,7 @@ public sealed class VoyageSession
             foreach (var cell in modifier.AffectedCells)
                 into[cell] = into.GetValueOrDefault(cell) + worth;
         }
-        return (flat, perRare, perPack, perQty, amplify);
+        return (flat, perRare, perPack, perQty, perConvert, amplify);
     }
 
     /// <summary>
@@ -672,6 +690,7 @@ public sealed class VoyageSession
             {
                 VoyageProfile.PayoutChannel.Rares => 1 + rareDensity,
                 VoyageProfile.PayoutChannel.Population => 1 + packDensity,
+                _ when VoyageProfile.IsDropConversion(adj) => 1 + packDensity + qtyDensity,
                 _ when VoyageProfile.ScalesWithReceiverQuantity(adj) => 1 + qtyDensity,
                 _ when VoyageProfile.IsMagnitudeAmplifier(adj) => explicitHere,
                 _ => 1,
@@ -696,7 +715,7 @@ public sealed class VoyageSession
         var board = new VoyageBoard(Layout.Rows, Layout.Cols);
         foreach (var placement in solution.Placements) board.Place(placement);
 
-        var (flat, perRare, perPack, perQty, amplify) = BoardValueByCell(profile);
+        var (flat, perRare, perPack, perQty, perConvert, amplify) = BoardValueByCell(profile);
         var syn = profile.MonsterPayoutSynergy;
 
         // Golden Lanterns granted TO each square, from the board and from neighbours'
@@ -746,7 +765,8 @@ public sealed class VoyageSession
                         {
                             VoyageProfile.PayoutChannel.Rares => 1 + rareDensity,
                             VoyageProfile.PayoutChannel.Population => 1 + packDensity,
-                            _ when VoyageProfile.ScalesWithReceiverQuantity(adj) => 1 + qtyDensity,
+                            _ when VoyageProfile.IsDropConversion(adj) => 1 + packDensity + qtyDensity,
+                _ when VoyageProfile.ScalesWithReceiverQuantity(adj) => 1 + qtyDensity,
                             _ when VoyageProfile.IsMagnitudeAmplifier(adj) => explicitHere,
                             _ => 1,
                         };

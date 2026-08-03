@@ -174,6 +174,9 @@ public class SolverSoundnessTests
                     AdjacentValue = Math.Round(random.NextDouble() * 60, 3),
                     AdjacentPerMonsterValue = Math.Round(random.NextDouble() * 50 - 25, 3),
                     AdjacentPerQuantityValue = Math.Round(random.NextDouble() * 30 - 15, 3),
+                    // The two-factor channel, drawn SIGNED like the rest: its ceiling
+                    // sums two densities, so a bound built for one would sit too low.
+                    AdjacentConversionValue = Math.Round(random.NextDouble() * 40 - 20, 3),
                     MonsterDensity = Math.Round(random.NextDouble() * 3, 3),
                     PackDensity = Math.Round(random.NextDouble() * 3, 3),
                     QuantityDensity = Math.Round(random.NextDouble() * 2, 3),
@@ -190,6 +193,52 @@ public class SolverSoundnessTests
             Assert.True(Math.Abs(best - solution.Value) < 1e-6,
                         $"trial {trial}: brute force {best:0.###}, solver {solution.Value:0.###}");
         }
+    }
+
+    /// <summary>
+    /// A board whose entire worth is conversion PAIRING still solves to the optimum:
+    /// the converter is worth nothing alone and nothing beside a thin tile, so greedy
+    /// by own value leaves it out of the board altogether.
+    ///
+    /// Honest about what this does NOT prove. The conversion is the only pair term
+    /// multiplied by two of the receiver's densities, so its ceiling has to allow for
+    /// both or the bound sits under what a pair can really pay -- but deleting that
+    /// term from the ceiling does not fail this test, or the random sweep either. The
+    /// polish reaches the optimum by swapping without the search ever needing an
+    /// admissible bound, which is the same reason the amplifier needed a sweep rather
+    /// than a hand-built case. The ceiling term is kept because admissibility is an
+    /// argument about all instances, not about the ones small enough to enumerate.
+    /// </summary>
+    [Fact]
+    public void TheConversionPairTermCannotPruneTheTrueOptimum()
+    {
+        Chart Conv(string id, double own, double conversion, double pack, double qty) =>
+            new(id, id, ChartShape.Crossing, 80, [])
+            {
+                Value = own, AdjacentConversionValue = conversion,
+                PackDensity = pack, QuantityDensity = qty,
+            };
+
+        // The optimum needs the converter beside the dense tile; greedy by own value
+        // takes the three middling charts and leaves the converter out entirely.
+        var charts = new[]
+        {
+            Conv("dense", own: 10, conversion: 0, pack: 3.0, qty: 2.0),
+            Conv("converter", own: 0, conversion: 50, pack: 0, qty: 0),
+            Conv("c", own: 12, conversion: 0, pack: 0.1, qty: 0.1),
+            Conv("d", own: 11, conversion: 0, pack: 0.2, qty: 0),
+            Conv("e", own: 9, conversion: 0, pack: 0, qty: 0.1),
+        };
+
+        double Score(Chart chart, Cell _) => chart.Value;
+
+        var best = Permutations(charts, 4).Max(RowValue);
+        var solution = new VoyageSolver(1, 4, charts, Score,
+                                        allowEmpty: false, strandedPenalty: 40)
+            .Solve(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(best, solution.Value, 6);
+        Assert.True(solution.ProvedOptimal, "an instance this small must be proved");
     }
 
     /// <summary>One row scored the way the solver accumulates: own value, plus every
@@ -211,6 +260,8 @@ public class SolverSoundnessTests
           * (1 + (giver.AdjacentPayoutOnPopulation
                       ? receiver.PackDensity : receiver.MonsterDensity))
         + giver.AdjacentPerQuantityValue * (1 + receiver.QuantityDensity)
+        + giver.AdjacentConversionValue
+          * (1 + receiver.PackDensity + receiver.QuantityDensity)
         + giver.AdjacentMagnitudeValue * receiver.ExplicitValue;
 
     private static IEnumerable<IReadOnlyList<Chart>> Permutations(

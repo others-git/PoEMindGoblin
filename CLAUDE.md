@@ -256,15 +256,19 @@ Corroborated: plan from the reward outward rather than filling the board; adjace
 belong in the centre, global ones on the edge, high-value rewards in a corner (two border
 modifiers); read the borders *before* placing; borders are rerollable for sulphur.
 
-**The multiplication gap is CLOSED — four channels.** Border payouts multiply with the
+**The multiplication gap is CLOSED — five channels.** Border payouts multiply with the
 receiving tile: per-RARE payouts by its rare density (pack size + the tileset's measured
 room bonus — and per poedb, NO self-scope rare-adding chart mods exist, so nothing else
 may count), at-least-Magic payouts by its pack density, container gifts (boxes,
-barrels, cages…) **and drop CONVERSIONS** (`Basic Currency items dropped by Monsters …
-will instead drop as Stacked Decks`) by its Item Quantity — a conversion adds nothing to
-the area, it upgrades the drops already there, so quantity decides how many there are to
-convert and `ScalesWithReceiverQuantity` is the one predicate all four scoring paths ask
-— and **amplifiers** (`#% increased explicit modifier
+barrels, cages…) by its Item Quantity, **drop CONVERSIONS** (`Basic Currency items
+dropped by Monsters … will instead drop as Stacked Decks`) by its pack density AND its
+quantity — the only TWO-factor channel, because a conversion adds nothing to the area,
+it upgrades what the tile's own MONSTERS drop, so both how many monsters it has and the
+quantity multiplying their drops decide the count converted. Scored flat it was worth
+the same 40 wherever it sat; scored on quantity alone a +150% pack tile paid it exactly
+what a blank one did, so the solver fed the square BARRELS — whose loot no monster drops
+and which a monster-drop conversion therefore cannot touch. That asymmetry is the point:
+pack size feeds a conversion and never a container. And **amplifiers** (`#% increased explicit modifier
 magnitudes`) by the receiving chart's EXPLICIT value — its rolled affixes and the stats
 that aggregate them, never its one implicit. **Bottles are NOT a container gift**
 (field-confirmed): a Message in a Bottle is ground loot sold UNOPENED — a fixed-value

@@ -700,6 +700,11 @@ public sealed class VoyageSolver
           * (1 + (giver.AdjacentPayoutOnPopulation
                       ? receiver.PackDensity : receiver.MonsterDensity))
         + giver.AdjacentPerQuantityValue * (1 + receiver.QuantityDensity)
+        // The conversion is the only TWO-factor channel: it upgrades what the
+        // receiver's monsters drop, so both how many monsters it has and the quantity
+        // multiplying their drops decide the count converted.
+        + giver.AdjacentConversionValue
+          * (1 + receiver.PackDensity + receiver.QuantityDensity)
         // The amplifier: a share of the receiver's own explicit mods, with no baseline
         // of its own -- worth everything beside a fat chart and nothing beside a blank.
         + giver.AdjacentMagnitudeValue * receiver.ExplicitValue;
@@ -773,6 +778,10 @@ public sealed class VoyageSolver
                   Math.Min(c.MonsterDensity, c.PackDensity))));
         // Per channel, because the sign decides which end of that range is the best case.
         double BestDensityFor(double perX) => perX * (1 + (perX >= 0 ? maxDensity : minDensity));
+        // The conversion sums TWO densities, so its extreme is twice the single-channel
+        // one. Loose but admissible: pack and quantity are each at most maxDensity.
+        double BestConversionFor(double v) =>
+            v * (1 + 2 * (v >= 0 ? maxDensity : minDensity));
         // The amplifier pair term is a PRODUCT of two signed quantities -- a strategy
         // may price magnitude negatively (dump) and explicit value negatively with it --
         // so the only safe ceiling is over absolute values. Loose, and it has to be:
@@ -782,7 +791,8 @@ public sealed class VoyageSolver
         var maxExplicit = _charts.Count == 0 ? 0 : _charts.Max(c => Math.Abs(c.ExplicitValue));
         var bestAdjacent = _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c =>
             c.AdjacentValue + BestDensityFor(c.AdjacentPerMonsterValue)
-                            + BestDensityFor(c.AdjacentPerQuantityValue))
+                            + BestDensityFor(c.AdjacentPerQuantityValue)
+                            + BestConversionFor(c.AdjacentConversionValue))
             + maxMagnitude * maxExplicit);
         var pairsRemaining = AdjacentPairsFrom();
 
@@ -857,6 +867,7 @@ public sealed class VoyageSolver
                                           + Math.Max(0, _charts[idx].AdjacentValue
                                                         + _charts[idx].AdjacentPerMonsterValue * 2
                                                         + _charts[idx].AdjacentPerQuantityValue * 2
+                                                        + _charts[idx].AdjacentConversionValue * 2
                                                         + _charts[idx].AdjacentMagnitudeValue * maxExplicit) * 8)
                 .ToArray();
         }
