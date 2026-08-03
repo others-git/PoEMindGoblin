@@ -408,6 +408,16 @@ public sealed class Strategy
     /// </summary>
     public bool UseBoardScaling { get; set; } = true;
 
+    /// <summary>
+    /// One bottle chart per voyage (field rule): a bottle's count is fixed by the roll
+    /// and nothing multiplies it, so a second bottle chart in the same voyage mostly
+    /// re-covers areas the first already feeds -- held back, it is a whole extra
+    /// voyage of bottles. Lives on the SHIPPED strategy, not the serialized profile:
+    /// a rule file written by an older build cannot switch mechanics off, and a tuned
+    /// profile keeps its weights without losing the rationing.
+    /// </summary>
+    public bool SeatsOneBottleChart { get; set; }
+
     /// <summary>The catalog priced by this strategy's weights: the old rule shape.</summary>
     public VoyageProfile Compile() => new()
     {
@@ -461,6 +471,13 @@ public static class Strategies
     private static VoyageRule Extra(string pattern, double weight, string comment) =>
         new() { Pattern = pattern, Weight = weight, Comment = comment };
 
+    /// <summary>Keyed by profile NAME because the serialized profile cannot carry it:
+    /// mechanics must survive a rule file written before the flag existed.</summary>
+    public static bool SeatsOneBottleChart(string profileName) =>
+        Shipped().FirstOrDefault(s =>
+            s.Name.Equals(profileName, StringComparison.OrdinalIgnoreCase))
+        ?.SeatsOneBottleChart ?? false;
+
     public static List<Strategy> Shipped() =>
     [
         new()
@@ -472,7 +489,8 @@ public static class Strategies
         new()
         {
             Name = "bottles",
-            Description = "Chase Messages in a Bottle: gifts beside the highest-quantity tiles.",
+            Description = "Chase Messages in a Bottle: seat the gift where it touches the most tiles.",
+            SeatsOneBottleChart = true,
             BoardModifierWeight = 1.5,
             AreaLevelWeight = 0.3,   // bottles only exist on 68+ charts; break ties upward
             Weights =

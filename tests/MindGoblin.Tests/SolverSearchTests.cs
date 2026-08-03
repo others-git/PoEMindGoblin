@@ -43,6 +43,72 @@ public class SolverSearchTests
     }
 
     [Fact]
+    public void AChartWhoseValueIsAllContainerGiftIsStillTried()
+    {
+        // The strongbox story above, per channel: the loop must CONTINUE past a weak
+        // candidate so a chart whose whole worth is its per-quantity gift is still
+        // reached. The ordering boost surfaces these channels early too -- its first
+        // cut summed only the flat and per-monster parts, and a real bottles board
+        // paid 121 points for the weak incumbents that ordering produced.
+        var charts = Enumerable.Range(0, 12)
+            .Select(i => Chart($"plain{i}", 10) with { QuantityDensity = 1 }).ToList();
+        charts.Add(Chart("bottler", own: 1) with { AdjacentPerQuantityValue = 500 });
+
+        var solution = new VoyageSolver(3, 3, charts).Solve(TimeSpan.FromSeconds(2));
+
+        Assert.Contains(solution.Placements, p => p.Chart.Id == "bottler");
+    }
+
+    [Fact]
+    public void AChartWhoseValueIsAllAmplifierIsStillTried()
+    {
+        // Fourth channel: the amplifier pays a share of its neighbours' explicit value
+        // and nothing of its own, so every mechanism that surfaces candidates -- the
+        // continue rule and the ordering boost -- must see that channel as well.
+        var charts = Enumerable.Range(0, 12)
+            .Select(i => Chart($"plain{i}", 10) with { ExplicitValue = 100 }).ToList();
+        charts.Add(Chart("amplifier", own: 1) with { AdjacentMagnitudeValue = 5 });
+
+        var solution = new VoyageSolver(3, 3, charts).Solve(TimeSpan.FromSeconds(2));
+
+        Assert.Contains(solution.Placements, p => p.Chart.Id == "amplifier");
+    }
+
+    [Fact]
+    public void TheContainerGiftLandsBesideTheRichestReceivers()
+    {
+        // Nine charts so the claim is about the optimum. The gift multiplies by each
+        // RECEIVER's quantity, so with uniform receivers the centre's four neighbours
+        // are worth exactly twice a corner's two.
+        var charts = Enumerable.Range(0, 8)
+            .Select(i => Chart($"plain{i}", 10) with { QuantityDensity = 1 }).ToList();
+        charts.Add(Chart("bottler", own: 1) with { AdjacentPerQuantityValue = 500 });
+
+        var solution = new VoyageSolver(3, 3, charts).Solve(TimeSpan.FromSeconds(5));
+        var bottler = solution.Placements.Single(p => p.Chart.Id == "bottler");
+
+        Assert.Equal(new Cell(1, 1), bottler.Cell);
+    }
+
+    [Fact]
+    public void APinnedChartSitsAtItsPinAndNowhereElse()
+    {
+        // A pin is a constraint, not a price: priced, the bound cannot see that an
+        // early rotation closed the pinned cell off, and the budget burns inside
+        // prefixes that can never satisfy it (the bottle chart came back cornered at
+        // a 1e7 bonus). Constrained, such branches die at the pinned cell.
+        var charts = Enumerable.Range(0, 12).Select(i => Chart($"plain{i}", 50)).ToList();
+        charts.Add(Chart("pinned", 1));
+
+        var solution = new VoyageSolver(3, 3, charts, pin: ("pinned", new Cell(0, 2)))
+            .Solve(TimeSpan.FromSeconds(2));
+
+        var placed = solution.Placements.Single(p => p.Chart.Id == "pinned");
+        Assert.Equal(new Cell(0, 2), placed.Cell);
+        Assert.Equal(9, solution.Placements.Count);
+    }
+
+    [Fact]
     public void ASolutionNeverHoldsMoreThanTheBoard()
     {
         // The deadline unwinds the recursion by exception, and each frame undoes its

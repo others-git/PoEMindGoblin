@@ -57,8 +57,8 @@ public class BorderSynergyTests
 
     /// <summary>The container-gift classifier and the quantity it multiplies with.</summary>
     [Theory]
-    [InlineData("Adjacent Areas contain 3 additional Messages in a Bottle", true)]
-    [InlineData("Adjacent Areas contain an additional Message in a Bottle", true)]
+    [InlineData("Adjacent Areas contain 3 additional Messages in a Bottle", false)]  // ground loot, sold unopened: flat
+    [InlineData("Adjacent Areas contain an additional Message in a Bottle", false)]  // ground loot, sold unopened: flat
     [InlineData("Adjacent Areas contain 5 additional Diviner's Strongboxes", true)]
     [InlineData("Adjacent Areas contain an additional Cluster of Barrels", true)]
     [InlineData("Adjacent Areas contain an additional Golden Lantern", false)]   // its value IS quantity
@@ -75,51 +75,132 @@ public class BorderSynergyTests
         Assert.Equal(expected, VoyageProfile.QuantityDensityOf(line), 3);
 
     /// <summary>
-    /// The bottle play, end to end: a bottle gift pays into its NEIGHBOURS, multiplied
-    /// by their quantity -- so the solver must seat the bottle chart beside the
-    /// highest-quantity tile in the panel, not wherever its flat value lands.
+    /// The bottle play, end to end: a bottle is ground loot sold UNOPENED
+    /// (field-confirmed), so the gift pays a fixed value into EVERY adjacent area and
+    /// nothing multiplies it. Its existence is what gets maximised -- the solver must
+    /// seat the bottle chart in the centre, where it touches four tiles, not chase
+    /// receiver quantity, which is worth nothing to an unopened bottle.
     /// </summary>
     [Fact]
-    public void ABottleGiftSitsBesideTheQuantityTile()
+    public void ABottleGiftTakesTheCentre()
     {
         var session = Session(out _, out _);
         var gift = 11;
-        var quantity = 3;
         session.ApplyChartText(gift,
             "Kelp Forest\nAnchorfield\nAdjacent Modifier: "
             + "Adjacent Areas contain 4 additional Messages in a Bottle");
-        session.ApplyChartText(quantity,
+        session.ApplyChartText(3,
             "Drowned Shelf\nAnchorfield\nItem Quantity: +120%");
 
         var bottles = VoyageRules.Defaults().Single(p => p.Name == "bottles");
         var plan = session.Plan(session.Solve(bottles, TimeSpan.FromSeconds(3)));
 
-        var giftSquare = Assert.Single(plan, s => s.ChartNumber == gift).Square;
-        var qtySquare = Assert.Single(plan, s => s.ChartNumber == quantity).Square;
-        var neighbours = qtySquare switch
-        {
-            1 => new[] { 2, 4 }, 2 => new[] { 1, 3, 5 }, 3 => new[] { 2, 6 },
-            4 => new[] { 1, 5, 7 }, 5 => new[] { 2, 4, 6, 8 }, 6 => new[] { 3, 5, 9 },
-            7 => new[] { 4, 8 }, 8 => new[] { 5, 7, 9 }, _ => new[] { 6, 8 },
-        };
-        Assert.Contains(giftSquare, neighbours);
+        Assert.Equal(5, Assert.Single(plan, s => s.ChartNumber == gift).Square);
     }
 
-    /// <summary>A container BOARD modifier is a per-quantity payout: its square must
-    /// pull the highest-quantity chart onto itself, the Milky speedrun placement.</summary>
+    /// <summary>The bottle gift wording, both numbers the game writes; strongboxes are
+    /// a different gift and must not ration.</summary>
+    [Theory]
+    [InlineData("Adjacent Areas contain 3 additional Messages in a Bottle", true)]
+    [InlineData("Adjacent Areas contain an additional Message in a Bottle", true)]
+    [InlineData("Adjacent Areas contain 5 additional Diviner's Strongboxes", false)]
+    [InlineData("30% increased number of Rare Monsters in adjacent Areas", false)]
+    public void BottleGiftsAreKnownByName(string line, bool expected) =>
+        Assert.Equal(expected, VoyageProfile.IsBottleGift(line));
+
+    /// <summary>
+    /// One bottle chart per voyage (field rule): a bottle's count is fixed by the roll,
+    /// so a second bottle chart mostly re-covers areas the first already feeds -- held
+    /// back it is a whole extra voyage of bottles. The BETTER roll sails, and the
+    /// solve says so in its notes.
+    /// </summary>
     [Fact]
-    public void ABottleSquareTakesTheQuantityChart()
+    public void OnlyOneBottleChartSailsPerVoyage()
     {
         var session = Session(out _, out _);
-        var quantity = 3;
-        session.ApplyChartText(quantity,
-            "Drowned Shelf\nAnchorfield\nItem Quantity: +120%");
-        session.ApplySquareModifiers(1, ["Area contains 3 additional Messages in a Bottle"]);
+        session.ApplyChartText(2,
+            "Kelp Forest\nAnchorfield\nAdjacent Modifier: "
+            + "Adjacent Areas contain 2 additional Messages in a Bottle");
+        session.ApplyChartText(7,
+            "Briny Quest\nAnchorfield\nAdjacent Modifier: "
+            + "Adjacent Areas contain an additional Message in a Bottle");
 
         var bottles = VoyageRules.Defaults().Single(p => p.Name == "bottles");
         var plan = session.Plan(session.Solve(bottles, TimeSpan.FromSeconds(3)));
 
-        Assert.Equal(1, Assert.Single(plan, s => s.ChartNumber == quantity).Square);
+        Assert.Single(plan, s => s.ChartNumber == 2);       // the 2-bottle roll sails
+        Assert.DoesNotContain(plan, s => s.ChartNumber == 7);
+        var note = Assert.Single(session.SolveNotes);
+        Assert.Contains("1 per voyage", note);
+        Assert.Contains("held back", note);
+    }
+
+    /// <summary>The bottle chart's existence is the objective: it sails even when every
+    /// other chart outscores it, it sails in the CENTRE even when a fatter chart would
+    /// use that square better, and both bonuses are peeled off the report.</summary>
+    [Fact]
+    public void TheBottleChartSailsCentredEvenWhenOutclassed()
+    {
+        var session = Session(out _, out _);
+        foreach (var i in Enumerable.Range(1, 12).Where(i => i != 11))
+            session.ApplyChartText(i,
+                $"Rich {i}\nAnchorfield\nItem Quantity: +150%");
+        session.ApplyChartText(11,
+            "Kelp Forest\nAnchorfield\nAdjacent Modifier: "
+            + "Adjacent Areas contain an additional Message in a Bottle");
+
+        var bottles = VoyageRules.Defaults().Single(p => p.Name == "bottles");
+        var solution = session.Solve(bottles, TimeSpan.FromSeconds(3));
+
+        var bottle = solution.Placements.Single(p => p.Chart.Id.EndsWith("-11"));
+        Assert.Equal(new Cell(1, 1), bottle.Cell);
+        Assert.InRange(solution.Value, 0, 50_000);   // neither bonus is reported
+    }
+
+    /// <summary>Rationing is the bottle CHASE's economics; a profile that is not
+    /// chasing bottles spends its charts on their merits, without notes.</summary>
+    [Fact]
+    public void OtherProfilesAreNotRationed()
+    {
+        var session = Session(out _, out _);
+        session.ApplyChartText(2,
+            "Kelp Forest\nAnchorfield\nAdjacent Modifier: "
+            + "Adjacent Areas contain 2 additional Messages in a Bottle");
+        session.ApplyChartText(7,
+            "Briny Quest\nAnchorfield\nAdjacent Modifier: "
+            + "Adjacent Areas contain an additional Message in a Bottle");
+
+        var sulphur = VoyageRules.Defaults().Single(p => p.Name == "sulphur");
+        session.Solve(sulphur, TimeSpan.FromSeconds(3));
+
+        Assert.Empty(session.SolveNotes);
+    }
+
+    /// <summary>The receipt view agrees: a bottle gift hands every neighbour the same
+    /// value, whatever that neighbour's quantity. Before the ground-loot correction the
+    /// same board showed the +120% tile receiving 2.2x its poorer neighbours.</summary>
+    [Fact]
+    public void ABottleGiftPaysEveryNeighbourTheSame()
+    {
+        var session = Session(out _, out _);
+        var gift = 11;
+        session.ApplyChartText(gift,
+            "Kelp Forest\nAnchorfield\nAdjacent Modifier: "
+            + "Adjacent Areas contain 4 additional Messages in a Bottle");
+        session.ApplyChartText(3,
+            "Drowned Shelf\nAnchorfield\nItem Quantity: +120%");
+
+        var bottles = VoyageRules.Defaults().Single(p => p.Name == "bottles");
+        var solution = session.Solve(bottles, TimeSpan.FromSeconds(3));
+        var giftSquare = session.Plan(solution).Single(s => s.ChartNumber == gift).Square;
+
+        var received = Enumerable.Range(1, 9)
+            .SelectMany(sq => session.ReceivedOnSquare(bottles, solution, sq))
+            .Where(r => r.FromSquare == giftSquare && r.Modifier.Contains("Bottle"))
+            .Select(r => r.Value)
+            .ToList();
+        Assert.True(received.Count >= 2);
+        Assert.All(received, v => Assert.Equal(received[0], v, 6));
     }
 
     /// <summary>

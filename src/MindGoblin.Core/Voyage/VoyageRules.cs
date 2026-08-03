@@ -409,17 +409,28 @@ public sealed class VoyageProfile
         new(@"(?:(\d+)|an)\s+additional Imprisoned Monsters?",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     /// <summary>
-    /// Adjacent/board lines that put OPENABLES into an area -- bottles, boxes, barrels,
-    /// cages, treasures. Their loot multiplies with the receiving tile's quantity, so
-    /// their value rides the quantity channel rather than scoring flat. Lanterns are
-    /// deliberately absent (their value IS quantity, not loot to multiply) and starfish
-    /// are monsters, priced on the rare channel.
+    /// Adjacent/board lines that put OPENABLES into an area -- boxes, barrels, cages,
+    /// treasures. Their loot multiplies with the receiving tile's quantity, so their
+    /// value rides the quantity channel rather than scoring flat. Lanterns are
+    /// deliberately absent (their value IS quantity, not loot to multiply), starfish
+    /// are monsters, priced on the rare channel -- and BOTTLES are absent too
+    /// (field-confirmed): a Message in a Bottle is ground loot sold UNOPENED, a
+    /// fixed-value item whose count is fixed by the roll, so there is nothing for the
+    /// receiver's quantity to multiply and its worth is per adjacent AREA, flat.
     /// </summary>
     public static bool IsContainerGift(string line) => ContainerGift.IsMatch(line);
 
     private static readonly Regex ContainerGift =
-        new(@"additional (?:\w+'s )?(?:Strongbox(?:es)?|Messages? in (?:a )?Bottles?|"
+        new(@"additional (?:\w+'s )?(?:Strongbox(?:es)?|"
             + @"Clusters? of Barrels|cages? of Tormented Spirits|Treasure)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>The bottle gift, both spellings the game writes. The solver rations
+    /// these to one per voyage under a bottle-chasing profile.</summary>
+    public static bool IsBottleGift(string line) => BottleGift.IsMatch(line);
+
+    private static readonly Regex BottleGift =
+        new(@"additional Messages? in (?:a )?Bottles?",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>

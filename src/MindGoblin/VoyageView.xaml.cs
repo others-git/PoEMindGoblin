@@ -1347,7 +1347,8 @@ public partial class VoyageView : UserControl, IDisposable
         }
         if (cts.IsCancellationRequested) return false;
 
-        ApplySolution(solution, profile);
+        // The snapshot did the solving, so the snapshot holds the notes.
+        ApplySolution(solution, profile, snapshot.SolveNotes);
         return true;
     }
 
@@ -1357,10 +1358,12 @@ public partial class VoyageView : UserControl, IDisposable
     private void SolveNow()
     {
         if (Tuned is not { } profile) return;
-        ApplySolution(_session.Solve(profile, TimeSpan.FromSeconds(3)), profile);
+        var solution = _session.Solve(profile, TimeSpan.FromSeconds(3));
+        ApplySolution(solution, profile, _session.SolveNotes);
     }
 
-    private void ApplySolution(VoyageSolver.Solution solution, VoyageProfile profile)
+    private void ApplySolution(VoyageSolver.Solution solution, VoyageProfile profile,
+                               IReadOnlyList<string>? solveNotes = null)
     {
         // A solve races Clear and Dive Again: cancellation covers the common case, but
         // a result that slipped past it must not be applied over a session that no
@@ -1398,7 +1401,9 @@ public partial class VoyageView : UserControl, IDisposable
                        + (_solution.ProvedOptimal ? "proved best" : "best found in 3s")
                        + $" · {note}\n{_solution.NodesExplored:N0} "
                        + (_solution.NodesExplored == 1 ? "layout" : "layouts")
-                       + $" checked in {_solution.Elapsed.TotalMilliseconds:0} ms";
+                       + $" checked in {_solution.Elapsed.TotalMilliseconds:0} ms"
+                       + (solveNotes is { Count: > 0 }
+                           ? "\n" + string.Join("\n", solveNotes) : "");
         SolveInfo.Foreground = new SolidColorBrush(_solution.StrandedCells.Count == 0
             ? Color.FromRgb(0x6B, 0x5F, 0x4E)
             : Color.FromRgb(0xB8, 0x50, 0x3E));
@@ -1471,8 +1476,9 @@ public partial class VoyageView : UserControl, IDisposable
     /// which rerolls every voyage. Unplaced charts keep their panel numbers -- those
     /// point at physical panel positions.
     ///
-    /// With a chart-refund chance in play the spend is not a foregone conclusion, so
-    /// the panel asks which charts came back first; otherwise all nine go.
+    /// All nine go, even with a chart-refund chance in play: a refunded chart returns to
+    /// the panel and the next Identify reads it there. Asking the user which ones came
+    /// back was friction for an answer the screen already holds.
     /// </summary>
     private void OnNextVoyage(object sender, RoutedEventArgs e)
     {
@@ -1484,48 +1490,10 @@ public partial class VoyageView : UserControl, IDisposable
             return;
         }
 
-        if (_session.PreserveChanceInPlay(_steps.Select(st => st.ChartNumber)))
-        {
-            ShowPreservePanel();
-            return;
-        }
         FinishVoyage(_steps.Select(st => st.ChartNumber));
     }
 
-    private void ShowPreservePanel()
-    {
-        PreserveList.Children.Clear();
-        foreach (var step in _steps.OrderBy(st => st.ChartNumber))
-        {
-            var chart = _session.ByPanelIndex.GetValueOrDefault(step.ChartNumber);
-            var name = chart is { Name.Length: > 0 } ? chart.Name : $"chart {step.ChartNumber}";
-            PreserveList.Children.Add(new ToggleButton
-            {
-                Content = $"{step.ChartNumber} · {name}",
-                Tag = step.ChartNumber,
-                Margin = new Thickness(0, 0, 6, 6),
-                Padding = new Thickness(8, 3, 8, 3),
-                ToolTip = "Toggled = it came back to the panel; untoggled = consumed",
-            });
-        }
-        PreservePanel.Visibility = Visibility.Visible;
-    }
-
-    private void OnPreserveCancel(object sender, RoutedEventArgs e) =>
-        PreservePanel.Visibility = Visibility.Collapsed;
-
-    private void OnPreserveConfirm(object sender, RoutedEventArgs e)
-    {
-        var survived = PreserveList.Children.OfType<ToggleButton>()
-            .Where(t => t.IsChecked == true)
-            .Select(t => (int)t.Tag)
-            .ToHashSet();
-        PreservePanel.Visibility = Visibility.Collapsed;
-        FinishVoyage(_steps.Select(st => st.ChartNumber).Where(i => !survived.Contains(i)),
-                     kept: survived.Count);
-    }
-
-    private void FinishVoyage(IEnumerable<int> toSpend, int kept = 0)
+    private void FinishVoyage(IEnumerable<int> toSpend)
     {
         var spent = _session.CompleteVoyage(toSpend);
         _solution = null;
@@ -1543,8 +1511,7 @@ public partial class VoyageView : UserControl, IDisposable
         RefreshProgress();
         Persist();
 
-        SetStatus($"Voyage complete \u2014 {spent} charts spent"
-                  + (kept > 0 ? $", {kept} preserved" : "") + ". "
+        SetStatus($"Voyage complete \u2014 {spent} charts spent. "
                   + "The border has rerolled: hover each square and press Ctrl+Alt+C.");
         ShowBoardNote();
     }

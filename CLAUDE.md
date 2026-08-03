@@ -72,6 +72,14 @@ once that captured a live boss fight instead of the app. Use `--render`.
 * **Bottles are the chase** (researched): "Adjacent Areas contain 1–2 additional Messages
   in Bottles" is a hidden-until-charted voyage mod, ilvl 68+, max +2, on every base that
   shows a table. ~39c each, sellable UNOPENED. It cannot be crafted for — only revealed.
+  **A bottle is GROUND LOOT** (field-confirmed): a fixed-value item whose count the roll
+  fixes — receiver quantity multiplies nothing, so the gift scores FLAT per adjacent
+  area and belongs in the centre. **The bottles solve seats ONE bottle chart per voyage**
+  (best roll, PINNED to the centre; the rest held back and said so in the solve notes) —
+  a second chart mostly re-covers the same areas, while held back it is a whole extra
+  voyage of bottles. The pin is a solver CONSTRAINT (`VoyageSolver`'s `pin:`), not a
+  bonus: priced at 1e7 the bound could not see an early rotation closing the centre off
+  and the chart came back cornered — the Soul Eater lesson, measured.
 * **3.29.1**: the max-res chart mod NEVER FUNCTIONED and no longer rolls (a chart still
   carrying it is free upside — the alert says so); Grasping Vines is its replacement
   danger; dredged currency now rolls Strongboxes mid-voyage; Eldritch Depths is a new
@@ -238,10 +246,14 @@ modifiers); read the borders *before* placing; borders are rerollable for sulphu
 **The multiplication gap is CLOSED — four channels.** Border payouts multiply with the
 receiving tile: per-RARE payouts by its rare density (pack size + the tileset's measured
 room bonus — and per poedb, NO self-scope rare-adding chart mods exist, so nothing else
-may count), at-least-Magic payouts by its pack density, container gifts (bottles, boxes,
-barrels…) by its Item Quantity, and **amplifiers** (`#% increased explicit modifier
+may count), at-least-Magic payouts by its pack density, container gifts (boxes,
+barrels, cages…) by its Item Quantity, and **amplifiers** (`#% increased explicit modifier
 magnitudes`) by the receiving chart's EXPLICIT value — its rolled affixes and the stats
-that aggregate them, never its one implicit. The amplifier is the odd one out and the
+that aggregate them, never its one implicit. **Bottles are NOT a container gift**
+(field-confirmed): a Message in a Bottle is ground loot sold UNOPENED — a fixed-value
+item whose count is fixed by the roll — so nothing multiplies it and the gift scores
+FLAT per adjacent area. Its existence is what gets maximised, which is why the bottle
+chart belongs in the centre. The amplifier is the odd one out and the
 shape to copy for any future mod like it: it has no payout of its own, so it is priced as
 a FRACTION (0.01 per percent, not chaos) and carries no flat baseline — worth everything
 beside a fat chart and exactly nothing beside a blank one. Scored flat it was counted but

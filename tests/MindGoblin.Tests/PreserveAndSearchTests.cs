@@ -3,8 +3,7 @@ using MindGoblin.Core.Voyage;
 namespace MindGoblin.Tests;
 
 /// <summary>
-/// Two post-solve conveniences: knowing when spending all nine charts would discard a
-/// refund the board just paid for, and finding the nine in the in-game stash at all.
+/// Finding the nine placed charts in the in-game stash at all.
 /// </summary>
 public class PreserveAndSearchTests
 {
@@ -16,46 +15,6 @@ public class PreserveAndSearchTests
             { Level = 80 }).ToList());
         return session;
     }
-
-    [Fact]
-    public void AChartRefundChanceOnAChartIsNoticed()
-    {
-        var session = Session();
-        session.ApplyChartText(3,
-            "Reach\nAnchorfield\nVoyage Modifier: 30% chance for Charts to not be consumed");
-
-        Assert.True(session.PreserveChanceInPlay([3, 5, 7]));
-        Assert.False(session.PreserveChanceInPlay([5, 7]));   // the carrier is not placed
-    }
-
-    [Fact]
-    public void AChartRefundChanceOnTheBorderIsNoticed()
-    {
-        var session = Session();
-        session.ApplySquareModifiers(4, ["20% chance for Charts to not be consumed"]);
-        Assert.True(session.PreserveChanceInPlay([1, 2]));
-    }
-
-    /// <summary>
-    /// The path the slurp actually takes. Figurines are what a real session records --
-    /// the square dictionary stays empty -- and the figurine tables carry this mod, so
-    /// a check reading SquareModifiers directly never once fired: Dive Again skipped
-    /// the preserve question and completion deleted a refunded chart.
-    /// </summary>
-    [Fact]
-    public void AChartRefundChanceOnAFigurineIsNoticed()
-    {
-        var session = Session();
-        session.ApplyFigurineText(1,
-            "Adjacent Charts have 25% chance to not be consumed when beginning a Voyage");
-
-        Assert.Empty(session.SquareModifiers);
-        Assert.True(session.PreserveChanceInPlay([1, 2]));
-    }
-
-    [Fact]
-    public void NoRefundChanceMeansNoQuestion() =>
-        Assert.False(Session().PreserveChanceInPlay([1, 2, 3]));
 
     [Fact]
     public void TheSearchStringNamesEveryNamedChartOnce()

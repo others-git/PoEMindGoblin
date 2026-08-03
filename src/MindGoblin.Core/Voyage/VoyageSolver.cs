@@ -49,7 +49,8 @@ public sealed class VoyageSolver
         Func<Chart, Cell, double>? score = null,
         bool allowEmpty = true,
         double strandedPenalty = 0,
-        int? maxPlacements = null)
+        int? maxPlacements = null,
+        (string ChartId, Cell Cell)? pin = null)
     {
         _rows = rows;
         _cols = cols;
@@ -62,7 +63,31 @@ public sealed class VoyageSolver
         // only four Charts." A cap is not the same as leaving cells empty by choice: it
         // is a limit on how many charts you have to spend.
         _maxPlacements = Math.Clamp(maxPlacements ?? rows * cols, 0, rows * cols);
+
+        // A pin is a CONSTRAINT, not a price. Paid as a bonus instead, the bound
+        // cannot see that an early rotation closed the pinned cell off, and the whole
+        // budget burns inside prefixes where the pin can never be satisfied -- priced
+        // at 1e7 the bottle chart still came back cornered. As a constraint, a branch
+        // that reaches the pinned cell unable to place the pinned chart DIES, and the
+        // backtrack repairs the offending neighbour instead.
+        if (pin is { } p)
+        {
+            _pinCellIndex = p.Cell.Row * cols + p.Cell.Col;
+            for (var i = 0; i < charts.Count; i++)
+                if (string.Equals(charts[i].Id, p.ChartId, StringComparison.Ordinal))
+                    _pinChartIdx = i;
+        }
     }
+
+    /// <summary>Linear index of the pinned cell, or -1; index of the pinned chart, or
+    /// -1. Both set only when the pin names a chart actually in the pool.</summary>
+    private readonly int _pinCellIndex = -1;
+    private readonly int _pinChartIdx = -1;
+
+    /// <summary>At the pinned cell only the pinned chart may sit; elsewhere it may not.
+    /// One predicate so the search, the seed and the polish cannot drift apart.</summary>
+    private bool PinAllows(int chartIdx, int cellIndex) =>
+        _pinChartIdx < 0 || (chartIdx == _pinChartIdx) == (cellIndex == _pinCellIndex);
 
     /// <summary>Cached: Enum.GetValues allocates a fresh array every call, and these
     /// loops run per placement in the innermost part of the search.</summary>
@@ -309,12 +334,19 @@ public sealed class VoyageSolver
 
             foreach (var placement in placements)
             {
+                // The pinned chart's cell is settled: nothing displaces it, and no
+                // swap may carry it away.
+                if (_pinChartIdx >= 0
+                    && placement.Cell.Row * _cols + placement.Cell.Col == _pinCellIndex)
+                    continue;
+
                 var baseline = Evaluate(board);
 
                 // Any unused chart, any rotation that fits the cell's inner edges.
                 for (var i = 0; i < _charts.Count && !improved; i++)
                 {
                     if (used[i]) continue;
+                    if (i == _pinChartIdx) continue;
                     foreach (var rotation in ChartFace.DistinctRotations(_charts[i].Shape))
                     {
                         board.Clear(placement.Cell);
@@ -339,6 +371,9 @@ public sealed class VoyageSolver
                 foreach (var other in placements)
                 {
                     if (other.Cell == placement.Cell) continue;
+                    if (_pinChartIdx >= 0
+                        && other.Cell.Row * _cols + other.Cell.Col == _pinCellIndex)
+                        continue;
                     board.Clear(placement.Cell);
                     board.Clear(other.Cell);
                     foreach (var ra in ChartFace.DistinctRotations(other.Chart.Shape))
@@ -538,11 +573,13 @@ public sealed class VoyageSolver
             // full board, and since fewer charts is always less value, the capped search
             // could never beat its own seed -- the cap silently did nothing.
             if (board.FilledCount >= _maxPlacements)
-                return _allowEmpty && LeavingEmptyIsLegal(board, cell) && Dive(index + 1);
+                return index != _pinCellIndex
+                       && _allowEmpty && LeavingEmptyIsLegal(board, cell) && Dive(index + 1);
 
             foreach (var i in ordering[index])
             {
                 if (used[i]) continue;
+                if (!PinAllows(i, index)) continue;
                 var chart = _charts[i];
 
                 foreach (var rotation in ChartFace.DistinctRotations(chart.Shape))
@@ -755,6 +792,9 @@ public sealed class VoyageSolver
     {
         var cells = AllCells().ToList();
         var result = new int[cells.Count][];
+        // The amplifier has no payout of its own, so its surfacing value is what the
+        // richest neighbour could hand it -- same shape as the bound's ceiling.
+        var maxExplicit = _charts.Count == 0 ? 0 : _charts.Max(c => Math.Abs(c.ExplicitValue));
         for (var i = 0; i < cells.Count; i++)
         {
             var cell = cells[i];
@@ -763,11 +803,16 @@ public sealed class VoyageSolver
             // depend on which candidate is chosen). Deliberately overweighted: this only
             // orders candidates, and surfacing adjacency charts early is what matters --
             // ordering on the own-score alone buried the charts whose whole value is
-            // what they give the squares around them.
+            // what they give the squares around them. ALL FOUR channels, per
+            // PairAdjacency: the first cut summed only the flat and per-monster parts,
+            // and a bottle chart -- zero own value, everything in the per-quantity
+            // gift -- sorted dead last at every cell and cost a real board 121 points.
             result[i] = Enumerable.Range(0, _charts.Count)
                 .OrderByDescending(idx => _score(_charts[idx], cell)
                                           + Math.Max(0, _charts[idx].AdjacentValue
-                                                        + _charts[idx].AdjacentPerMonsterValue * 2) * 8)
+                                                        + _charts[idx].AdjacentPerMonsterValue * 2
+                                                        + _charts[idx].AdjacentPerQuantityValue * 2
+                                                        + _charts[idx].AdjacentMagnitudeValue * maxExplicit) * 8)
                 .ToArray();
         }
         return result;
@@ -888,10 +933,11 @@ public sealed class VoyageSolver
         var cell = new Cell(index / _cols, index % _cols);
 
         // A cap on how many charts may be spent. Once it is reached the rest of the board
-        // has to stay empty, which is legal -- the game says "up to nine".
+        // has to stay empty, which is legal -- the game says "up to nine". The pinned
+        // cell is the exception: empty there breaks the pin, so the branch dies.
         if (board.FilledCount >= _maxPlacements)
         {
-            if (_allowEmpty && LeavingEmptyIsLegal(board, cell))
+            if (index != _pinCellIndex && _allowEmpty && LeavingEmptyIsLegal(board, cell))
                 Recurse(index + 1, board, used, value, usedCeil, ref best, sw, deadline, ct);
             return;
         }
@@ -909,6 +955,7 @@ public sealed class VoyageSolver
         foreach (var i in order)
         {
             if (used[i]) continue;
+            if (!PinAllows(i, index)) continue;
             var chart = _charts[i];
             var gain = _score(chart, cell) + AdjacencyGain(board, cell, chart);
 

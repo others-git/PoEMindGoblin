@@ -45,6 +45,11 @@ public sealed class VoyageSession
     /// not persisted: a fresh load starts everyone at zero strikes.</summary>
     private readonly HashSet<int> _missedOnce = new();
 
+    /// <summary>What the last Solve decided beyond the board itself -- the bottle
+    /// rationing note, today. Transient: it narrates one solve, not the session.</summary>
+    public IReadOnlyList<string> SolveNotes => _solveNotes;
+    private readonly List<string> _solveNotes = new();
+
     public VoyageSession(BoardLayout? layout = null)
     {
         Layout = layout ?? BoardLayout.Default();
@@ -385,6 +390,44 @@ public sealed class VoyageSession
             .OrderBy(kv => kv.Key)
             .ToList();
 
+        // One bottle chart per voyage (field rule). A bottle is ground loot whose count
+        // the roll fixes, so a second bottle chart in the same voyage mostly re-covers
+        // areas the first already feeds -- held back, it is a whole extra voyage of
+        // bottles. The best gift sails NOW and is guaranteed a seat: its existence is
+        // the objective, so it borrows the star's bonus (peeled back off below).
+        _solveNotes.Clear();
+        int? bottleSeat = null;
+        string? bottleId = null;
+        if (Strategies.SeatsOneBottleChart(profile.Name))
+        {
+            var bottled = eligible
+                .Where(kv => kv.Value.AdjacentModifier is { } b && VoyageProfile.IsBottleGift(b))
+                .OrderByDescending(kv => profile.ScoreAdjacent(kv.Value))
+                .ThenByDescending(kv => profile.ScoreChart(kv.Value))
+                .ToList();
+            if (bottled.Count > 0)
+            {
+                bottleSeat = bottled[0].Key;
+                bottleId = bottled[0].Value.Id;
+                var held = bottled.Skip(1).Select(kv => kv.Key).ToHashSet();
+                eligible.RemoveAll(kv => held.Contains(kv.Key));
+                _solveNotes.Add($"Bottles: seating {bottled[0].Value.Name} — will only "
+                    + "add 1 per voyage to maximize bottles"
+                    + (held.Count > 0
+                        ? $" ({held.Count} held back for later voyages)." : "."));
+            }
+        }
+        // The bottle chart belongs in the CENTRE -- four areas fed is the objective
+        // itself, and no generic-value trade may buy it off that seat. Handed to the
+        // solver as a PIN, not a price: priced (flat or at the cell) the bound cannot
+        // see that an early rotation closed the centre off, and the whole budget burnt
+        // inside prefixes where the bottle could never be seated -- measured at 1e7 it
+        // still came back cornered. If shape ever makes the pinned board impossible,
+        // the fallback below re-solves unpinned with the flat seat bonus instead.
+        Cell? bottleCentre = bottleSeat is not null
+                             && Layout.Rows % 2 == 1 && Layout.Cols % 2 == 1
+            ? new Cell(Layout.Rows / 2, Layout.Cols / 2) : null;
+
         var boardEstimate = eligible
             .Select(kv => profile.ScoreChart(kv.Value))
             .OrderByDescending(v => v)
@@ -413,7 +456,9 @@ public sealed class VoyageSession
                 // chooses WHERE it goes -- which quietly subsumes the old "cheapest
                 // square" rule, since the layout that loses least is the optimum.
                 Value = profile.ScoreChart(c, boardEstimate)
-                        + (_required.Contains(kv.Key) ? RequiredBonus : 0),
+                        + (_required.Contains(kv.Key)
+                           || (bottleCentre is null && kv.Key == bottleSeat)
+                            ? RequiredBonus : 0),
                 AdjacentValue = payoutAdj || containerAdj || magnitudeAdj ? 0 : adjacent,
                 AdjacentPerMonsterValue = payoutAdj ? adjacent : 0,
                 AdjacentPerQuantityValue = containerAdj ? adjacent : 0,
@@ -507,24 +552,46 @@ public sealed class VoyageSession
         // board must fill; empties are only legal when the pool or cap cannot cover.
         var cells = Layout.Rows * Layout.Cols;
         var mustFill = scored.Count >= cells && (profile.MaxCharts ?? cells) >= cells;
-        var solution = new VoyageSolver(Layout.Rows, Layout.Cols, scored, score,
-                                        allowEmpty: !mustFill,
-                                        strandedPenalty: profile.StrandedSquarePenalty,
-                                        maxPlacements: profile.MaxCharts)
-            .Solve(budget, ct);
-        if (mustFill && solution.IsEmpty)
-            // A shape-starved pool can make a full board genuinely impossible; a
-            // partial answer then beats refusing to answer.
-            solution = new VoyageSolver(Layout.Rows, Layout.Cols, scored, score,
-                                        strandedPenalty: profile.StrandedSquarePenalty,
-                                        maxPlacements: profile.MaxCharts)
+        VoyageSolver.Solution RunSolve()
+        {
+            var pin = bottleCentre is { } bc && bottleId is not null
+                ? (bottleId, bc) : ((string, Cell)?)null;
+            var s = new VoyageSolver(Layout.Rows, Layout.Cols, scored, score,
+                                     allowEmpty: !mustFill,
+                                     strandedPenalty: profile.StrandedSquarePenalty,
+                                     maxPlacements: profile.MaxCharts,
+                                     pin: pin)
                 .Solve(budget, ct);
+            if (mustFill && s.IsEmpty)
+                // A shape-starved pool can make a full board genuinely impossible; a
+                // partial answer then beats refusing to answer.
+                s = new VoyageSolver(Layout.Rows, Layout.Cols, scored, score,
+                                     strandedPenalty: profile.StrandedSquarePenalty,
+                                     maxPlacements: profile.MaxCharts,
+                                     pin: pin)
+                    .Solve(budget, ct);
+            return s;
+        }
+        var solution = RunSolve();
+        if (bottleCentre is not null
+            && !solution.Placements.Any(p => p.Chart.Id == bottleId))
+        {
+            // The centre seat proved impossible for this pool's shapes. Seated still
+            // beats centred: pay the bonus flat instead and solve again.
+            bottleCentre = null;
+            scored = scored.Select(c => c.Id == bottleId
+                ? c with { Value = c.Value + RequiredBonus } : c).ToList();
+            solution = RunSolve();
+        }
 
         // The bonus buys inclusion, not points. Reporting it would claim ten million
         // where the board earned six hundred, so peel it back off for every required
-        // chart the solver actually seated.
+        // chart the solver actually seated -- the rationed bottle seat included.
         var requiredIds = _required.Where(_charts.ContainsKey)
             .Select(i => _charts[i].Id).ToHashSet(StringComparer.Ordinal);
+        // The pinned bottle seat is a constraint and costs nothing to peel; only the
+        // unpinned fallback bought its seat with the flat bonus.
+        if (bottleId is not null && bottleCentre is null) requiredIds.Add(bottleId);
         var seated = solution.Placements.Count(p => requiredIds.Contains(p.Chart.Id));
         return seated == 0 ? solution
             : solution with { Value = solution.Value - seated * RequiredBonus };
@@ -900,37 +967,6 @@ public sealed class VoyageSession
         if (_required.Remove(panelIndex)) return ChartMark.None;
         _excluded.Add(panelIndex);
         return ChartMark.Excluded;
-    }
-
-    private static readonly Regex NotConsumed =
-        new(@"chance (?:for Charts? )?to not be consumed",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-
-    /// <summary>
-    /// Is a "Charts aren't consumed" chance in play for this board -- on any placed
-    /// chart's own lines, or anywhere on the border? When it is, spending all nine
-    /// on completion would silently discard the refund the mod just paid for.
-    ///
-    /// The border half goes through <see cref="BoardModifiers"/> like every other
-    /// border consumer, never <see cref="SquareModifiers"/>: the slurp writes
-    /// FIGURINES, and the figurine tables carry this mod ("Adjacent Charts have #%
-    /// chance to not be consumed"). Reading the square dictionary directly saw an
-    /// empty board in the normal workflow, so a slurped refund was never noticed and
-    /// completion deleted a chart the game had handed back.
-    /// </summary>
-    public bool PreserveChanceInPlay(IEnumerable<int> placedCharts)
-    {
-        foreach (var index in placedCharts)
-            if (_charts.TryGetValue(index, out var chart) && ChartLines(chart).Any(NotConsumed.IsMatch))
-                return true;
-        return BoardModifiers().Any(m => NotConsumed.IsMatch(m.Description));
-    }
-
-    private static IEnumerable<string> ChartLines(Chart chart)
-    {
-        if (!string.IsNullOrWhiteSpace(chart.VoyageModifier)) yield return chart.VoyageModifier!;
-        if (!string.IsNullOrWhiteSpace(chart.AdjacentModifier)) yield return chart.AdjacentModifier!;
-        foreach (var line in chart.Modifiers) yield return line;
     }
 
     /// <summary>

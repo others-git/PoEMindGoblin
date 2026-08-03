@@ -668,32 +668,6 @@
                      tuning is occasional, and a strip that reserves height for it would
                      tax the board permanently. Rows are built in code, one per category
                      the active profile has rules in. -->
-                <!-- After a voyage with a "Charts aren't consumed" chance in play:
-                     which of the nine came back? Spending all would discard the refund. -->
-                <Border x:Name="PreservePanel" Visibility="Collapsed" Panel.ZIndex="12"
-                        VerticalAlignment="Top" Margin="0,24,0,0" Padding="14,10"
-                        MaxWidth="440" HorizontalAlignment="Center"
-                        Background="{StaticResource PanelFill}"
-                        BorderBrush="{StaticResource FrameEdge}" BorderThickness="1">
-                    <Border.Effect>
-                        <DropShadowEffect Color="#000000" BlurRadius="20" ShadowDepth="5"
-                                          Opacity="0.8"/>
-                    </Border.Effect>
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource Eyebrow}"
-                                   Text="W H I C H   C H A R T S   S U R V I V E D ?"/>
-                        <TextBlock Foreground="{StaticResource Shade}" FontSize="12"
-                                   TextWrapping="Wrap" Margin="0,4,0,8"
-                                   Text="A chart-refund chance was in play. Toggle the charts that came back; the rest are spent."/>
-                        <WrapPanel x:Name="PreserveList"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                            <Button Content="Spend the rest" Click="OnPreserveConfirm"
-                                    Style="{StaticResource Primary}"/>
-                            <Button Content="Cancel" Click="OnPreserveCancel" Margin="8,0,0,0"/>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
                 <Border x:Name="WeightsPanel" Visibility="Collapsed" Panel.ZIndex="11"
                         VerticalAlignment="Top" Margin="0,24,0,0" Padding="14,10"
                         Width="430" HorizontalAlignment="Center"
