@@ -155,9 +155,10 @@ scrape raw and parse locally. poewiki is behind Anubis and unreachable, like red
   figure has no reachable source: it is OUR estimate. Separately confirmed and more
   useful: Vesper's `ScatterObjects1` carries `map strongboxes are rare [1]`, so chart
   strongboxes are Rare rarity by default once unlocked.
-* **Bottles: the ~39c is UNVERIFIED** — poe.watch does not track the item at all (absent
-  from all 335 Allflame currency entries). poedb's `Message in a Bottle /25` outcome table
-  IS known: Mageblood, Headhunter, Kalandra's Touch, Ryslatha's Coil, Taste of Hate,
+* **Bottles are ~70c** — FIELD price, 2026-08-03, and the catalog carries it. No API can
+  check this: poe.watch does not track the item at all (absent from all 335 Allflame
+  currency entries), and the old ~39c was a stale research figure. poedb's
+  `Message in a Bottle /25` outcome table IS known: Mageblood, Headhunter, Kalandra's Touch, Ryslatha's Coil, Taste of Hate,
   Defiance of Destiny, Inspired Learning, Unnatural Instinct, Bloodnotch, Rain of
   Splinters, Replica Dragonfang's Flight, generic Unique Belt/Jewel/Ring/Amulet/Flask,
   Hinekora's Lock, Fracturing Orb, Divine Orb (and a stack), Reflecting Mist, a Stacked
@@ -211,13 +212,15 @@ encode it.
   Monsters" mods.
 * **Placed league ground items are the fixed-value class** [likely, from the natural/
   non-natural rule] — independent support for the field-confirmed flat bottle.
-* **Stacked Decks are ~1.1c, not 2c** — poe.watch mean, league Allflame, daily volume 127,
-  fetched 2026-08-03. The basic currency they replace: Transmutation 0.025, Augmentation
-  0.1, Jeweller's 0.098, Alchemy 0.167, Alteration 0.2, Fusing 0.25 — so a conversion nets
-  **≈0.9c**, and against a Chromatic (1.3c) it is a small LOSS. **"Basic Currency" means
-  currency with no drop restrictions**, i.e. non-league [confirmed], so the mod is a
-  CONVERSION whose worth is `(basic drops) x (deck price - what it replaced)`. Prices move;
-  re-check rather than trusting this line.
+* **Stacked Decks: the FIELD says ~2c; poe.watch said 1.1c and the field wins.** The API
+  number was used to "correct" the player's own figure and that was the wrong call — see
+  the lag rule under Sources. What the API is still good for is the OTHER half of the sum:
+  the basic currency a deck replaces prices at Transmutation 0.025, Augmentation 0.1,
+  Jeweller's 0.098, Alchemy 0.167, Alteration 0.2, Fusing 0.25, so a conversion nets
+  roughly the deck's price, and against a Chromatic (1.3c) it is close to a wash.
+  **"Basic Currency" means currency with no drop restrictions**, i.e. non-league
+  [confirmed], so the mod is a CONVERSION worth `(basic drops) x (deck price - what it
+  replaced)` — not an addition.
 * **Soul Eater is not a loot mod at all** — attack/cast speed and size per kill. It buys
   TIME, which this model does not price. Already `Stat.PlayerPower`; do not let it drift
   into a reward. [confirmed]
@@ -375,12 +378,20 @@ league is newer than any model's cutoff.
 
 ## Sources, in order of trust
 
-1. **The game itself** — help text, copied item text, the Area Modifiers panel.
+1. **The game itself** — help text, copied item text, the Area Modifiers panel. **And the
+   player, for PRICES.** They are the one looking at live trade.
 2. **GGG's patch notes on the official forum.** Reachable, authoritative, and where the
    balance actually lives. 3.29.0b alone moved Golden Lanterns, gated the good strongboxes
    at area level 67, and made Ends and Straights rarer.
 3. **poedb**, for the generated mod tables.
-4. **SEO strategy sites**, which paraphrase each other and get numbers wrong. Useful for
+4. **Price APIs (poe.watch, poe.ninja and the rest) — LAGGING, and below poedb for this
+   reason.** They are scrapes of listings, they trail the real market, and on a league
+   item they may not list it at all. Bottles: absent entirely while trading at ~70c.
+   Stacked Decks: the API said 1.1c and the field said ~2c. **A price the player quotes
+   OUTRANKS a price fetched from an API — do not "correct" them with a scrape.** What
+   the APIs remain good for is relative pricing of liquid core currency (what an
+   Alteration is worth against a Chaos), where the lag is small and the volume is real.
+5. **SEO strategy sites**, which paraphrase each other and get numbers wrong. Useful for
    the shape of a strategy, never for a figure.
 
 **Reddit is unreachable** — it blocks Anthropic's crawler at the platform level. Not a

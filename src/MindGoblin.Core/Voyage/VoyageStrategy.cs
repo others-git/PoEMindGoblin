@@ -24,11 +24,12 @@ public enum Stat
     /// <summary>Scarab drops. Their own stat: jackpot-shaped, worth chasing alone.</summary>
     Scarabs,
 
-    /// <summary>Messages in Bottles: the chase. Sellable UNOPENED because it is
-    /// Stackable Currency with "Right click to open" -- a mechanical reason, not a
-    /// convention. The ~39c is UNVERIFIED: poe.watch does not track the item at all.
-    /// The outcome table is known (Mageblood, Headhunter, Hinekora's Lock, Divine
-    /// stacks, Broken Mirror...), which carries the GRAIL tier on its own.</summary>
+    /// <summary>Messages in Bottles: the chase, ~70c field-priced 2026-08-03. Sellable
+    /// UNOPENED because it is Stackable Currency with "Right click to open" -- a
+    /// mechanical reason, not a convention. No API can price it: poe.watch does not
+    /// track the item at all. It opens into the likes of Mageblood, Headhunter,
+    /// Hinekora's Lock and Divine stacks, which carries the GRAIL tier on its own.
+    /// </summary>
     Bottles,
 
     /// <summary>Strongboxes, named and generic; their rare-fountain half also rides the
@@ -152,9 +153,9 @@ public static class StatText
         Stat.Scarabs =>
             "Scarab drops. Jackpot-shaped, so they are their own stat rather than currency.",
         Stat.Bottles =>
-            "Messages in a Bottle: sellable UNOPENED, and they open into the likes of "
-            + "Mageblood and Hinekora's Lock. The chase — a hidden voyage mod that "
-            + "cannot be crafted for, only revealed.",
+            "Messages in a Bottle: ~70c each and sellable UNOPENED, opening into the "
+            + "likes of Mageblood and Hinekora's Lock. The chase — a hidden voyage mod "
+            + "that cannot be crafted for, only revealed.",
         Stat.Strongboxes =>
             "Strongboxes, named and generic. Rolled before opening they also pour out "
             + "rares, so they feed any per-rare payout next to them.",
@@ -254,10 +255,14 @@ public static class ModCatalog
             Comment: "multiplies the WHOLE board's sulphur: scored as that fraction"),
 
         // ---- bottles, boxes, containers, lanterns ----------------------------------
-        new(@"(?:(\d+)|an)\s+additional Messages? in (?:a )?Bottles?", Stat.Bottles, 39,
-            Comment: "researched 2026-07-31: ~39c each, sellable UNOPENED; a hidden-"
-                     + "until-charted voyage mod, ilvl 68+, max +2 -- cannot be crafted "
-                     + "for, only revealed. Container channel seats it beside quantity."),
+        // ~70c, FIELD-PRICED 2026-08-03. Was 39c, and the price APIs are no help here:
+        // poe.watch does not list the item at all, and where it does list something it
+        // LAGS the real market. A trade price the player is seeing beats a scrape.
+        new(@"(?:(\d+)|an)\s+additional Messages? in (?:a )?Bottles?", Stat.Bottles, 70,
+            Comment: "field 2026-08-03: ~70c each, sellable UNOPENED (Stackable Currency, "
+                     + "right-click to open); hidden-until-charted, ilvl 68+, max +2 -- "
+                     + "cannot be crafted for, only revealed. GROUND LOOT, so it scores "
+                     + "FLAT per adjacent area and belongs in the centre."),
         new(@"(?:(\d+)|an)\s+additional Arcanist's Strongbox(?:es)?", Stat.Strongboxes, 25),
         new(@"(?:(\d+)|an)\s+additional Diviner's Strongbox(?:es)?", Stat.Strongboxes, 25),
         new(@"(?:(\d+)|an)\s+additional Operative's Strongbox(?:es)?", Stat.Strongboxes, 20,
