@@ -94,6 +94,67 @@ once that captured a live boss fight instead of the app. Use `--render`.
   voyage, so both pressures say the same thing: take the valuable squares EARLY. That is
   the traveling repairman's problem, solved exactly by subset DP (9 squares = 512 subsets).
 
+## PoE core mechanics — what actually multiplies what
+
+Researched 2026-08-03 because three scoring bugs in a row came from ASSUMING these.
+Full writeup with per-claim sources: `research/poe-core-mechanics.md`.
+**Source caveat:** poewiki.net blocks the fetcher (Anubis) and fandom 402s, so most wiki
+claims below are the wiki's own wording recovered from search snippets, not pages read in
+full. Only **poedb.tw** and the **poe.watch API** were fetched directly. No SEO site was
+used for any number. Confidence is marked; UNVERIFIED means read it off the game, do not
+encode it.
+
+* **A drop rolls against FOUR multiplicative quantity sources: player, AREA, party,
+  monster.** The Voyage board's quantity is the *area* slot — not the player slot that
+  almost all community writing (and the "magic find" folklore) is about. [confirmed]
+* **The governing rule for this whole model:** *natural* drops are affected by all four
+  categories; *non-natural* drops "may ignore some, ignore all, or interact in alternative
+  ways". So monster loot scales, and anything PLACED is case-by-case. [confirmed]
+* **Area quantity DOES multiply strongboxes and destructible containers.** The famous
+  "quantity doesn't affect strongboxes" is about the player's GEAR: poedb states outright
+  that gear IIQ does not affect strongbox drops while **map quantity modifiers do**, and
+  the wiki says only the containing area's IIQ and the party bonus affect chests. Barrels
+  carry their own object bonus, multiplicative with area quantity, on a low base ("only a
+  small chance of containing an item"). This is what licenses the container channel —
+  it was assumed before it was checked, and it happened to be right. [confirmed, poedb]
+* **IIQ raises only the CHANCE per drop roll.** It "does not affect the type, quality, or
+  rarity of item dropped" — it never enlarges the pool and never upgrades anything.
+  [confirmed]
+* **IIR never increases item COUNT, and does not touch currency, divination cards, scrolls
+  or gems** — none of them have a rarity tier. It raises the unique chance on equipment.
+  So a currency, card or Stacked-Deck gift gains NOTHING from a neighbour's rarity: rarity
+  and quantity are different axes over different item classes. [confirmed]
+* **Monster rarity is itself the fourth multiplier**: life, damage, experience, and item
+  drop *rarity and quantity* all rise with it. Rares genuinely drop more AND rarer, which
+  is why per-rare payouts get their own channel. The exact rare-vs-normal multiple is
+  UNVERIFIED — leave it a tunable weight, do not invent a number.
+* **Pack size probably does NOT raise the RARE count** (community forum reply, no GGG
+  post) [uncertain] — which is the split the model already makes: pack size feeds the
+  pack/magic channel, rare density comes only from explicit "increased number of Rare
+  Monsters" mods.
+* **Placed league ground items are the fixed-value class** [likely, from the natural/
+  non-natural rule] — independent support for the field-confirmed flat bottle.
+* **Stacked Decks are ~1.1c, not 2c** — poe.watch mean, league Allflame, daily volume 127,
+  fetched 2026-08-03. The basic currency they replace: Transmutation 0.025, Augmentation
+  0.1, Jeweller's 0.098, Alchemy 0.167, Alteration 0.2, Fusing 0.25 — so a conversion nets
+  **≈0.9c**, and against a Chromatic (1.3c) it is a small LOSS. **"Basic Currency" means
+  currency with no drop restrictions**, i.e. non-league [confirmed], so the mod is a
+  CONVERSION whose worth is `(basic drops) x (deck price - what it replaced)`. Prices move;
+  re-check rather than trusting this line.
+* **Soul Eater is not a loot mod at all** — attack/cast speed and size per kill. It buys
+  TIME, which this model does not price. Already `Stat.PlayerPower`; do not let it drift
+  into a reward. [confirmed]
+* **Tormented Spirits**: Touch (normal/magic) = 25% increased quantity AND rarity; Grip
+  (rare/unique) = 50% increased rarity; killing the spirit guarantees a rare, a possessed
+  rare ≥2, a possessed unique ≥3. The "Possessed" chart line is this same mechanic,
+  rare-scoped. [confirmed]
+* **Wildwood Wisps**: Vivid = MORE quantity, Wild = MORE rarity, Primal = additional
+  currency — *more*, a separate multiplier, and they stack. [confirmed]
+* **UNVERIFIED, do not encode — read them off the game:** Altars to the Goddess, Atziri's
+  Influence, Pantheon Modifier on rares. All three are Voyage mod texts and only SEO sites
+  had anything to say about them. Also unverified: whether pack size has diminishing
+  returns.
+
 ## Gotchas (each of these was a silent bug)
 
 * **GGG misspells Quantity as "Qauntity"** — but only in the global lines. The adjacent and
