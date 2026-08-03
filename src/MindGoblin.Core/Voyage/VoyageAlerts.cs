@@ -119,10 +119,16 @@ public static class VoyageAlerts
             "The game's own tables file this as a reward, and it deletes most of the loot. "
             + "Only take it when farming currency or gold."),
 
-        new(AlertKind.Trap, @"reduced quantity of items found in adjacent Areas per connection",
-            "Quantity lost per connection",
-            "This gets worse the better the board is joined \u2014 the one thing the planner "
-            + "is trying to maximise. Give it few connections."),
+        // NOT a trap, though it reads like one. poedb's border table shows this line
+        // never rolls alone: the figurine carries it WITH +120% or +180% increased
+        // Quantity in adjacent Areas. At one open connection that is +70%/+130%; it only
+        // turns negative at three. Badged as a trap it told the user to avoid what is
+        // often the best figurine on the board, which is worse than saying nothing.
+        new(AlertKind.Jackpot, @"reduced quantity of items found in adjacent Areas per connection",
+            "Big quantity, priced in connections",
+            "It comes bundled with +120% or +180% quantity, and only the PER-CONNECTION "
+            + "half is negative: strong on a square with one or two open edges, a loss "
+            + "on a well-joined one. Check the bundled roll and give it few connections."),
 
         new(AlertKind.Jackpot, @"Players have -?#% to all maximum Resistances",
             "Free difficulty roll",

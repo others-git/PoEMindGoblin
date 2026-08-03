@@ -184,6 +184,28 @@ public class BorderSynergyTests
         Assert.Equal(expected, VoyageProfile.QuantityDensityOf(line), 3);
 
     /// <summary>
+    /// 3.29.1's notes say "Fixed a typo in a Voyage modifier" WITHOUT saying which, and
+    /// poedb still serves the pre-patch corpus, so the game may now emit either spelling
+    /// of either line. Both must score the same through the whole chain -- an exact-match
+    /// lookup that misses degrades to the pattern fallback silently, which is the worst
+    /// way to be wrong about a Divine Orb.
+    /// </summary>
+    [Theory]
+    [InlineData("Rare Monsters adjacent in Areas drop 2 additional Divine Orbs",
+                "Rare Monsters in adjacent Areas drop 2 additional Divine Orbs")]
+    [InlineData("20% increased Qauntity of Items found in all Voyage Areas",
+                "20% increased Quantity of Items found in all Voyage Areas")]
+    public void BothSpellingsOfAGGGTypoScoreAlike(string typo, string fixedUp)
+    {
+        foreach (var profile in VoyageRules.Defaults())
+            Assert.Equal(profile.ScoreText([typo]), profile.ScoreText([fixedUp]), 6);
+
+        Assert.Equal(VoyageProfile.PayoutChannelOf(typo), VoyageProfile.PayoutChannelOf(fixedUp));
+        Assert.Equal(VoyageProfile.QuantityDensityOf(typo), VoyageProfile.QuantityDensityOf(fixedUp), 6);
+        Assert.Equal(ChartRewards.IsReward(typo), ChartRewards.IsReward(fixedUp));
+    }
+
+    /// <summary>
     /// The bottle play, end to end: a bottle is ground loot sold UNOPENED
     /// (field-confirmed), so the gift pays a fixed value into EVERY adjacent area and
     /// nothing multiplies it. Its existence is what gets maximised -- the solver must

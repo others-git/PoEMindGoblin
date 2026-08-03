@@ -94,6 +94,83 @@ once that captured a live boss fight instead of the app. Use `--render`.
   voyage, so both pressures say the same thing: take the valuable squares EARLY. That is
   the traveling repairman's problem, solved exactly by subset DP (9 squares = 512 subsets).
 
+## Voyage facts, checked against poedb (2026-08-03)
+
+Full writeup: `research/voyage-league-facts.md`. **poedb serves fine to
+`curl -A '<browser UA>'` and WebFetch's summariser refuses to reproduce its tables** —
+scrape raw and parse locally. poewiki is behind Anubis and unreachable, like reddit;
+`pathofexile.com/allflame` is a JS SPA with no server-rendered text.
+
+* **`reduced quantity per connection` is NOT a trap.** poedb's border table shows it never
+  rolls alone: the figurine carries it WITH `120%` or `180% increased Quantity of Items
+  found in adjacent Areas`. One open connection = +70%/+130%; it only goes negative at
+  three. It is the one board mod whose worth depends on the shape the solver picked.
+  Badged as a trap it told the user to avoid the best figurine on the board.
+  **Its per-connection half is still scored FLAT** — the penalty should scale with the
+  receiving square's open edges, which the solver knows and the model does not use yet.
+* **Every per-rare currency payout is FIGURINE-ONLY.** Diffing the pools: 88 chart lines,
+  40 border lines, only 6 shared. All twelve `Rare Monsters ... drop # additional <orb>`
+  lines, the Support Gem chance, `more Currency/Rarity/Scarabs`, the Stacked Deck
+  conversion, the magnitude amplifier, Captainsbane/Filthscrabble/Pirate's Locker/
+  Brinerot, Treasure Anchors and Altars are border-only. Payouts live on the BORDER,
+  multipliers live on the CHARTS — which is the synergy model, stated by the data.
+  Caveat: `assets/voyage-mods.json`'s `lines` is the UNION of both pools, so the corpus
+  cannot answer "can a chart roll this?".
+* **Every chart affix is a bundle: one payout plus one downside, and the family is
+  fixed.** Quantity-in-adjacent only comes with monster tankiness; Sulphur only with
+  monster damage; Rarity only with extra-phys-as-element; Pack Size only with
+  speed/crit/AoE. **Gold is the only chart payout with `in this Area` self scope.**
+* **All 65 border rolls are Level 1** — figurines are not ilvl-gated, so a level-68 board
+  can roll a Divine figurine. Every orb figurine is exactly `1 additional`, no tier
+  ladder: which is precisely why `VoyageAlerts` must stay a name list and cannot be a sum.
+* **The implemented chart bases have byte-identical 142-row mod tables** — the base picks
+  the TILESET and nothing else.
+* **poedb is STALE against 3.29.1**: no Grasping Vines anywhere, the disabled max-res mod
+  still listed, Sunken Opulence/Sunken Gems absent. Re-running `fetch_voyage_mods.py`
+  today returns the PRE-PATCH corpus, and the hand-added Grasping Vines line has to
+  survive it. Its upside is now known: **14/16/18% increased Pack Size in adjacent Areas**
+  at ilvl 68/80/83.
+* **3.29.1 "Fixed a typo in a Voyage modifier" and does not say which.** Both typos the
+  parser leans on (`Qauntity`, `Rare Monsters adjacent in Areas`) are still on stale
+  poedb. Verified 2026-08-03 that BOTH spellings of both lines score identically through
+  scoring, channel, density and reward classification, pinned by
+  `BothSpellingsOfAGGGTypoScoreAlike`. Keep it that way.
+* **Captainsbane and Filthscrabble are UNIQUE minibosses, not Rares** — level 68, ~1.85M
+  life, `monster dropped item rarity +% [15000]`. **Per-rare figurine payouts do NOT
+  collect from them.** Never price them as rare feeders.
+* **Imprisoned Monsters are Essence-imprisoned RARES** (confirmed by wording), so they do
+  feed per-rare payouts — which is what the model already assumes.
+* **Sulphur is area-harvested, not monster-dropped** — the game's own Maiden Voyage step 8:
+  "Look for clusters of luminous coral and collect them by placing Allflame Lanterns near
+  them." Every scaling line says *found*, every orb line says *drop*, and Vesper's
+  `IncreasedResourceGain1` is `map deepwater league resource found +% [20]`, area-scoped.
+  Exactly ONE modifier in the corpus makes monsters drop it: the figurine `Rare Monsters
+  in adjacent Areas drop Dead Man's Sulphur`. That single line is the only sulphur term a
+  rare-count multiplier may touch. **Market price 0.01c** (poe.watch, Allflame, 44
+  listings) — a bulk consumable; the catalog's ~5c/point is a UTILITY judgement about
+  board rerolls, not a market price, and the two should not be confused.
+* **"Dredged currency rolls Strongboxes" is a drifted paraphrase.** The real note:
+  "Dredged currency items can now be used on Strongboxes and Essences" — about what you
+  may apply currency TO, saying nothing about spawn rates. The `≈4 rares per strongbox`
+  figure has no reachable source: it is OUR estimate. Separately confirmed and more
+  useful: Vesper's `ScatterObjects1` carries `map strongboxes are rare [1]`, so chart
+  strongboxes are Rare rarity by default once unlocked.
+* **Bottles: the ~39c is UNVERIFIED** — poe.watch does not track the item at all (absent
+  from all 335 Allflame currency entries). poedb's `Message in a Bottle /25` outcome table
+  IS known: Mageblood, Headhunter, Kalandra's Touch, Ryslatha's Coil, Taste of Hate,
+  Defiance of Destiny, Inspired Learning, Unnatural Instinct, Bloodnotch, Rain of
+  Splinters, Replica Dragonfang's Flight, generic Unique Belt/Jewel/Ring/Amulet/Flask,
+  Hinekora's Lock, Fracturing Orb, Divine Orb (and a stack), Reflecting Mist, a Stacked
+  Deck stack, Broken Mirror, Albino Crab Claw, Chain Hook of Angling. It is Stackable
+  Currency, "Right click to open" — which is the mechanical reason it sells unopened.
+* **Eldritch Depths is UNCERTAIN as a base.** 3.29.1 calls it "a new Chart variant", but
+  poedb lists it as a ROOM of the Coral Forest tileset, it was already in our corpus
+  before the patch, and `Eldritch_Depths_Chart` 404s where all four real bases return 200.
+  Do not add a fifth base on this evidence.
+* **No per-room density or loot data exists anywhere reachable** — poedb's room table is
+  name→tileset only. Our measured room bonuses can be neither corroborated nor refuted,
+  so they stay field measurements.
+
 ## PoE core mechanics — what actually multiplies what
 
 Researched 2026-08-03 because three scoring bugs in a row came from ASSUMING these.
