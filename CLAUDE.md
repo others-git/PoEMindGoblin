@@ -260,7 +260,11 @@ modifiers); read the borders *before* placing; borders are rerollable for sulphu
 receiving tile: per-RARE payouts by its rare density (pack size + the tileset's measured
 room bonus — and per poedb, NO self-scope rare-adding chart mods exist, so nothing else
 may count), at-least-Magic payouts by its pack density, container gifts (boxes,
-barrels, cages…) by its Item Quantity, and **amplifiers** (`#% increased explicit modifier
+barrels, cages…) **and drop CONVERSIONS** (`Basic Currency items dropped by Monsters …
+will instead drop as Stacked Decks`) by its Item Quantity — a conversion adds nothing to
+the area, it upgrades the drops already there, so quantity decides how many there are to
+convert and `ScalesWithReceiverQuantity` is the one predicate all four scoring paths ask
+— and **amplifiers** (`#% increased explicit modifier
 magnitudes`) by the receiving chart's EXPLICIT value — its rolled affixes and the stats
 that aggregate them, never its one implicit. **Bottles are NOT a container gift**
 (field-confirmed): a Message in a Bottle is ground loot sold UNOPENED — a fixed-value

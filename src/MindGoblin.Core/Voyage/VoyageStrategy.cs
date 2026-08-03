@@ -260,7 +260,13 @@ public static class ModCatalog
             Comment: "board modifier"),
         new(@"(?:(\d+)|an) Altars? to the Goddess", Stat.Currency, 12,
             Comment: "3.29.1 blessings convert common currency to rarer, party-wide"),
-        new(@"instead drop as Stacked Decks", Stat.Currency, 40),
+        // A CONVERSION, so the tile it lands on decides what it is worth: the value is
+        // (decks converted) x (deck price - the basic currency it replaced), and the
+        // count of basic drops is what Item Quantity multiplies. 40 is ~20 converted
+        // drops at a deck's ~2c, priced for a BASELINE tile -- the receiver's quantity
+        // scales it from there, which is why it must not be scored flat.
+        new(@"instead drop as Stacked Decks", Stat.Currency, 40,
+            Comment: "conversion: ~2c per deck, count scales with the receiver's Quantity"),
         new(@"(?:(\d+)|an)\s+additional Golden Lanterns?", Stat.Lanterns, 12,
             Comment: "3.29.0b made these grant increased Quantity too; 3.29.1 buffs "
                      + "hired mercenaries from them as well"),

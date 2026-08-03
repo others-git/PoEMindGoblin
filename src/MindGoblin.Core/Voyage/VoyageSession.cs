@@ -443,7 +443,7 @@ public sealed class VoyageSession
                 ? VoyageProfile.PayoutChannelOf(adj) : VoyageProfile.PayoutChannel.None;
             var payoutAdj = channel != VoyageProfile.PayoutChannel.None;
             var containerAdj = !payoutAdj && c.AdjacentModifier is { } gift
-                               && VoyageProfile.IsContainerGift(gift);
+                               && VoyageProfile.ScalesWithReceiverQuantity(gift);
             // The amplifier channel: pays a SHARE of the neighbour rather than a sum of
             // its own, so it must not also keep a flat value or it would be paid twice.
             var magnitudeAdj = !payoutAdj && !containerAdj
@@ -629,7 +629,7 @@ public sealed class VoyageSession
             {
                 VoyageProfile.PayoutChannel.Rares => perRare,
                 VoyageProfile.PayoutChannel.Population => perPack,
-                _ when VoyageProfile.IsContainerGift(modifier.Description) => perQty,
+                _ when VoyageProfile.ScalesWithReceiverQuantity(modifier.Description) => perQty,
                 _ when VoyageProfile.IsMagnitudeAmplifier(modifier.Description) => amplify,
                 _ => flat,
             };
@@ -672,7 +672,7 @@ public sealed class VoyageSession
             {
                 VoyageProfile.PayoutChannel.Rares => 1 + rareDensity,
                 VoyageProfile.PayoutChannel.Population => 1 + packDensity,
-                _ when VoyageProfile.IsContainerGift(adj) => 1 + qtyDensity,
+                _ when VoyageProfile.ScalesWithReceiverQuantity(adj) => 1 + qtyDensity,
                 _ when VoyageProfile.IsMagnitudeAmplifier(adj) => explicitHere,
                 _ => 1,
             };
@@ -746,7 +746,7 @@ public sealed class VoyageSession
                         {
                             VoyageProfile.PayoutChannel.Rares => 1 + rareDensity,
                             VoyageProfile.PayoutChannel.Population => 1 + packDensity,
-                            _ when VoyageProfile.IsContainerGift(adj) => 1 + qtyDensity,
+                            _ when VoyageProfile.ScalesWithReceiverQuantity(adj) => 1 + qtyDensity,
                             _ when VoyageProfile.IsMagnitudeAmplifier(adj) => explicitHere,
                             _ => 1,
                         };

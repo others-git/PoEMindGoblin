@@ -425,6 +425,31 @@ public sealed class VoyageProfile
             + @"Clusters? of Barrels|cages? of Tormented Spirits|Treasure)",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
+    /// <summary>
+    /// Drop CONVERSIONS -- "Basic Currency items dropped by Monsters in adjacent Areas
+    /// will instead drop as Stacked Decks".
+    ///
+    /// Not a container gift: nothing is added to the area, the drops it ALREADY makes
+    /// are upgraded in place. So what it pays rides entirely on how many such drops the
+    /// receiving tile produces, which is what Item Quantity says -- a conversion beside
+    /// a blank tile converts almost nothing, and beside a fat one it converts the lot.
+    /// Scored flat it was counted and inert: worth the same 40 wherever it sat, so the
+    /// solver left a +200% quantity chart on the far side of the board from it.
+    /// </summary>
+    public static bool IsDropConversion(string line) => DropConversion.IsMatch(line);
+
+    private static readonly Regex DropConversion =
+        new(@"will instead drop as", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Every payout the RECEIVING tile's Item Quantity multiplies: container gifts,
+    /// whose contents quantity rolls against, and drop conversions, whose yield is the
+    /// count of drops quantity produces. The one predicate the four scoring paths ask,
+    /// so a mod cannot be multiplied in the solver and flat in the tooltip.
+    /// </summary>
+    public static bool ScalesWithReceiverQuantity(string line) =>
+        IsContainerGift(line) || IsDropConversion(line);
+
     /// <summary>The bottle gift, both spellings the game writes. The solver rations
     /// these to one per voyage under a bottle-chasing profile.</summary>
     public static bool IsBottleGift(string line) => BottleGift.IsMatch(line);

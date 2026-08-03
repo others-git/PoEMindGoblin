@@ -67,6 +67,45 @@ public class BorderSynergyTests
     public void ContainerGiftsAreKnownByName(string line, bool expected) =>
         Assert.Equal(expected, VoyageProfile.IsContainerGift(line));
 
+    /// <summary>
+    /// A drop conversion is not a container -- nothing is added, the drops the tile
+    /// already makes are upgraded -- but the receiving tile's Quantity multiplies it
+    /// just the same, because Quantity is what decides how many drops there are to
+    /// convert. It went through neither channel and scored FLAT, inert at 40 wherever
+    /// it sat, on a mod whose decks are ~2c each.
+    /// </summary>
+    [Theory]
+    [InlineData("Basic Currency items dropped by Monsters in adjacent Areas "
+                + "will instead drop as Stacked Decks", true)]
+    [InlineData("Adjacent Areas contain 5 additional Diviner's Strongboxes", true)]
+    [InlineData("Adjacent Areas contain 3 additional Messages in a Bottle", false)]
+    [InlineData("Rare Monsters in adjacent Areas drop 2 additional Chaos Orbs", false)]
+    [InlineData("60% increased explicit modifier magnitudes", false)]
+    public void QuantityScaledPayoutsIncludeDropConversions(string line, bool expected) =>
+        Assert.Equal(expected, VoyageProfile.ScalesWithReceiverQuantity(line));
+
+    /// <summary>
+    /// The conversion square must pull the highest-quantity chart onto ITSELF. Scored
+    /// flat it could not: the solver left a +200% quantity chart on the far side of the
+    /// board and the figurine paid the same either way.
+    /// </summary>
+    [Fact]
+    public void AConversionSquareTakesTheQuantityChart()
+    {
+        var session = Session(out _, out _);
+        var quantity = 3;
+        session.ApplyChartText(quantity,
+            "Drowned Shelf\nAnchorfield\nItem Quantity: +200%");
+        session.ApplySquareModifiers(1,
+            ["Basic Currency items dropped by Monsters in this Area "
+             + "will instead drop as Stacked Decks"]);
+
+        var currency = VoyageRules.Defaults().Single(p => p.Name == "currency");
+        var plan = session.Plan(session.Solve(currency, TimeSpan.FromSeconds(3)));
+
+        Assert.Equal(1, Assert.Single(plan, s => s.ChartNumber == quantity).Square);
+    }
+
     [Theory]
     [InlineData("45% increased Quantity of Items found in adjacent Areas", 0.45)]
     [InlineData("8% increased Qauntity of Items found in all Voyage Areas", 0.08)]
