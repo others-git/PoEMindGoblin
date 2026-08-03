@@ -36,6 +36,23 @@ public class PreserveAndSearchTests
         Assert.True(session.PreserveChanceInPlay([1, 2]));
     }
 
+    /// <summary>
+    /// The path the slurp actually takes. Figurines are what a real session records --
+    /// the square dictionary stays empty -- and the figurine tables carry this mod, so
+    /// a check reading SquareModifiers directly never once fired: Dive Again skipped
+    /// the preserve question and completion deleted a refunded chart.
+    /// </summary>
+    [Fact]
+    public void AChartRefundChanceOnAFigurineIsNoticed()
+    {
+        var session = Session();
+        session.ApplyFigurineText(1,
+            "Adjacent Charts have 25% chance to not be consumed when beginning a Voyage");
+
+        Assert.Empty(session.SquareModifiers);
+        Assert.True(session.PreserveChanceInPlay([1, 2]));
+    }
+
     [Fact]
     public void NoRefundChanceMeansNoQuestion() =>
         Assert.False(Session().PreserveChanceInPlay([1, 2, 3]));

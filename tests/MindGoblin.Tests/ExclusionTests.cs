@@ -52,11 +52,14 @@ public class ExclusionTests
         Assert.Equal([5], session.Excluded);
         Assert.Equal([7], session.Required);
 
-        // Both spent; the panel comes back holding neither.
-        session.ApplyPanelRead(Enumerable.Range(1, 12).Where(i => i is not (5 or 7))
+        // Both spent; the panel comes back holding neither. Twice, because one read
+        // that cannot see a chart is not evidence the chart is gone.
+        var withoutFiveAndSeven = Enumerable.Range(1, 12).Where(i => i is not (5 or 7))
             .Select(i => new ChartPanelReader.ReadCell(
                 i, (i - 1) / 6, (i - 1) % 6, true, true, true, true) { Level = 80 })
-            .ToList());
+            .ToList();
+        session.ApplyPanelRead(withoutFiveAndSeven);
+        session.ApplyPanelRead(withoutFiveAndSeven);
         Assert.Empty(session.Excluded);
         Assert.Empty(session.Required);
 

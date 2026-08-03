@@ -69,6 +69,35 @@ public static class WeightCategories
             : Enum.TryParse<Stat>(Current(category), out var stat) ? StatText.Describe(stat)
             : "";
 
+    /// <summary>
+    /// The stats every upright shipped strategy prices NEGATIVE -- the traps the game's
+    /// own tables file as rewards.
+    ///
+    /// The catalog stores them positive by design: a Danger entry is a SEVERITY, and
+    /// "cannot drop Equipment" is a +1 magnitude, because what a mod IS and how much a
+    /// plan cares are separate questions. A borrowed rule taken at catalog sign therefore
+    /// answers "I care about danger" with charts most likely to end the voyage -- and the
+    /// slider is the only place a stat can arrive without a strategy's opinion attached.
+    ///
+    /// Which way a stat points is not a new hand-list: the shipped strategies already
+    /// say, unanimously, and <c>EveryTrapStatIsWeightedNegativeInWordsAndInSign</c>
+    /// fails the build if that ever stops agreeing with what the tooltip tells the user.
+    /// The dump is excluded by the same test the borrow path uses, because it inverts
+    /// EVERY stat -- and being inverted it never borrows at all.
+    /// </summary>
+    private static readonly HashSet<Stat> NegativeByConvention =
+        Strategies.Shipped()
+            .Where(s => s.ChartBaseValue <= 0)
+            .SelectMany(s => s.Weights)
+            .GroupBy(w => w.Key)
+            .Where(g => g.All(w => w.Value < 0))
+            .Select(g => g.Key)
+            .ToHashSet();
+
+    /// <summary>Which way a slider on this stat points: a trap is steered AWAY from, so
+    /// its borrowed rules enter negative at the slider's magnitude.</summary>
+    public static double SignOf(Stat stat) => NegativeByConvention.Contains(stat) ? -1 : 1;
+
     /// <summary>Only a FALLBACK now, for rules written before
     /// <see cref="VoyageRule.Category"/> existed; a compiled profile stamps its own.</summary>
     private static readonly Dictionary<string, Stat> StatByPattern =
@@ -150,7 +179,9 @@ public static class WeightCategories
                     .Select(e => new VoyageRule
                     {
                         Pattern = e.Pattern,
-                        Weight = e.UnitValue * Multiplier(v),
+                        // The slider gives magnitude, the stat gives sign: a trap
+                        // borrowed at catalog sign would make the planner PREFER it.
+                        Weight = SignOf(stat) * e.UnitValue * Multiplier(v),
                         ScalesWithBoard = e.ScalesWithBoard,
                         Comment = e.Comment,
                         Category = name,

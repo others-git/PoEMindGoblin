@@ -12,7 +12,11 @@ public static class SaveProbe
     {
         using var px = new FilePixels(screenshot);
         var session = new VoyageSession();
-        session.ApplyPanelRead(new ChartPanelReader().Read(px));
+        // The app's reader, not a default one: the round-trip is only evidence if the
+        // charts going into it are the charts the app would have produced -- the user's
+        // calibration and their learned level templates included.
+        session.ApplyPanelRead(new ChartPanelReader(ChartPanelReader.Options.Load(),
+                                                    LevelReader.LoadWithUserTemplates()).Read(px));
         session.ApplySquareModifiers(5, ["Areas contain 8 additional packs of Sea Beasts"]);
         session.ApplyChartText(session.ByPanelIndex.Keys.Order().First(),
             "Tempest Reach\nSeafloor Ridges\nDead Man's Sulphur: +14");

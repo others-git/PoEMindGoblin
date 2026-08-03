@@ -112,6 +112,107 @@ public class SolverSoundnessTests
         }
     }
 
+    /// <summary>
+    /// A NEGATIVE adjacent payout must not be ceilinged at the DENSEST tile.
+    ///
+    /// PairAdjacency multiplies the per-monster and per-quantity parts by (1 + the
+    /// RECEIVER's density), so a payout priced below zero is at its best beside the
+    /// THINNEST tile: its ceiling is the value itself, not the value times the panel's
+    /// biggest density. Scaled the wrong way the adjacency slack sits under what the
+    /// board can really score, and this instance is what that costs -- the optimum is
+    /// 153.031 (c1, c0, c4, c2) and the bound prunes it, returning 144.091 and calling
+    /// it proved. Only a hand-edited voyage-rules.json can price an adjacent payout
+    /// negative, which changes nothing: what the solver calls proved has to be proved.
+    /// </summary>
+    [Fact]
+    public void ANegativeAdjacentPayoutCannotPruneTheTrueOptimum()
+    {
+        Chart Feeder(string id, double own, double flat, double perMonster, double density) =>
+            new(id, id, ChartShape.Crossing, 80, [])
+            {
+                Value = own, AdjacentValue = flat,
+                AdjacentPerMonsterValue = perMonster, MonsterDensity = density,
+            };
+
+        var charts = new[]
+        {
+            Feeder("c0", own: -8.367, flat: 56.185, perMonster: -22.843, density: 1.272),
+            Feeder("c1", own: 60.015, flat: 47.854, perMonster: -24.263, density: 0.905),
+            Feeder("c2", own: 9.795, flat: 44.949, perMonster: -11.168, density: 2.789),
+            Feeder("c3", own: -11.961, flat: 34.710, perMonster: -9.485, density: 2.326),
+            Feeder("c4", own: -14.956, flat: 44.151, perMonster: -8.860, density: 0.017),
+        };
+
+        double Score(Chart chart, Cell _) => chart.Value;
+
+        var best = Permutations(charts, 4).Max(RowValue);
+        var solution = new VoyageSolver(1, 4, charts, Score,
+                                        allowEmpty: false, strandedPenalty: 40)
+            .Solve(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(153.031, best, 3);            // the brute force, pinned
+        Assert.Equal(best, solution.Value, 6);
+        Assert.True(solution.ProvedOptimal, "an instance this small must be proved");
+    }
+
+    /// <summary>
+    /// The same claim over instances nobody chose, with the per-monster and per-quantity
+    /// payouts drawn SIGNED against positive densities -- the shape a user's own weights
+    /// can produce and the shipped presets cannot.
+    /// </summary>
+    [Fact]
+    public void TheSolverMatchesBruteForceOnSignedAdjacentPayouts()
+    {
+        var random = new Random(20260802);
+
+        for (var trial = 0; trial < 120; trial++)
+        {
+            var charts = Enumerable.Range(0, 5).Select(i =>
+                new Chart($"c{i}", $"c{i}", ChartShape.Crossing, 80, [])
+                {
+                    Value = Math.Round(random.NextDouble() * 150 - 50, 3),
+                    AdjacentValue = Math.Round(random.NextDouble() * 60, 3),
+                    AdjacentPerMonsterValue = Math.Round(random.NextDouble() * 50 - 25, 3),
+                    AdjacentPerQuantityValue = Math.Round(random.NextDouble() * 30 - 15, 3),
+                    MonsterDensity = Math.Round(random.NextDouble() * 3, 3),
+                    PackDensity = Math.Round(random.NextDouble() * 3, 3),
+                    QuantityDensity = Math.Round(random.NextDouble() * 2, 3),
+                    AdjacentPayoutOnPopulation = random.Next(2) == 0,
+                }).ToArray();
+
+            double Score(Chart chart, Cell _) => chart.Value;
+
+            var best = Permutations(charts, 4).Max(RowValue);
+            var solution = new VoyageSolver(1, 4, charts, Score,
+                                            allowEmpty: false, strandedPenalty: 40)
+                .Solve(TimeSpan.FromSeconds(5));
+
+            Assert.True(Math.Abs(best - solution.Value) < 1e-6,
+                        $"trial {trial}: brute force {best:0.###}, solver {solution.Value:0.###}");
+        }
+    }
+
+    /// <summary>One row scored the way the solver accumulates: own value, plus every
+    /// adjacent pair counted in both directions.</summary>
+    private static double RowValue(IReadOnlyList<Chart> row)
+    {
+        var total = row.Sum(c => c.Value);
+        for (var i = 0; i + 1 < row.Count; i++)
+            total += Pays(row[i], row[i + 1]) + Pays(row[i + 1], row[i]);
+        return total;
+    }
+
+    /// <summary>PairAdjacency restated: what one chart's adjacent modifier pays the chart
+    /// beside it. Its own copy on purpose -- a brute force that called the solver's
+    /// arithmetic would agree with a broken bound as readily as a sound one.</summary>
+    private static double Pays(Chart giver, Chart receiver) =>
+        giver.AdjacentValue
+        + giver.AdjacentPerMonsterValue
+          * (1 + (giver.AdjacentPayoutOnPopulation
+                      ? receiver.PackDensity : receiver.MonsterDensity))
+        + giver.AdjacentPerQuantityValue * (1 + receiver.QuantityDensity)
+        + giver.AdjacentMagnitudeValue * receiver.ExplicitValue;
+
     private static IEnumerable<IReadOnlyList<Chart>> Permutations(
         IReadOnlyList<Chart> pool, int take)
     {

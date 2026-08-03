@@ -6,4 +6,11 @@
   <Folder Name="/tests/">
     <Project Path="tests/MindGoblin.Tests/MindGoblin.Tests.csproj" />
   </Folder>
+  <!-- The probes are headless callers of Core's public API, so they only stay compiling
+       if something compiles them: outside the solution a Core rename broke both with CI
+       still green. -->
+  <Folder Name="/tools/">
+    <Project Path="tools/RoiProbe/RoiProbe.csproj" />
+    <Project Path="tools/VoyageProbe/VoyageProbe.csproj" />
+  </Folder>
 </Solution>

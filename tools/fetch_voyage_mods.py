@@ -36,15 +36,19 @@ import urllib.error
 import urllib.request
 from collections import OrderedDict
 
-# Every base linked from poedb's Chart item-class page. Thermal Vents exists as an item
-# but has no mod table published yet, which is a warning rather than a failure -- when it
-# gains one, a refresh picks it up and says so.
+# Every base linked from poedb's Chart item-class page.
 BASES = [
     "Coral_Reef_Chart",
     "Coral_Forest_Chart",
     "Sandy_Seabed_Chart",
     "Thermal_Vents_Chart",
 ]
+
+# Thermal Vents exists as an item but has no mod table published, so parsing nothing off
+# it is the truth. Every OTHER base yielding nothing means the markup moved, and writing
+# that result would ship a corpus silently missing a whole base -- which reads as a
+# successful refresh. Listing the exception is what lets the rest be fatal.
+NO_TABLE = {"Thermal_Vents_Chart"}
 
 # The league page carries two things the chart pages do not: the BORDER mods, which are
 # what the figurines around the board grant, and the room list -- the tilesets a chart can
@@ -277,6 +281,10 @@ DIFFICULTY = [
     r"(?:gain|gain an?) (?:a )?(?:Frenzy|Endurance|Power) Charge on Hit",
     r"steal Power, Frenzy and Endurance charges on Hit",
     r"Monsters (?:Maim|Poison|Blind|Hinder) on Hit",
+    # 3.29.1's replacement for the max-res roll it disabled. It is a hinder, and the
+    # patch notes are the only place it appears -- no chart table publishes it -- so
+    # without a rule the app's "matches neither" bias would file the danger as a payout.
+    r"apply Grasping Vines on Hit",
     # area and player penalties
     r"to all maximum Resistances",
     r"less effect of Curses on Monsters",
@@ -355,15 +363,18 @@ def main() -> int:
             return 2
 
         found = extract(page)
-        if not found:
-            # Either the base has no published table yet, or the page changed. Both are
-            # worth saying out loud; only the second is a problem, and losing EVERY base
-            # is how you tell them apart.
-            print(f"warning: no mod table on {base}", file=sys.stderr)
-            per_base[base] = 0
-            continue
-
         per_base[base] = len(found)
+        if not found:
+            if base not in NO_TABLE:
+                print(f"error: no mod table on {base} -- has poedb changed?",
+                      file=sys.stderr)
+                return 2
+            print(f"warning: no mod table on {base} (none published yet)", file=sys.stderr)
+            continue
+        if base in NO_TABLE:
+            print(f"note: {base} now publishes a mod table -- drop it from NO_TABLE",
+                  file=sys.stderr)
+
         for kind, line in found:
             lines.setdefault(line, classify(line, reward, difficulty, exclude))
             kinds.setdefault(line, set()).add(kind)
@@ -385,26 +396,33 @@ def main() -> int:
     for line in excluded:
         del lines[line]
 
-    # The league page: border mods (what the figurines grant) and the room list.
+    # The league page: border mods (what the figurines grant) and the room list. Nothing
+    # else publishes either, so a page that parses to nothing is a corpus with no
+    # figurines and no tilesets -- fatal for the same reason a missing base is.
     try:
         league = fetch(LEAGUE_PAGE)
     except (urllib.error.URLError, urllib.error.HTTPError) as error:
-        print(f"warning: could not fetch {LEAGUE_PAGE}: {error}", file=sys.stderr)
-    else:
-        rooms = extract_rooms(league)
-        border = extract(league, BORDER_MODS_TAB)
-        per_base[LEAGUE_PAGE + " (border)"] = len(border)
-        for kind, line in border:
-            category = classify(line, reward, difficulty, exclude)
-            if category == "excluded":
-                continue
-            board_lines.setdefault(line, category)
-            lines.setdefault(line, category)
-            kinds.setdefault(line, set()).add(kind)
-        if not border:
-            print(f"warning: no border mod table on {LEAGUE_PAGE}", file=sys.stderr)
-        if not rooms:
-            print(f"warning: no room list on {LEAGUE_PAGE}", file=sys.stderr)
+        print(f"error: could not fetch {LEAGUE_PAGE}: {error}", file=sys.stderr)
+        return 2
+
+    rooms = extract_rooms(league)
+    border = extract(league, BORDER_MODS_TAB)
+    per_base[LEAGUE_PAGE + " (border)"] = len(border)
+    if not border:
+        print(f"error: no border mod table on {LEAGUE_PAGE} -- has poedb changed?",
+              file=sys.stderr)
+        return 2
+    if not rooms:
+        print(f"error: no room list on {LEAGUE_PAGE} -- has poedb changed?",
+              file=sys.stderr)
+        return 2
+    for kind, line in border:
+        category = classify(line, reward, difficulty, exclude)
+        if category == "excluded":
+            continue
+        board_lines.setdefault(line, category)
+        lines.setdefault(line, category)
+        kinds.setdefault(line, set()).add(kind)
 
     if not lines:
         print("error: no mod table found on any base -- has poedb changed?", file=sys.stderr)

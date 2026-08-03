@@ -23,7 +23,9 @@ namespace MindGoblin.Core.Voyage;
 ///     difficulty list.
 ///   * A line matching NEITHER counts as a reward. The list is complete for this league,
 ///     but a patch that adds a payout must not have it silently hidden; the cost of being
-///     wrong this way is an extra line, the other way it is a missing one.
+///     wrong this way is an extra line, the other way it is a missing one. The same bias
+///     applies to the table: only "difficulty" hides a line, so a regenerated corpus that
+///     files something "unclassified" still shows it.
 /// </summary>
 public static class ChartRewards
 {
@@ -32,7 +34,8 @@ public static class ChartRewards
         /// <summary>
         /// Every line the three bases can roll, numbers reduced to '#', mapped to
         /// "reward" or "difficulty". This is the primary lookup: an exact match against
-        /// the real table beats guessing from wording.
+        /// the real table beats guessing from wording. A regeneration can also emit
+        /// "unclassified", which is treated as a reward -- see <see cref="IsReward"/>.
         /// </summary>
         public Dictionary<string, string> Lines { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -147,6 +150,18 @@ public static class ChartRewards
         }
     }
 
+    /// <summary>
+    /// Dangers no mod table publishes, so no regeneration can supply them.
+    ///
+    /// Grasping Vines arrived in 3.29.1's patch notes as the replacement for the max-res
+    /// roll it disabled; poedb's tables never carried it, which means neither the corpus
+    /// nor the generated pattern lists mention it and "matches neither" would file the
+    /// danger as a payout. Checked alongside the loaded difficulty patterns, never
+    /// instead of them.
+    /// </summary>
+    private static readonly Regex AlwaysDifficulty =
+        new(@"Grasping Vines", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static readonly Regex Digits = new(@"\d+(?:\.\d+)?", RegexOptions.Compiled);
     private static readonly Regex SignedHash = new(@"[-+]#", RegexOptions.Compiled);
     private static readonly Regex Spaces = new(@"\s+", RegexOptions.Compiled);
@@ -169,11 +184,14 @@ public static class ChartRewards
         if (string.IsNullOrWhiteSpace(line)) return false;
 
         // The table first: it is the actual mod list, so a hit here is not a judgement.
+        // "difficulty" is the only category that hides a line -- a regeneration that
+        // could not classify something must not make it disappear from the panel.
         if (Current.Lines.TryGetValue(Normalise(line), out var category))
-            return category.Equals("reward", StringComparison.OrdinalIgnoreCase);
+            return !category.Equals("difficulty", StringComparison.OrdinalIgnoreCase);
 
         // Only a line the table does not have reaches the patterns.
         if (Current.RewardPattern.IsMatch(line)) return true;
+        if (AlwaysDifficulty.IsMatch(line)) return false;
         return !Current.DifficultyPattern.IsMatch(line);
     }
 

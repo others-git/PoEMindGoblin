@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using MindGoblin.Core;
@@ -72,10 +73,9 @@ public partial class GemRoiView : UserControl
             PriceNote.Text = "currency prices from poe.watch; edit to override";
 
             _ladders = PoeWatchClient.ToLadders(gems, MinVolume());
-            _settings.DefaultLeague = league;
-            _settings.Save();
 
             Status($"{gems.Count} gem rows, {_ladders.Count} gems with usable prices.");
+            // Recalculate persists the league and the two fetched prices along with it.
             Recalculate();
         }
         catch (Exception ex)
@@ -95,9 +95,18 @@ public partial class GemRoiView : UserControl
     private void Recalculate()
     {
         _rows.Clear();
-        if (_ladders is null) { Status("No price data yet - press Refresh prices."); return; }
 
-        var costs = new GemRoi.Costs(ParseDouble(GcpBox.Text, 1.0), ParseDouble(VaalBox.Text, 1.0));
+        // Unparsable text keeps the stored price rather than replacing it with a
+        // placeholder: a box mid-edit is not an instruction to forget the override.
+        var costs = new GemRoi.Costs(ParseDouble(GcpBox.Text, _settings.GemcutterChaos),
+                                     ParseDouble(VaalBox.Text, _settings.VaalOrbChaos));
+        if (_ladders is null)
+        {
+            Status("No price data yet - press Refresh prices.");
+            Persist(costs);
+            return;
+        }
+
         var roi = new GemRoi(_settings.Corruption());
         var paths = SelectedPaths();
 
@@ -125,6 +134,7 @@ public partial class GemRoiView : UserControl
         var profitable = results.Count(r => r.Result.Profit > 0);
         Status($"{_rows.Count} rows ({profitable} profitable) · {skippedNonVendor} non-vendor gems "
              + $"skipped · {incomplete} rows dropped for missing prices");
+        Persist(costs);
     }
 
     private GemRoi.Path[] SelectedPaths()
@@ -147,6 +157,36 @@ public partial class GemRoiView : UserControl
     {
         var dialog = new CorruptionOddsWindow(_settings) { Owner = Window.GetWindow(this) };
         if (dialog.ShowDialog() == true) Recalculate();
+    }
+
+    /// <summary>
+    /// Remember what the calculation was actually run with.
+    ///
+    /// The two currency prices are OVERRIDES -- the fetch fills them in and the user
+    /// corrects them -- so a correction that does not survive a restart silently re-costs
+    /// every row at the shipped default. They are stored with the league, which was
+    /// already persisted, and from the same values the rows were computed from.
+    ///
+    /// Runs last, because a write that fails has to be able to say so without the row
+    /// count writing over it.
+    /// </summary>
+    private void Persist(GemRoi.Costs costs)
+    {
+        var league = LeagueBox.Text.Trim();
+        if (league.Length > 0) _settings.DefaultLeague = league;
+        _settings.GemcutterChaos = costs.GemcutterChaos;
+        _settings.VaalOrbChaos = costs.VaalOrbChaos;
+
+        try
+        {
+            _settings.Save();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Every filter toggle recalculates, so this runs often: a locked settings
+            // file must cost the override, not the app.
+            Status($"Settings not saved: {ex.Message}");
+        }
     }
 
     private int MinVolume() => int.TryParse(MinVolumeBox.Text, out var n) && n >= 0 ? n : 0;

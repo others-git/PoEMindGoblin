@@ -476,4 +476,128 @@ public class PanelStateTests
         var reading = AreaModifierPanel.Read(["Areas contain 8 additional packs of Sea Beasts"]);
         Assert.Equal(AreaModifierPanel.PanelState.Modifiers, reading.State);
     }
+
+    /// <summary>
+    /// The fourth meaning of an empty-looking panel, and the one that used to hide: the
+    /// capture landed somewhere else entirely and OCR found text there anyway. Without
+    /// the heading, unrelated text is not evidence the panel was captured -- and calling
+    /// it Modifiers marks the square READ, so its real modifiers are never collected and
+    /// nothing ever asks for them again.
+    /// </summary>
+    [Fact]
+    public void TextThatIsNotAModifierMeansTheCaptureMissedThePanel()
+    {
+        var reading = AreaModifierPanel.Read([
+            "Sell items to this vendor",
+            "Waypoint discovered nearby",
+        ]);
+        Assert.Equal(AreaModifierPanel.PanelState.NotFound, reading.State);
+        Assert.False(reading.IsRead);
+        Assert.Empty(reading.Lines);
+    }
+
+    /// <summary>One modifier is enough: the junk beside it does not veto the read.</summary>
+    [Fact]
+    public void OneModifierLineCarriesTheReadWithoutTheHeading()
+    {
+        var reading = AreaModifierPanel.Read([
+            "Sell items to this vendor",
+            "Adjacent Areas contain 4 additional Golden Lanterns",
+        ]);
+        Assert.Equal(AreaModifierPanel.PanelState.Modifiers, reading.State);
+        Assert.Contains("Adjacent Areas contain 4 additional Golden Lanterns", reading.Lines);
+    }
+
+    /// <summary>
+    /// The evidence test must not become a second corpus to maintain: EVERY board
+    /// modifier the game can show has to look like one, alone and unheaded. A digit is
+    /// the usual tell, but the digit-less lines ("Adjacent Areas contain Captainsbane")
+    /// are exactly the ones a shape rule loses, and losing one means a real read
+    /// silently downgraded to "capture missed".
+    /// </summary>
+    [Fact]
+    public void EveryBoardModifierIsRecognisedWithoutTheHeading()
+    {
+        var missed = ChartRewards.Current.BoardLines.Keys
+            .Select(l => l.Replace("#", "12"))
+            .Where(l => AreaModifierPanel.Read([l]).State != AreaModifierPanel.PanelState.Modifiers)
+            .ToList();
+        Assert.True(missed.Count == 0, string.Join("\n", missed.Take(12)));
+    }
+
+    /// <summary>
+    /// The three documented meanings stay three. The heading is what separates them, and
+    /// the new evidence rule applies only where there is no heading to go on.
+    /// </summary>
+    [Fact]
+    public void TheEmptyLookingPanelsStayDistinct()
+    {
+        Assert.Equal(AreaModifierPanel.PanelState.Placeholder,
+            AreaModifierPanel.Read([". Area Modifiers", "Hover a square of the Voyage"]).State);
+        Assert.Equal(AreaModifierPanel.PanelState.NoModifiers,
+            AreaModifierPanel.Read([". Area Modifiers"]).State);
+        Assert.Equal(AreaModifierPanel.PanelState.NotFound,
+            AreaModifierPanel.Read(["Sell items to this vendor"]).State);
+    }
+
+    /// <summary>The heading proves the panel was found, so what sits under it is the
+    /// panel's own text -- the evidence rule has no say there.</summary>
+    [Fact]
+    public void TheHeadingStillVouchesForWhateverFollowsIt()
+    {
+        var reading = AreaModifierPanel.Read([". Area Modifiers", "Sell items to this vendor"]);
+        Assert.Equal(AreaModifierPanel.PanelState.Modifiers, reading.State);
+        Assert.Equal(["Sell items to this vendor"], reading.Lines);
+    }
+}
+
+/// <summary>
+/// Repair must decline a TIE. The twelve "Rare Monsters ... drop # additional &lt;orb&gt;
+/// Orbs" board lines are token-identical apart from the orb word, so OCR damage to
+/// exactly that word leaves every one of them on the same overlap score -- and taking
+/// the first turned a damaged Chromatic figurine into a Divine one, scored as one, and
+/// fired the GRAIL alert on it. A guess that confident is worse than no repair.
+/// </summary>
+public class CanonicalizeTieTests
+{
+    /// <summary>
+    /// The distinguishing word is the damaged one, so nothing distinguishes the
+    /// candidates: pass the line through untouched. A damaged Divine declines too --
+    /// losing a repair is the price, and it is the cheap side of this trade.
+    /// </summary>
+    [Theory]
+    [InlineData("Rare Monsters in adjacent Areas drop 2 additional Chramatic Orbs")]
+    [InlineData("Rare Monsters in adjacent Areas drop 2 additional Exaited Orbs")]
+    [InlineData("Rare Monsters in adjacent Areas drop 2 additional Chaas Orbs")]
+    [InlineData("Rare Monsters in adjacent Areas drop 2 additional Divlne Orbs")]
+    [InlineData("Rare Monsters in adjacent Areas drop 2 additional Orbs of Annulmnt")]
+    public void ADamagedOrbWordIsNotRepairedByGuessing(string line) =>
+        Assert.Equal(line, AreaModifierPanel.Canonicalize(line));
+
+    /// <summary>
+    /// The bug, end to end and verbatim: this line used to come back as the Divine
+    /// template, which alerts as GRAIL. No orb line may ever be invented from one whose
+    /// own orb word is unreadable.
+    /// </summary>
+    [Fact]
+    public void ADamagedChromaticNeverBecomesADivine()
+    {
+        const string damaged = "Rare Monsters in adjacent Areas drop 2 additional Chramatic Orbs";
+        Assert.DoesNotContain("Divine", AreaModifierPanel.Canonicalize(damaged));
+    }
+
+    /// <summary>
+    /// The other half: damage to a SHARED word leaves the orb word intact, one template
+    /// wins outright, and the repair still happens. Declining a tie must not turn into
+    /// declining everything.
+    /// </summary>
+    [Theory]
+    [InlineData("Rare Monsters in adjacent Areås drop 2 additional Chromatic Orbs",
+                "Rare Monsters in adjacent Areas drop 2 additional Chromatic Orbs")]
+    [InlineData("Rare Monsters in adjacent Areas drop 2 additional Chromatic Orbs l:",
+                "Rare Monsters in adjacent Areas drop 2 additional Chromatic Orbs")]
+    [InlineData("Rare Mons+ers in adjacent Areas drop 1 additional Exalted Orbs",
+                "Rare Monsters in adjacent Areas drop 1 additional Exalted Orbs")]
+    public void DamageToASharedWordStillRepairs(string mangled, string expected) =>
+        Assert.Equal(expected, AreaModifierPanel.Canonicalize(mangled));
 }

@@ -338,4 +338,49 @@ public class ChartCorpusTests
         Assert.False(ChartRewards.IsKnown("Areas contain 3 additional Sunken Chests"));
         Assert.True(ChartRewards.IsReward("Areas contain 3 additional Sunken Chests"));
     }
+
+    [Fact]
+    public void GraspingVinesIsDifficultyWithoutTheTableSayingSo()
+    {
+        var original = ChartRewards.Current;
+        try
+        {
+            // 3.29.1 introduced it in the patch notes and no mod table publishes it, so
+            // a regenerated corpus can arrive without it -- and "matches neither" would
+            // then file the league's headline danger as a payout.
+            ChartRewards.Use(new ChartRewards.Catalogue
+            {
+                Reward = original.Reward,
+                Difficulty = original.Difficulty,
+            });
+            Assert.False(ChartRewards.IsKnown("Monsters apply Grasping Vines on Hit"));
+            Assert.False(ChartRewards.IsReward("Monsters apply Grasping Vines on Hit"));
+        }
+        finally
+        {
+            ChartRewards.Use(original);
+        }
+    }
+
+    [Fact]
+    public void AnUnclassifiedLineIsShownRatherThanDropped()
+    {
+        var original = ChartRewards.Current;
+        try
+        {
+            // What the generator writes when no rule covered a new modifier. Only
+            // "difficulty" may hide a line: an unjudged payout that never appears is the
+            // one way of being wrong nobody can spot.
+            ChartRewards.Use(new ChartRewards.Catalogue
+            {
+                Lines = { ["Areas contain # additional Sunken Chests"] = "unclassified" },
+            });
+            Assert.True(ChartRewards.IsKnown("Areas contain 3 additional Sunken Chests"));
+            Assert.True(ChartRewards.IsReward("Areas contain 3 additional Sunken Chests"));
+        }
+        finally
+        {
+            ChartRewards.Use(original);
+        }
+    }
 }

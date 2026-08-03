@@ -234,6 +234,69 @@ public class WeightCategoryTests
                         StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// ...and the slider must PRODUCE that sign, not merely advise it.
+    ///
+    /// Multiplier() is never negative, and the catalog stores a trap positive on purpose
+    /// (a Danger entry is a severity, the loot-lock a +1 magnitude), so a borrowed trap
+    /// arrived ATTRACTIVE: raising "Monster danger" on a profile that does not weight it
+    /// made the planner prefer the charts most likely to end the voyage, which is the
+    /// exact opposite of what the row says it does.
+    /// </summary>
+    [Theory]
+    [InlineData("Danger", "Monsters are Hexproof", -20)]
+    [InlineData("Danger", "Monsters cannot be Taunted", -12)]
+    [InlineData("NoEquipmentDrops",
+                "Monsters in Area cannot drop Equipment, Flasks or Tinctures", -2)]
+    public void ATrapStatBorrowedBySliderScoresNegative(
+        string category, string line, double expected)
+    {
+        var sulphur = Shipped("sulphur");   // weights neither trap
+        Assert.Equal(0, sulphur.ScoreText([line]));
+
+        var blended = WeightCategories.Blended(sulphur,
+            new Dictionary<string, int> { [category] = WeightCategories.Max },
+            VoyageRules.Defaults());
+
+        Assert.Equal(expected, blended.ScoreText([line]), 6);
+    }
+
+    /// <summary>A profile that already prices a trap keeps its OWN opinion: that path
+    /// goes through Scale, where the strategy's sign is already right and the slider
+    /// only says how much.</summary>
+    [Fact]
+    public void AProfileCarryingATrapScalesItsOwnNegativeWeight()
+    {
+        var bottles = Shipped("bottles");
+        var line = "Monsters in Area cannot drop Equipment, Flasks or Tinctures";
+        Assert.True(bottles.ScoreText([line]) < 0, "bottles prices the loot-lock at -40");
+
+        var blended = WeightCategories.Blended(bottles,
+            new Dictionary<string, int> { ["NoEquipmentDrops"] = WeightCategories.Max },
+            VoyageRules.Defaults());
+
+        Assert.Equal(bottles.ScoreText([line]) * 2, blended.ScoreText([line]), 6);
+    }
+
+    /// <summary>
+    /// The two statements of a trap must not drift apart: the sentence telling the user
+    /// to weight it negative, and the sign a slider applies. The sign is DERIVED from
+    /// the shipped strategies rather than hand-listed, so a new strategy pricing Danger
+    /// positive -- or a trap added to the catalog that no strategy prices at all --
+    /// fails here rather than quietly making the planner chase run-enders.
+    /// </summary>
+    [Fact]
+    public void EveryTrapStatIsWeightedNegativeInWordsAndInSign()
+    {
+        foreach (var stat in Enum.GetValues<Stat>())
+        {
+            var saysNegative = StatText.Describe(stat)
+                .Contains("negative", StringComparison.OrdinalIgnoreCase);
+            Assert.True(saysNegative == (WeightCategories.SignOf(stat) < 0),
+                        $"{stat}: the description and the slider's sign disagree");
+        }
+    }
+
+    /// <summary>
     /// A renamed slider keeps its old name's meaning, wherever that name was written
     /// down -- the store, and a rule stamped before the rename.
     /// </summary>

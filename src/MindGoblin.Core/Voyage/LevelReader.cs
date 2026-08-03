@@ -66,21 +66,37 @@ public sealed class LevelReader
         {
             var sy = height / (double)ReferenceHeight;
             var s = Math.Min(width / (double)ReferenceWidth, sy);
-            return this with
-            {
-                TextOffsetY = (int)Math.Round(TextOffsetY * sy),
-                TextHeight = (int)Math.Round(TextHeight * s),
-                TextLeft = (int)Math.Round(TextLeft * s),
-                TextRight = (int)Math.Round(TextRight * s),
-                PrefixWidth = (int)Math.Round(PrefixWidth * s),
-                // Slack for baseline drift, in PIXELS, so it shrinks with the caption.
-                // Left fixed it was proportionally three times the search it was tuned
-                // to be, which is search the templates have to be slid through.
-                BaselinePad = Math.Max(1, (int)Math.Round(BaselinePad * s)),
-                ReferenceWidth = width,
-                ReferenceHeight = height,
-            };
+            return Scaled(sy, s) with { ReferenceWidth = width, ReferenceHeight = height };
         }
+
+        /// <summary>
+        /// The caption as it appears on a grid MEASURED at this scale.
+        ///
+        /// THE STRIP IS A FEATURE OF THE TILE, SO IT SCALES WITH THE TILE. The image is
+        /// a different question and gives a different answer the moment a capture is
+        /// cropped: the native 1080p capture is 0.524 of the reference by resolution and
+        /// 0.731 by measured pitch. Sized by the resolution, the window landed above the
+        /// caption and cut the "L" off, ExtractDigits anchored on the first digit
+        /// instead, and PrefixWidth then ate it -- so the level read as a single digit or
+        /// as nothing. Worse, the documented remedy for a resolution the templates do not
+        /// cover is to <see cref="LevelReader.Learn"/> one from a native capture, and
+        /// that carves through this same window: a misplaced window bakes a clipped
+        /// glyph into the template file, where it is wrong for good.
+        /// </summary>
+        public Options ForScale(double scale) => scale == 1 ? this : Scaled(scale, scale);
+
+        private Options Scaled(double sy, double s) => this with
+        {
+            TextOffsetY = (int)Math.Round(TextOffsetY * sy),
+            TextHeight = (int)Math.Round(TextHeight * s),
+            TextLeft = (int)Math.Round(TextLeft * s),
+            TextRight = (int)Math.Round(TextRight * s),
+            PrefixWidth = (int)Math.Round(PrefixWidth * s),
+            // Slack for baseline drift, in PIXELS, so it shrinks with the caption.
+            // Left fixed it was proportionally three times the search it was tuned
+            // to be, which is search the templates have to be slid through.
+            BaselinePad = Math.Max(1, (int)Math.Round(BaselinePad * s)),
+        };
     }
 
     /// <summary>One digit's ink mask. Rows are the strip height, columns its own width.</summary>
@@ -160,14 +176,16 @@ public sealed class LevelReader
     public IReadOnlyList<char> KnownDigits => _templates.Select(t => t.Digit).Order().ToList();
 
     /// <summary>
-    /// Read the level under a cell whose glyph is centred at (cx, cellTop).
+    /// Read the level under a cell whose glyph is centred at (cx, cellTop), on a grid
+    /// measured at <paramref name="scale"/> against the calibrated 2560x1440.
+    ///
+    /// The scale is the CALLER'S because the caller is the one that located the cell:
+    /// see <see cref="Options.ForScale"/> for what deriving it here from the image cost.
     /// Returns null when the caption is absent or contains an untrained digit.
     /// </summary>
-    public int? Read(IPixels px, int cx, int cellTop)
+    public int? Read(IPixels px, int cx, int cellTop, double scale)
     {
-        var o = px.Width == _o.ReferenceWidth && px.Height == _o.ReferenceHeight
-            ? _o
-            : _o.ScaledTo(px.Width, px.Height);
+        var o = _o.ForScale(scale);
 
         var strip = ExtractDigits(px, o, cx, cellTop);
         if (strip is null) return null;

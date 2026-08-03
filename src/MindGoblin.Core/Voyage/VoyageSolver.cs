@@ -680,6 +680,17 @@ public sealed class VoyageSolver
         var maxDensity = _charts.Count == 0 ? 0
             : Math.Max(0, _charts.Max(c => Math.Max(c.QuantityDensity,
                   Math.Max(c.MonsterDensity, c.PackDensity))));
+        // ...and the THINNEST tile is the best case for a NEGATIVE payout, which is the
+        // same requirement seen from the other side. PairAdjacency multiplies these by
+        // (1 + the receiver's density), so scaling a negative per-X value up by the
+        // densest tile puts the ceiling BELOW the pair value the board can really score:
+        // the bound prunes the true optimum and the survivor is then reported as proved.
+        // A user-edited rule file is all it takes to price one of these negative.
+        var minDensity = _charts.Count == 0 ? 0
+            : Math.Min(0, _charts.Min(c => Math.Min(c.QuantityDensity,
+                  Math.Min(c.MonsterDensity, c.PackDensity))));
+        // Per channel, because the sign decides which end of that range is the best case.
+        double BestDensityFor(double perX) => perX * (1 + (perX >= 0 ? maxDensity : minDensity));
         // The amplifier pair term is a PRODUCT of two signed quantities -- a strategy
         // may price magnitude negatively (dump) and explicit value negatively with it --
         // so the only safe ceiling is over absolute values. Loose, and it has to be:
@@ -688,8 +699,8 @@ public sealed class VoyageSolver
         var maxMagnitude = _charts.Count == 0 ? 0 : _charts.Max(c => Math.Abs(c.AdjacentMagnitudeValue));
         var maxExplicit = _charts.Count == 0 ? 0 : _charts.Max(c => Math.Abs(c.ExplicitValue));
         var bestAdjacent = _charts.Count == 0 ? 0 : Math.Max(0, _charts.Max(c =>
-            c.AdjacentValue + (c.AdjacentPerMonsterValue + c.AdjacentPerQuantityValue)
-                              * (1 + maxDensity))
+            c.AdjacentValue + BestDensityFor(c.AdjacentPerMonsterValue)
+                            + BestDensityFor(c.AdjacentPerQuantityValue))
             + maxMagnitude * maxExplicit);
         var pairsRemaining = AdjacentPairsFrom();
 

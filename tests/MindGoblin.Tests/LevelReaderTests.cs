@@ -166,4 +166,81 @@ public class LevelReaderTests
         Assert.Equal(10, scaled.PrefixWidth);      // 13 * 0.75
         Assert.Equal(1920, scaled.ReferenceWidth);
     }
+
+    [Fact]
+    public void ScalingByTheGridAgreesWithTheResolutionWhereverTheTwoAgree()
+    {
+        // A whole 1920x1080 screen is 0.75 of the reference by either measure, so the
+        // two ways of asking must give the same window. Where they part company -- a
+        // cropped capture -- is the next test.
+        var o = new LevelReader.Options();
+        var byImage = o.ScaledTo(1920, 1080);
+        var byGrid = o.ForScale(0.75);
+
+        Assert.Same(o, o.ForScale(1));
+        Assert.Equal(byImage.TextOffsetY, byGrid.TextOffsetY);
+        Assert.Equal(byImage.TextHeight, byGrid.TextHeight);
+        Assert.Equal(byImage.TextLeft, byGrid.TextLeft);
+        Assert.Equal(byImage.TextRight, byGrid.TextRight);
+        Assert.Equal(byImage.PrefixWidth, byGrid.PrefixWidth);
+        Assert.Equal(byImage.BaselinePad, byGrid.BaselinePad);
+    }
+
+    /// <summary>A canvas with nothing on it but the ink a test paints.</summary>
+    private sealed class Canvas(int width, int height) : IPixels
+    {
+        private readonly bool[,] _ink = new bool[height, width];
+
+        public int Width => width;
+        public int Height => height;
+        public void Ink(int x, int y) => _ink[y, x] = true;
+        public (int R, int G, int B) At(int x, int y) => _ink[y, x] ? (200, 200, 200) : (0, 0, 0);
+    }
+
+    /// <summary>
+    /// THE CAPTION IS SIZED BY THE GRID THAT FOUND THE CELL, NOT BY THE IMAGE.
+    ///
+    /// They are the same number only while the capture is a whole screen. The native
+    /// 1080p capture is cropped: 0.524 of the reference by resolution, 0.731 by the pitch
+    /// the reader measures off the tiles. Sized by the resolution the strip landed above
+    /// the caption and clipped the "L" off it entirely, so ExtractDigits anchored on the
+    /// first DIGIT instead and PrefixWidth then ate it -- and the documented remedy for a
+    /// resolution the templates do not cover is to Learn one through this same window,
+    /// which would have carved a clipped glyph and baked it into the template file.
+    ///
+    /// So: one caption, painted once, read at both scales.
+    /// </summary>
+    [Fact]
+    public void TheCaptionWindowFollowsTheGridsScaleAndNotTheImages()
+    {
+        const double byGrid = 49 / 67.0;             // measured pitch over the reference's
+        const int cx = 200, cellTop = 100;
+        var o = new LevelReader.Options().ForScale(byGrid);
+        var px = new Canvas(1489, 755);              // the cropped capture's dimensions
+
+        var x0 = cx + o.TextLeft;
+        var top = cellTop + o.TextOffsetY - o.BaselinePad;
+
+        // The "L:" prefix. Only its first inked column matters -- PrefixWidth measures
+        // the rest of the way to the digits -- so a bar of ink stands in for the glyphs.
+        for (var y = 3; y < 11; y++) { px.Ink(x0 + 2, top + y); px.Ink(x0 + 3, top + y); }
+
+        var at = 2 + o.PrefixWidth;
+        foreach (var digit in "83")
+        {
+            var t = LevelReader.BuiltInTemplates().Single(d => d.Digit == digit)
+                                                  .ScaledTo(o.TextHeight);
+            for (var y = 0; y < t.Height; y++)
+                for (var x = 0; x < t.Width; x++)
+                    if (t.Mask[y, x]) px.Ink(x0 + at + x, top + 3 + y);
+            at += t.Width;
+        }
+
+        Assert.Equal(83, new LevelReader().Read(px, cx, cellTop, byGrid));
+
+        var byImage = Math.Min(1489 / 2560.0, 755 / 1440.0);
+        var wrong = new LevelReader().Read(px, cx, cellTop, byImage);
+        Assert.True(wrong != 83,
+            $"the image-derived scale {byImage:0.000} read the caption as {wrong}");
+    }
 }

@@ -352,8 +352,8 @@ public sealed class ChartPanelReader
 
         return scaled with
         {
-            OriginX = columns[0].Centre,
-            OriginY = rows[0].Centre - offset,
+            OriginX = SnapToGrid(columns, pitch, scaled.OriginX, scaled.Cols),
+            OriginY = SnapToGrid(rows, pitch, scaled.OriginY + offset, scaled.Rows) - offset,
             Pitch = pitch,
             GlyphOffsetY = offset,
             GlyphHalf = Math.Max(6, half),
@@ -361,6 +361,38 @@ public sealed class ChartPanelReader
             EdgeMargin = Math.Max(1, (int)Math.Round(Reference.EdgeMargin * k)),
             OpenThreshold = Math.Max(1, (int)(Reference.OpenThreshold * k)),
         };
+    }
+
+    /// <summary>
+    /// Where index ZERO sits, extrapolated back from the bands that happen to be inked.
+    ///
+    /// A PANEL INDEX IS A PHYSICAL POSITION, not the n-th occupied cell -- everything
+    /// stored per chart (its copied text, the star, the exclude) is keyed by index, and
+    /// the panel is re-read every Identify. Anchoring the located grid on the first band
+    /// said otherwise: a voyage consumes nine charts, the leading column or row empties,
+    /// and the next read slides the whole grid over and hands every chart the modifiers
+    /// of the one that used to hold its index. Blanking the leftmost tile column of the
+    /// native fixture moved the origin 1114 -> 1162 and renumbered all thirteen.
+    ///
+    /// The pixels still say WHERE the grid is; the calibration only says which index the
+    /// first band holds, and only ever as a whole number of pitches. Its drift measures
+    /// 10-20px against a ~50px pitch -- comfortably inside the half pitch the rounding
+    /// absorbs, and a drift wider than that was mis-indexed before Locate existed.
+    ///
+    /// The clamp is what carries the case the prior cannot: a CROPPED capture has no
+    /// absolute reference in it at all (the crop translates every coordinate by an
+    /// unknowable amount), so the panel's own extent has to decide. Bands spanning the
+    /// full six columns can only be columns 0-5, whatever the prior believes -- which is
+    /// exactly the native 1080p capture, where the prior is out by three pitches and the
+    /// clamp still lands it on nought.
+    /// </summary>
+    private static int SnapToGrid(List<(int Centre, int Size)> tiles, double pitch,
+                                  double prior, int count)
+    {
+        var span = (int)Math.Round((tiles[^1].Centre - tiles[0].Centre) / pitch);
+        var shift = (int)Math.Round((tiles[0].Centre - prior) / pitch);
+        shift = Math.Clamp(shift, 0, Math.Max(0, count - 1 - span));
+        return (int)Math.Round(tiles[0].Centre - shift * pitch);
     }
 
     /// <summary>
@@ -475,8 +507,19 @@ public sealed class ChartPanelReader
     private static int Confidence(IReadOnlyList<ReadCell> cells) =>
         cells.Count(c => c.Shape is not null);
 
-    private IReadOnlyList<ReadCell> ReadWith(IPixels pixels, Options o)
+    /// <summary>
+    /// Decode with a grid already resolved, so a caller that HOVERS aims at the same
+    /// cells the decode numbered. <see cref="Resolve"/> then this is what
+    /// <see cref="Read"/> does; splitting them lets the slurp keep the grid instead of
+    /// resolving a second time and possibly landing on a different candidate.
+    /// </summary>
+    public IReadOnlyList<ReadCell> ReadWith(IPixels pixels, Options o)
     {
+        // THE CAPTION IS SIZED BY THE GRID THAT FOUND THE CELL, not by the image. They
+        // are the same number only while the capture is a whole screen: crop one and the
+        // resolution says 0.52 where the measured pitch says 0.73, and that slid the
+        // caption window clean off the "L".
+        var scale = o.Pitch / Reference.Pitch;
 
         var found = new List<ReadCell>();
         for (var row = 0; row < o.Rows; row++)
@@ -491,7 +534,7 @@ public sealed class ChartPanelReader
                 if (ReadCellAt(pixels, o, cx, cy, row, col) is not { } cell) continue;
                 // Only bother with the caption once a glyph is confirmed -- an empty cell
                 // has no level to read.
-                found.Add(cell with { Level = _levels?.Read(pixels, cx, cellY) });
+                found.Add(cell with { Level = _levels?.Read(pixels, cx, cellY, scale) });
             }
         }
         return found;

@@ -73,6 +73,15 @@ public partial class VoyageView : UserControl, IDisposable
     private Queue<(bool IsFigurine, int Index)>? _slurp;
     private string _lastClipboard = "";
 
+    /// <summary>
+    /// The grid the last panel decode actually used -- possibly located in the image
+    /// rather than the scaled calibration. The slurp hovers THIS, never the raw
+    /// calibration, or the cursor sits one cell off the chart the plan numbered.
+    /// Its reference dimensions are the capture's own, so ForScreen is the identity
+    /// unless the window was resized between the identify and the press.
+    /// </summary>
+    private ChartPanelReader.Options? _panelGrid;
+
     /// <summary>Items deliberately passed over, so the checklist cannot stall on one of them.</summary>
     private readonly HashSet<(Target, int)> _skipped = new();
 
@@ -489,8 +498,14 @@ public partial class VoyageView : UserControl, IDisposable
             try { bmp.Save(MindGoblin.Core.SettingsFolder.FileIn("last-identify.png")); }
             catch (System.Runtime.InteropServices.ExternalException) { }
             var pixels = new BitmapPixels(bmp);
-            var cells = new ChartPanelReader(
-                ChartPanelReader.Options.Load(), LevelReader.LoadWithUserTemplates()).Read(pixels);
+            // Resolve ONCE and keep the grid: Read may adopt a grid located in the
+            // image rather than the scaled calibration, and the slurp's hover must
+            // aim at the SAME grid the decode numbered the cells with -- hovering
+            // the calibration while reading the located grid copies the neighbour.
+            var reader = new ChartPanelReader(
+                ChartPanelReader.Options.Load(), LevelReader.LoadWithUserTemplates());
+            var grid = reader.Resolve(pixels);
+            var cells = reader.ReadWith(pixels, grid);
 
             if (cells.Count == 0)
             {
@@ -498,6 +513,7 @@ public partial class VoyageView : UserControl, IDisposable
                           bad: true);
                 return false;
             }
+            _panelGrid = grid;
 
             _session.ApplyPanelRead(cells);
             _solution = null;
@@ -666,8 +682,12 @@ public partial class VoyageView : UserControl, IDisposable
     {
         var text = SafeClipboardText();
         if (text.Length == 0 || text == _lastClipboard) return;
-        _lastClipboard = text;
+        // Bail BEFORE recording: this tick can land inside the F9 handler's wait for
+        // the game to fill the clipboard, and recording the text here made the slurp's
+        // change detector blind to its own copy -- every capture read as "nothing
+        // copied" and the queue could only advance by Skip.
         if (_slurp is not null) return;   // the F9 handler owns the clipboard mid-slurp
+        _lastClipboard = text;
         Capture(text, "copied");
     }
 
@@ -807,17 +827,22 @@ public partial class VoyageView : UserControl, IDisposable
             return;
         }
         SlurpInfo.Text = $"Copying chart {index}…";   // the press visibly landed
-        // ForScreen, not the raw calibration: the reader scales its own copy to the
-        // screen it decoded, so hovering the unscaled coordinates put the cursor on a
-        // different cell than the one the plan numbered on any other resolution.
+        // The grid the DECODE used, not the raw calibration: Resolve may have located
+        // the grid in the image, and arming the slurp always identifies first, so
+        // _panelGrid is the geometry the queue's indices were numbered with. ForScreen
+        // is the identity unless the window was resized since that capture.
         var game = ScreenCapture.ResolveGameBounds().Rect;
-        var o = ChartPanelReader.Options.Load().ForScreen(game.Width, game.Height);
+        var o = (_panelGrid ?? ChartPanelReader.Options.Load()).ForScreen(game.Width, game.Height);
         var (row, col) = ((index - 1) / o.Cols, (index - 1) % o.Cols);
         // Client-relative like everything else, plus the window origin -- this is the
         // one place that has to know where on the DESKTOP the game happens to sit.
         GameInput.HoverAt(game.X + (int)Math.Round(o.OriginX + col * o.Pitch),
                           game.Y + (int)Math.Round(o.OriginY + row * o.Pitch));
         await Task.Delay(140);
+        // Empty the clipboard first, so "anything non-empty" IS the copy landing.
+        // Comparing against the previous text instead made two adjacent charts with
+        // identical text -- or a retry of the same chart -- read as "nothing copied".
+        SafeClipboardClear();
         if (!GameInput.SendCopy())
         {
             SetStatus("Windows refused the Ctrl+C injection \u2014 is the game running elevated?", bad: true);
@@ -831,8 +856,7 @@ public partial class VoyageView : UserControl, IDisposable
         for (var wait = 0; wait < 5 && text.Length == 0; wait++)
         {
             await Task.Delay(80);
-            var read = SafeClipboardText();
-            if (read.Length > 0 && read != _lastClipboard) text = read;
+            text = SafeClipboardText();
         }
         if (text.Length == 0)
         {
@@ -1023,6 +1047,10 @@ public partial class VoyageView : UserControl, IDisposable
     private void StopSlurp(string status)
     {
         _slurp = null;
+        // A copy that landed after an F9's polling window gave up is still on the
+        // clipboard; resync so the read-mode poll does not capture it into whatever
+        // square or chart happens to be targeted the instant the slurp disarms.
+        _lastClipboard = SafeClipboardText();
         if (_slurpHotkey is { } id) { _hotkeys?.Unregister(id); _slurpHotkey = null; }
         SlurpPanel.Visibility = Visibility.Collapsed;
         SetStatus(status);
@@ -1039,6 +1067,21 @@ public partial class VoyageView : UserControl, IDisposable
         if (_targetIndex == 0)
         {
             SetStatus("Nothing selected — click a chart or a figurine first.", bad: true);
+            return;
+        }
+
+        // A square or figurine cannot be Ctrl+C'd in game, so an ITEM copy arriving
+        // while one is targeted is a stray -- usually a chart copied out of habit.
+        // Recording it would persist the chart's whole item text as board modifiers,
+        // score it, and alert on it. Charts validate their own copies in ApplyChartText;
+        // the hand-typed path ("entered") stays open for notes pasted on purpose.
+        if (_target != Target.Chart && how == "copied"
+            && (text.Contains("Item Class:", StringComparison.Ordinal)
+                || ChartText.Parse(text) is not null))
+        {
+            var what = _target == Target.Square ? $"Square {_targetIndex}" : $"Figurine {_targetIndex}";
+            SetStatus($"{what}: that was an item copy, not its text — hover it and press "
+                      + "Ctrl+Alt+C instead.", bad: true);
             return;
         }
 
@@ -1118,6 +1161,12 @@ public partial class VoyageView : UserControl, IDisposable
         // The clipboard is shared and can be locked by another process mid-read.
         try { return Clipboard.ContainsText() ? Clipboard.GetText().Trim() : ""; }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException) { return ""; }
+    }
+
+    private static void SafeClipboardClear()
+    {
+        try { Clipboard.Clear(); }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException) { }
     }
 
     /// <summary>
@@ -1541,7 +1590,11 @@ public partial class VoyageView : UserControl, IDisposable
         if (screenshot is not null && System.IO.File.Exists(screenshot))
         {
             using var bmp = new System.Drawing.Bitmap(screenshot);
-            _session.ApplyPanelRead(new ChartPanelReader().Read(new BitmapPixels(bmp)));
+            // The app's own decode path -- calibration and learned templates included --
+            // so the demo shows what a real identify would, not a defaults-only read.
+            _session.ApplyPanelRead(new ChartPanelReader(
+                ChartPanelReader.Options.Load(), LevelReader.LoadWithUserTemplates())
+                .Read(new BitmapPixels(bmp)));
         }
 
         var samples = new[]

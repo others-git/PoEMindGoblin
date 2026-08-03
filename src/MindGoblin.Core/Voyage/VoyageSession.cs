@@ -41,6 +41,10 @@ public sealed class VoyageSession
     private readonly Dictionary<int, string> _figurines = new();
     private readonly Dictionary<int, List<string>> _squareModifiers = new();
 
+    /// <summary>Charts the last panel read failed to find, one strike each. Deliberately
+    /// not persisted: a fresh load starts everyone at zero strikes.</summary>
+    private readonly HashSet<int> _missedOnce = new();
+
     public VoyageSession(BoardLayout? layout = null)
     {
         Layout = layout ?? BoardLayout.Default();
@@ -133,7 +137,9 @@ public sealed class VoyageSession
 
     /// <summary>
     /// Take a panel read. Charts already carrying hover detail keep it: a re-read after
-    /// hovering half the panel must not wipe the half that was done.
+    /// hovering half the panel must not wipe the half that was done -- and a chart the
+    /// read did not find survives one read before it is dropped, because a missed chart
+    /// and a spent one look exactly alike here.
     /// </summary>
     public void ApplyPanelRead(IEnumerable<ChartPanelReader.ReadCell> cells)
     {
@@ -159,12 +165,23 @@ public sealed class VoyageSession
                 $"panel-{cell.Index}", "", shape, cell.Level ?? 0, Array.Empty<string>());
         }
 
-        // A chart that is gone from the panel has been used or sold. Its MARKS go with
-        // it: panel indices are physical positions, so the next chart read into this one
-        // is a different chart, and inheriting the departed one's X or star would veto
-        // or force a card the user never touched.
-        foreach (var stale in _charts.Keys.Where(k => !seen.Contains(k)).ToList())
-            RemoveChart(stale);
+        // A chart that is gone from the panel has been used or sold -- but a chart the
+        // CAPTURE missed reads identically, and this deletion takes the hover detail with
+        // it while the caller persists immediately. One window overlapping the panel
+        // decodes a handful of cells and every other chart's copied text is gone. So a
+        // chart is only dropped once TWO CONSECUTIVE reads fail to find it: occlusion is
+        // transient and the next clean identify rescues it, while a genuinely spent chart
+        // costs nothing but one extra read to disappear. Removal by the user or by
+        // CompleteVoyage stays immediate -- those are not guesses about the screen.
+        //
+        // A dropped chart's MARKS go with it: panel indices are physical positions, so
+        // the next chart read into this one is a different chart, and inheriting the
+        // departed one's X or star would veto or force a card the user never touched.
+        foreach (var index in _charts.Keys.ToList())
+        {
+            if (seen.Contains(index)) _missedOnce.Remove(index);        // strikes are consecutive
+            else if (!_missedOnce.Add(index)) RemoveChart(index);       // Add fails: struck already
+        }
     }
 
     /// <summary>
@@ -219,6 +236,7 @@ public sealed class VoyageSession
         if (!_charts.Remove(panelIndex)) return false;
         _excluded.Remove(panelIndex);
         _required.Remove(panelIndex);
+        _missedOnce.Remove(panelIndex);
         return true;
     }
 
@@ -890,15 +908,22 @@ public sealed class VoyageSession
 
     /// <summary>
     /// Is a "Charts aren't consumed" chance in play for this board -- on any placed
-    /// chart's own lines, or on any square modifier? When it is, spending all nine
+    /// chart's own lines, or anywhere on the border? When it is, spending all nine
     /// on completion would silently discard the refund the mod just paid for.
+    ///
+    /// The border half goes through <see cref="BoardModifiers"/> like every other
+    /// border consumer, never <see cref="SquareModifiers"/>: the slurp writes
+    /// FIGURINES, and the figurine tables carry this mod ("Adjacent Charts have #%
+    /// chance to not be consumed"). Reading the square dictionary directly saw an
+    /// empty board in the normal workflow, so a slurped refund was never noticed and
+    /// completion deleted a chart the game had handed back.
     /// </summary>
     public bool PreserveChanceInPlay(IEnumerable<int> placedCharts)
     {
         foreach (var index in placedCharts)
             if (_charts.TryGetValue(index, out var chart) && ChartLines(chart).Any(NotConsumed.IsMatch))
                 return true;
-        return _squareModifiers.Values.Any(lines => lines.Any(NotConsumed.IsMatch));
+        return BoardModifiers().Any(m => NotConsumed.IsMatch(m.Description));
     }
 
     private static IEnumerable<string> ChartLines(Chart chart)
@@ -942,9 +967,11 @@ public sealed class VoyageSession
     /// <returns>How many charts were spent.</returns>
     public int CompleteVoyage(IEnumerable<int> placedCharts)
     {
+        // Immediate, unlike a panel read's two-strike drop: the user watched the game
+        // eat these, so there is nothing to be unsure about.
         var spent = 0;
         foreach (var index in placedCharts)
-            if (_charts.Remove(index)) { _excluded.Remove(index); _required.Remove(index); spent++; }
+            if (RemoveChart(index)) spent++;
 
         _squareModifiers.Clear();
         _figurines.Clear();

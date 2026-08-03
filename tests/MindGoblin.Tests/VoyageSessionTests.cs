@@ -51,13 +51,60 @@ public class VoyageSessionTests
         Assert.Equal("Storm Hollow", chart.Name);
     }
 
+    /// <summary>
+    /// A missed chart and a spent one look identical in one read, and the deletion takes
+    /// the hover detail with it -- a window over part of the panel used to destroy every
+    /// chart it covered, copied text and all, and the caller persists straight after. So
+    /// the first read that cannot find a chart only puts a strike against it.
+    /// </summary>
     [Fact]
-    public void ChartsMissingFromANewReadAreDropped()
+    public void AChartMissedByOneReadKeepsItsDetail()
+    {
+        var s = new VoyageSession();
+        s.ApplyPanelRead([Cell(1, true, true, true, true), Cell(2, true, true, true, true)]);
+        s.ApplyChartText(2, "Storm Hollow\nMonster Pack Size: +30%");
+
+        s.ApplyPanelRead([Cell(1, true, true, true, true)]);      // chart 2 occluded
+
+        Assert.Equal(2, s.Charts.Count);
+        Assert.Equal("Storm Hollow", s.ByPanelIndex[2].Name);
+        Assert.Equal(30, s.ByPanelIndex[2].MonsterPackSize);
+    }
+
+    [Fact]
+    public void ChartsMissingFromTwoConsecutiveReadsAreDropped()
     {
         var s = new VoyageSession();
         s.ApplyPanelRead([Cell(1, true, true, true, true), Cell(2, true, true, true, true)]);
         s.ApplyPanelRead([Cell(1, true, true, true, true)]);
+        s.ApplyPanelRead([Cell(1, true, true, true, true)]);
         Assert.Single(s.Charts);
+    }
+
+    /// <summary>Consecutive, not cumulative: seeing the chart again clears its strike,
+    /// or a panel read badly placed once would doom the chart forever after.</summary>
+    [Fact]
+    public void SeeingAChartAgainClearsItsStrike()
+    {
+        var s = new VoyageSession();
+        s.ApplyPanelRead([Cell(1, true, true, true, true), Cell(2, true, true, true, true)]);
+        s.ApplyPanelRead([Cell(1, true, true, true, true)]);                          // strike
+        s.ApplyPanelRead([Cell(1, true, true, true, true), Cell(2, true, true, true, true)]);
+        s.ApplyPanelRead([Cell(1, true, true, true, true)]);                          // strike again
+
+        Assert.Equal(2, s.Charts.Count);
+    }
+
+    /// <summary>Completion is not a guess about the screen -- the user watched the game
+    /// consume these -- so it removes on the spot, strikes or no strikes.</summary>
+    [Fact]
+    public void CompletingAVoyageSpendsItsChartsImmediately()
+    {
+        var s = new VoyageSession();
+        s.ApplyPanelRead(Crossings(3));
+
+        Assert.Equal(2, s.CompleteVoyage([1, 2]));
+        Assert.Equal(3, Assert.Single(s.ByPanelIndex.Keys));
     }
 
     [Fact]

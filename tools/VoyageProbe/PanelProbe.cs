@@ -25,12 +25,17 @@ public static class PanelProbe
         using var pixels = new FilePixels(path);
         Console.WriteLine($"{Path.GetFileName(path)}  {pixels.Width}x{pixels.Height}");
 
-        var options = ChartPanelReader.Options.Load();
-        var cells = new ChartPanelReader(options, LevelReader.LoadWithUserTemplates()).Read(pixels);
+        var reader = new ChartPanelReader(ChartPanelReader.Options.Load(),
+                                          LevelReader.LoadWithUserTemplates());
+        // The geometry the decode SAMPLED, which is not the calibration whenever the
+        // located grid wins. Drawing the calibration instead puts the boxes on cells
+        // nothing was read from, and the overlay exists to check exactly that.
+        var resolved = reader.Resolve(pixels);
+        var cells = reader.Read(pixels);
 
         if (overlayPath is not null)
         {
-            DrawOverlay(path, options, cells, overlayPath);
+            DrawOverlay(path, resolved, cells, overlayPath);
             Console.WriteLine($"overlay written to {overlayPath}");
         }
         Console.WriteLine($"\n{cells.Count} charts read");
@@ -69,20 +74,21 @@ public static class PanelProbe
     }
 
     /// <summary>
-    /// Draw the calibration grid back over the screenshot.
+    /// Draw the grid the decode used back over the screenshot.
     ///
     /// This is how the coordinates were found in the first place, and it is the only
     /// honest way to check them: a drifted origin still produces a plan, just a plan
     /// built from the wrong cells. Seeing the boxes land on the glyphs is proof.
+    ///
+    /// <paramref name="resolved"/> is the reader's own resolved geometry, already in the
+    /// capture's coordinates -- nothing here rescales, or the overlay would go back to
+    /// describing a decode that did not happen.
     /// </summary>
     private static void DrawOverlay(
-        string source, ChartPanelReader.Options o,
+        string source, ChartPanelReader.Options resolved,
         IReadOnlyList<ChartPanelReader.ReadCell> cells, string destination)
     {
         using var bmp = new Bitmap(source);
-        var scaled = bmp.Width == o.ReferenceWidth && bmp.Height == o.ReferenceHeight
-            ? o
-            : o.ScaledTo(bmp.Width, bmp.Height);
 
         using var g = Graphics.FromImage(bmp);
         using var found = new Pen(Color.Lime, 1);
@@ -90,16 +96,16 @@ public static class PanelProbe
         using var font = new Font("Consolas", 9);
         using var label = new SolidBrush(Color.Yellow);
 
-        for (var row = 0; row < scaled.Rows; row++)
+        for (var row = 0; row < resolved.Rows; row++)
         {
-            for (var col = 0; col < scaled.Cols; col++)
+            for (var col = 0; col < resolved.Cols; col++)
             {
                 // Rounded where the reader rounds: the overlay has to sit on the pixel
                 // the decode sampled, not half a cell away from it.
-                var cx = (int)Math.Round(scaled.OriginX + col * scaled.Pitch);
-                var cy = (int)Math.Round(scaled.OriginY + row * scaled.Pitch)
-                         + scaled.GlyphOffsetY;
-                var h = scaled.GlyphHalf;
+                var cx = (int)Math.Round(resolved.OriginX + col * resolved.Pitch);
+                var cy = (int)Math.Round(resolved.OriginY + row * resolved.Pitch)
+                         + resolved.GlyphOffsetY;
+                var h = resolved.GlyphHalf;
                 var cell = cells.FirstOrDefault(c => c.Row == row && c.Col == col);
                 g.DrawRectangle(cell is null ? empty : found, cx - h, cy - h, h * 2, h * 2);
                 if (cell is not null)

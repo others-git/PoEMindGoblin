@@ -230,8 +230,12 @@ public sealed class AreaModifierPanel
             kept.Add(line);
         }
 
-        // No heading and nothing else recognisable: the capture did not find the panel.
-        if (!sawHeading && !sawPlaceholder && kept.Count == 0)
+        // No heading and nothing modifier-shaped: the capture did not find the panel.
+        // Text alone is not proof it did -- a wrong region catches the vendor blurb or a
+        // waypoint label, and calling that Modifiers marks the square READ, so its real
+        // modifiers are never captured. Only the heading-less case needs the evidence;
+        // with the heading present the panel is known to be there and every line stands.
+        if (!sawHeading && !sawPlaceholder && !kept.Any(ModifierShaped))
             return new Reading(PanelState.NotFound, []);
 
         // The placeholder means no square is hovered. Everything else on the panel then
@@ -278,13 +282,21 @@ public sealed class AreaModifierPanel
             .ToList();
         // Stitch BEFORE judging: a wrapped continuation ("Messages in a Bottle") has
         // no anchor of its own and would die in the filter before rejoining its line.
-        return [.. Join(cleaned)
-            .Where(l => !Chrome.IsMatch(l))
-            // A modifier always carries words plus a number or a known verb; screen
-            // furniture ("WAYPOINT", an HP readout, a mangled heading) never has both.
-            .Where(l => ModShaped.IsMatch(l) && Regex.IsMatch(l, "[A-Za-z]{3}"))
-            .Select(Canonicalize)];
+        return [.. Join(cleaned).Where(ModifierShaped).Select(Canonicalize)];
     }
+
+    /// <summary>
+    /// Could this line be a modifier at all? A modifier always carries words plus a
+    /// number or a known verb; screen furniture ("WAYPOINT", an HP readout, a mangled
+    /// heading) never has both. The tooltip filters on it because its capture region is
+    /// generous; the panel needs it only when OCR missed the heading, where it is the
+    /// one thing separating a real read from a capture that landed off the panel.
+    /// </summary>
+    private static bool ModifierShaped(string line) =>
+        !Chrome.IsMatch(line) && ModShaped.IsMatch(line) && Letters.IsMatch(line);
+
+    private static readonly Regex Letters = new(
+        @"[A-Za-z]{3}", RegexOptions.CultureInvariant);
 
     private static readonly Regex Chrome = new(
         @"Area Modifiers|Hover a square|of the Voyage|relevant Area|Plan your Voyage|"
@@ -310,8 +322,14 @@ public sealed class AreaModifierPanel
     /// whose WORDS overwhelmingly match one template is that mod wearing OCR damage
     /// ("Scarabs found in adjacent Area9"): rebuild it as the template with the line's
     /// numbers dropped into the '#' slots. Repair declines rather than guesses -- a
-    /// weak match, or a number count that does not fit the slots, returns the line
+    /// weak match, a number count that does not fit the slots, or a TIE returns the line
     /// untouched, because a wrong canonical line would score confidently and wrongly.
+    ///
+    /// The tie is the sharp edge. The twelve "Rare Monsters ... drop # additional &lt;orb&gt;
+    /// Orbs" board lines are token-identical but for the orb word, so damage to exactly
+    /// that word ("Chramatic") leaves every one of them on the same score -- and picking
+    /// the first turned a Chromatic figurine into a Divine one, GRAIL alert and all.
+    /// Damage to a SHARED word leaves the orb word intact, which still names one winner.
     /// </summary>
     public static string Canonicalize(string line)
     {
@@ -321,6 +339,7 @@ public sealed class AreaModifierPanel
 
         string? best = null;
         var bestScore = 0.0;
+        var contested = false;
         foreach (var template in ChartRewards.Current.BoardLines.Keys)
         {
             var t = TokenCounts(template);
@@ -334,10 +353,13 @@ public sealed class AreaModifierPanel
                 lineTotal += n;
                 if (t.TryGetValue(tok, out var m)) overlap += Math.Min(n, m);
             }
+            // Ratios of the same small integers, so equality is exact: a second
+            // template on 8/9 lands on the same double as the first.
             var score = (double)overlap / Math.Max(tmplTotal, lineTotal);
-            if (score > bestScore) { bestScore = score; best = template; }
+            if (score > bestScore) { bestScore = score; best = template; contested = false; }
+            else if (score == bestScore) contested = true;
         }
-        if (best is null || bestScore < 0.68) return line;
+        if (best is null || contested || bestScore < 0.68) return line;
 
         var parts = best.Split('#');
         if (parts.Length - 1 != digits.Count) return line;

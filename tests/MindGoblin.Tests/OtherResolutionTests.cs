@@ -4,6 +4,18 @@ using MindGoblin.Core.Voyage;
 namespace MindGoblin.Tests;
 
 /// <summary>
+/// A capture with part of it painted out, so a test can empty a row or a column of the
+/// panel without needing a second screenshot of the same panel mid-voyage.
+/// </summary>
+internal sealed class Blanked(IPixels inner, Func<int, int, bool> hidden) : IPixels
+{
+    public int Width => inner.Width;
+    public int Height => inner.Height;
+
+    public (int R, int G, int B) At(int x, int y) => hidden(x, y) ? (0, 0, 0) : inner.At(x, y);
+}
+
+/// <summary>
 /// The reader at resolutions other than the one it was measured at.
 ///
 /// Two field reports, one cause: "index outside the bounds of the array on launch" and
@@ -268,6 +280,86 @@ public class OtherResolutionTests
 
         Assert.True(chosen >= calibrated,
             $"{shot}: located grid read {chosen} shapes where the calibration read {calibrated}");
+    }
+
+    /// <summary>
+    /// The same claim as above, in CELLS rather than in a count of them. A grid slid a
+    /// whole cell sideways reads exactly as many shapes as the right one and calls them
+    /// all by the wrong name, so counting alone cannot tell the two apart -- and the
+    /// wrong name is what the session then files the chart's modifiers under.
+    /// </summary>
+    [Fact]
+    public void EveryPanelDecodesToTheSameChartsNotJustTheSameNumberOfThem()
+    {
+        var expected = new (string Shot, int[] Charts)[]
+        {
+            ("voyage-panel.png",
+                [2, 5, 6, 7, 9, 10, 11, 14, 16, 17, 18, 22,
+                 31, 32, 33, 34, 35, 37, 39, 42, 43, 52, 53, 59]),
+            // The same 24 charts, one resolution down: the rescale may not move a cell.
+            ("voyage-panel-1080p.png",
+                [2, 5, 6, 7, 9, 10, 11, 14, 16, 17, 18, 22,
+                 31, 32, 33, 34, 35, 37, 39, 42, 43, 52, 53, 59]),
+            ("voyage-panel-native-1080p.png", [1, 2, 3, 4, 5, 6, 7, 8, 9, 41, 42, 54, 57]),
+            ("voyage-panel-3291.png", [.. Enumerable.Range(1, 60)]),
+        };
+
+        foreach (var (shot, charts) in expected)
+        {
+            using var px = new BitmapPixels(Fixture(shot));
+            Assert.Equal(charts, new ChartPanelReader().Read(px).Select(c => c.Index).Order());
+        }
+    }
+
+    /// <summary>
+    /// A PANEL INDEX IS A PHYSICAL POSITION, on the capture that first proved the grid
+    /// has to be located rather than computed. Blank the leftmost column of tiles -- what
+    /// a voyage does to the panel every time it consumes the charts in it -- and the
+    /// eleven that remain must answer to the same numbers they did before.
+    ///
+    /// They did not: the located grid was anchored on the first inked band, so emptying
+    /// that band moved the origin 1114 -> 1162 and handed chart #2 the number #1, #3 the
+    /// number #2, and so on down the panel. Nothing looks wrong afterwards -- the shapes
+    /// are all still there, one seat to the left -- but every chart's stored modifier
+    /// text, star and exclude now belongs to its neighbour.
+    /// </summary>
+    [Fact]
+    public void EmptyingTheLeadingColumnDoesNotRenumberTheRestOfThePanel()
+    {
+        using var px = new BitmapPixels(Fixture("voyage-panel-native-1080p.png"));
+        var full = new ChartPanelReader().Read(px).Select(c => c.Index).Order().ToArray();
+
+        // The leftmost tiles are centred on x=1114 with a measured pitch of 49, so half
+        // a pitch either way takes that column and nothing of the next.
+        var emptied = new ChartPanelReader()
+            .Read(new Blanked(px, (x, _) => Math.Abs(x - 1114) <= 24))
+            .Select(c => c.Index).Order();
+
+        Assert.Equal(full.Where(i => (i - 1) % 6 != 0), emptied);
+    }
+
+    /// <summary>
+    /// WHATEVER RESOLVE RETURNS IS ALREADY SCALED TO THE CAPTURE, and says so.
+    ///
+    /// The app resolves the grid once, reads with it and HOVERS with it, and the hover
+    /// runs the geometry through ForScreen on the way out. That is only harmless while
+    /// the resolved grid reports the capture's own dimensions as its reference -- get it
+    /// wrong and the rescale is applied twice, which lands the cursor on a different
+    /// cell than the one the plan numbered, and the wrong chart's text parses perfectly.
+    /// </summary>
+    [Theory]
+    [InlineData("voyage-panel.png")]
+    [InlineData("voyage-panel-1080p.png")]
+    [InlineData("voyage-panel-native-1080p.png")]
+    [InlineData("voyage-panel-3291.png")]
+    public void TheResolvedGridReportsTheCaptureAsItsOwnReference(string shot)
+    {
+        using var px = new BitmapPixels(Fixture(shot));
+        var resolved = new ChartPanelReader().Resolve(px);
+
+        Assert.Equal(px.Width, resolved.ReferenceWidth);
+        Assert.Equal(px.Height, resolved.ReferenceHeight);
+        Assert.Same(resolved, resolved.ForScreen(px.Width, px.Height));
     }
 
     /// <summary>
