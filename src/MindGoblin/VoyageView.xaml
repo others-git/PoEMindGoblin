@@ -748,6 +748,25 @@
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" x:Name="PanelHeader" Text="C H A R T S"
                            Style="{StaticResource Eyebrow}"/>
+                <!-- Search sits BELOW the panel: it filters what is above it, and a box
+                     between the heading and the grid would push the tiles down the column
+                     for a control that is empty most of the time. -->
+                <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="SearchBox" TextChanged="OnSearchChanged"
+                             Padding="6,3" FontSize="12"
+                             ToolTip="Filter the panel by anything written on a chart — name, area, shape, level, or any modifier line. Several words narrow it; four letters or more also match through a typo."/>
+                    <TextBlock x:Name="SearchHint" Grid.Column="0" IsHitTestVisible="False"
+                               Text="Search charts…" Foreground="#5A5145" FontSize="12"
+                               Margin="9,0,0,0" VerticalAlignment="Center"/>
+                    <Button x:Name="SearchClear" Grid.Column="1" Content="✕" Click="OnSearchClear"
+                            Visibility="Collapsed" Margin="6,0,0,0" Padding="8,2" FontSize="11"
+                            ToolTip="Clear the search"/>
+                </Grid>
+
                 <!-- Top-aligned on purpose: the cells are fixed-size, and a stretched
                      UniformGrid spreads its rows over whatever height the window gains,
                      growing the gaps between charts with it. -->

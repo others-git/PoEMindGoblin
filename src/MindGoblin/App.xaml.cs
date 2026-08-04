@@ -72,15 +72,19 @@ public partial class App : Application
             var demo = demoIndex >= 0 && demoIndex + 1 < e.Args.Length
                 ? e.Args[demoIndex + 1]
                 : null;
+            var searchIndex = Array.IndexOf(e.Args, "--search");
             RenderToFile(view, path, demoIndex >= 0, demo,
-                         weights: Array.IndexOf(e.Args, "--weights") >= 0);
+                         weights: Array.IndexOf(e.Args, "--weights") >= 0,
+                         search: searchIndex >= 0 && searchIndex + 1 < e.Args.Length
+                             ? e.Args[searchIndex + 1] : null);
             Shutdown();
             return;
         }
         base.OnStartup(e);
     }
 
-    private static void RenderToFile(string view, string path, bool demo, string? screenshot, bool weights = false)
+    private static void RenderToFile(string view, string path, bool demo, string? screenshot,
+                                     bool weights = false, string? search = null)
     {
         // The calibrator is a WINDOW, and all of its work happens in Loaded -- so it has
         // to be shown to be rendered. Shown far off the desktop: this app must never put
@@ -103,7 +107,7 @@ public partial class App : Application
 
         FrameworkElement element = view.ToLowerInvariant() switch
         {
-            "voyage" => BuildVoyage(demo, screenshot, weights),
+            "voyage" => BuildVoyage(demo, screenshot, weights, search),
             _ => throw new ArgumentException($"unknown view '{view}'"),
         };
 
@@ -150,12 +154,14 @@ public partial class App : Application
     /// picture of what it is meant to produce.
     /// </summary>
     private static FrameworkElement BuildVoyage(bool demo, string? screenshot,
-                                                bool weights = false)
+                                                bool weights = false, string? search = null)
     {
         var view = new VoyageView();
         if (demo) view.LoadSample(screenshot);
         // --weights: render with the panel open, so slider chrome is checkable offscreen
         if (weights) view.OpenWeightsForRender();
+        // --search: render mid-filter, so the dimmed misses are checkable too
+        if (!string.IsNullOrWhiteSpace(search)) view.SearchForRender(search!);
         return view;
     }
 }

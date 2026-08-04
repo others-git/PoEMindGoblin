@@ -308,6 +308,10 @@ public partial class VoyageView : UserControl, IDisposable
         RefreshWeights();
     }
 
+    /// <summary>Type into the search box for a render, so the DIMMING is checkable
+    /// offscreen -- an empty box renders a panel that looks exactly like no search.</summary>
+    public void SearchForRender(string query) => SearchBox.Text = query;
+
     private void OnToggleWeights(object sender, RoutedEventArgs e)
     {
         _weightsOpen = !_weightsOpen;
@@ -1763,6 +1767,10 @@ public partial class VoyageView : UserControl, IDisposable
 
     private Border[,] _boardCells = new Border[0, 0];
     private Border[] _panelCells = [];
+
+    /// <summary>The live panel filter. Empty means no filter, which is not the same as
+    /// "nothing matched" -- see <see cref="ChartSearch.MatchesText"/>.</summary>
+    private string _search = "";
     private readonly Dictionary<int, Border> _figurineMarkers = new();
 
     private const double SquareSize = 138;
@@ -2628,12 +2636,18 @@ public partial class VoyageView : UserControl, IDisposable
     private void RefreshPanel()
     {
         var used = _steps.ToDictionary(s => s.ChartNumber, s => s.Square);
+        var searching = _search.Length > 0;
+        var hits = 0;
 
         for (var i = 0; i < _panelCells.Length; i++)
         {
             var index = i + 1;
             var cell = _panelCells[i];
             var chart = _session.ByPanelIndex.GetValueOrDefault(index);
+
+            // An empty tile is not a miss, it is nothing -- dimming it would make the
+            // panel look like it had answered a question about a chart that is not there.
+            cell.Opacity = 1;
 
             if (chart is null)
             {
@@ -2644,6 +2658,12 @@ public partial class VoyageView : UserControl, IDisposable
                 cell.ToolTip = null;
                 continue;
             }
+
+            // Matching DIMS the rest rather than hiding it: panel indices are physical
+            // positions, so a chart that moved would be a chart the user cannot find on
+            // screen. Everything stays where it is, the misses just recede.
+            var isHit = !searching || ChartSearch.Matches(_search, chart, index);
+            if (isHit) hits++;
 
             var isExcluded = _session.IsExcluded(index);
             var isRequired = _session.IsRequired(index);
@@ -2656,12 +2676,17 @@ public partial class VoyageView : UserControl, IDisposable
             cell.Background = isPlanned
                 ? Face(0x2A, 0x21, 0x0E)
                 : Face(0x16, 0x13, 0x11);
-            cell.BorderBrush = new SolidColorBrush(isTarget
-                ? Color.FromRgb(0xC8, 0xAA, 0x6E)
+            cell.BorderBrush = new SolidColorBrush(
+                searching && isHit ? Color.FromRgb(0x86, 0xA8, 0x6A)
+                : isTarget ? Color.FromRgb(0xC8, 0xAA, 0x6E)
                 : isPlanned ? Color.FromRgb(0xA3, 0x8D, 0x6D)
                 : hasDetail ? Color.FromRgb(0x44, 0x5C, 0x38)
                 : Color.FromRgb(0x24, 0x1D, 0x16));
-            cell.BorderThickness = new Thickness(isTarget ? 2 : 1);
+            cell.BorderThickness = new Thickness(isTarget || (searching && isHit) ? 2 : 1);
+            // Dimmed, not hidden. 0.25 is low enough that the hits read as the only lit
+            // tiles at a glance, and high enough that a miss is still legible when you
+            // want to check WHY it missed.
+            if (searching && !isHit) cell.Opacity = 0.25;
 
             var stack = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
             stack.Children.Add(new TextBlock
@@ -2766,11 +2791,34 @@ public partial class VoyageView : UserControl, IDisposable
         // and it also reads like a verdict -- a chart the app looked at and found bare.
         // What it actually means is work not done yet, which is a thing the user can act on.
         var awaiting = _session.ChartsAwaitingDetail.Count;
-        PanelHeader.Text = _session.Charts.Count == 0
-            ? "C H A R T S"
-            : awaiting == 0
-                ? $"C H A R T S      {_session.Charts.Count} charts"
-                : $"C H A R T S      {_session.Charts.Count} charts · {awaiting} need detail";
+        PanelHeader.Text = searching
+            // While filtering, the count that matters is the ANSWER. Saying "24 charts"
+            // over a panel showing three lit tiles would be answering the wrong question.
+            ? $"C H A R T S      {hits} of {_session.Charts.Count} match"
+            : _session.Charts.Count == 0
+                ? "C H A R T S"
+                : awaiting == 0
+                    ? $"C H A R T S      {_session.Charts.Count} charts"
+                    : $"C H A R T S      {_session.Charts.Count} charts · {awaiting} need detail";
+
+        SearchHint.Visibility = searching ? Visibility.Collapsed : Visibility.Visible;
+        SearchClear.Visibility = searching ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Filter as you type. Cheap enough to run per keystroke: sixty charts against a
+    /// handful of terms, and the panel is redrawn on every solve anyway.
+    /// </summary>
+    private void OnSearchChanged(object sender, TextChangedEventArgs e)
+    {
+        _search = SearchBox.Text.Trim();
+        RefreshPanel();
+    }
+
+    private void OnSearchClear(object sender, RoutedEventArgs e)
+    {
+        SearchBox.Clear();          // TextChanged does the rest
+        SearchBox.Focus();
     }
 
     /// <summary>
