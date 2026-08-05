@@ -519,7 +519,10 @@ public partial class VoyageView : UserControl, IDisposable
             }
             _panelGrid = grid;
 
-            _session.ApplyPanelRead(cells);
+            // Scoped to the OPEN tab: a screenshot shows one tab, so reconciling the
+            // whole session against it would strike every chart on every other tab and
+            // then delete them.
+            _session.ApplyPanelRead(cells, CurrentPage);
             _solution = null;
             _summary.Clear();
             Persist();
@@ -730,7 +733,13 @@ public partial class VoyageView : UserControl, IDisposable
             // their data, so a post-dive slurp is squares-only -- and re-arming after
             // a partial pass resumes exactly the gaps. Re-read a changed chart by
             // clicking it and copying, as ever.
-            pending.AddRange(_session.ChartsAwaitingDetail.Order().Select(i => (false, i)));
+            // This tab only. F9 hovers a screen position, and the game is showing one
+            // tab -- queueing a chart from another would hover the right cell on the
+            // wrong tab and copy a chart that parses perfectly and is not the one asked
+            // for. The handoff below names the next tab when this one is done.
+            var page = CurrentPage;
+            pending.AddRange(_session.ChartsAwaitingDetail
+                .Where(page.Contains).Order().Select(i => (false, i)));
             if (pending.Count == 0)
             {
                 SlurpBtn.IsChecked = false;
@@ -1060,10 +1069,30 @@ public partial class VoyageView : UserControl, IDisposable
         SetStatus(status);
     }
 
+    /// <summary>
+    /// The queue is empty. On a tabbed panel that usually means THIS tab is done rather
+    /// than the inventory is, so say which tab still has work and how to get there --
+    /// the alternative is the slurp falling silent with half the charts unread and
+    /// nothing on screen explaining why.
+    ///
+    /// The app cannot turn the page for the user: it sends input to the game in exactly
+    /// one place, inside their own F9 press, and clicking a tab is neither that press
+    /// nor something it may do on its own.
+    /// </summary>
     private void FinishSlurp()
     {
         SlurpBtn.IsChecked = false;      // routes through StopSlurp via OnSlurpChanged
-        StopSlurp("Slurp complete \u2014 Solve when ready.");
+
+        var remaining = _session
+            .PagesAwaitingDetail(_panelOptions.Pages, _panelOptions.PageSize)
+            .Where(p => p != _page)
+            .ToList();
+
+        StopSlurp(remaining.Count == 0
+            ? "Slurp complete \u2014 Solve when ready."
+            : $"Tab {_page} done. Click tab {remaining[0]} in game AND above, then arm the "
+              + $"slurp again \u2014 {(remaining.Count == 1 ? "it is" : $"tabs {string.Join(", ", remaining)} are")} "
+              + "still unread.");
         RebuildModifiers();
     }
     private void Capture(string text, string how)
@@ -1771,6 +1800,22 @@ public partial class VoyageView : UserControl, IDisposable
     /// <summary>The live panel filter. Empty means no filter, which is not the same as
     /// "nothing matched" -- see <see cref="ChartSearch.MatchesText"/>.</summary>
     private string _search = "";
+
+    /// <summary>
+    /// Which TAB of the chart inventory is open, 1-based.
+    ///
+    /// The app cannot see which tab the game is showing -- a screenshot of tab 2 looks
+    /// exactly like a screenshot of tab 1 -- so this is the user's answer to that
+    /// question, and everything that touches the panel is scoped by it: a read stores
+    /// into this tab, and the slurp only queues charts it can actually reach on screen.
+    /// </summary>
+    private int _page = 1;
+
+    /// <summary>The panel's shape and tab count, as the READER understands it -- the one
+    /// place that number lives, because it is what assigns panel indices.</summary>
+    private ChartPanelReader.Options _panelOptions = ChartPanelReader.Options.Load();
+
+    private PanelPage CurrentPage => _panelOptions.Page(_page);
     private readonly Dictionary<int, Border> _figurineMarkers = new();
 
     private const double SquareSize = 138;
@@ -2575,14 +2620,79 @@ public partial class VoyageView : UserControl, IDisposable
         return g;
     }
 
+    /// <summary>
+    /// One button per inventory tab, and nothing at all when there is only one.
+    ///
+    /// The app cannot detect which tab the game is showing, so this is where the user
+    /// tells it. Everything downstream is scoped by that answer, which is what stops a
+    /// read of one tab from reconciling -- and eventually deleting -- the charts on the
+    /// others.
+    /// </summary>
+    private void BuildTabStrip()
+    {
+        TabStrip.Children.Clear();
+        if (_panelOptions.Pages <= 1)
+        {
+            TabStrip.Visibility = Visibility.Collapsed;
+            _page = 1;
+            return;
+        }
+
+        TabStrip.Visibility = Visibility.Visible;
+        _page = Math.Clamp(_page, 1, _panelOptions.Pages);
+        for (var p = 1; p <= _panelOptions.Pages; p++)
+        {
+            var number = p;
+            var tab = new Button
+            {
+                Content = number.ToString(),
+                Tag = number,
+                Padding = new Thickness(14, 3, 14, 3),
+                Margin = new Thickness(0, 0, 4, 0),
+                FontFamily = PoeFonts.Display,
+                ToolTip = Tip($"Tab {number}",
+                    "Open this tab in game too — the app cannot see which one you are on, "
+                    + "and a read or a slurp only reaches what is on screen.", [], false),
+            };
+            tab.Click += OnTabClicked;
+            TabStrip.Children.Add(tab);
+        }
+        RefreshTabStrip();
+    }
+
+    private void RefreshTabStrip()
+    {
+        foreach (var tab in TabStrip.Children.OfType<Button>())
+        {
+            var active = tab.Tag is int n && n == _page;
+            tab.FontWeight = active ? FontWeights.Bold : FontWeights.Normal;
+            tab.Foreground = new SolidColorBrush(active
+                ? Color.FromRgb(0xC8, 0xAA, 0x6E)
+                : Color.FromRgb(0x7A, 0x6E, 0x5C));
+        }
+    }
+
+    private void OnTabClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: int number } || number == _page) return;
+        _page = number;
+        RefreshTabStrip();
+        RefreshPanel();
+        SetStatus($"Tab {number}. Open the same tab in game before reading or slurping it.");
+    }
+
     private void BuildPanel()
     {
-        var layout = ScreenLayout.Load();
-        PanelGrid.Rows = layout.ChartPanelRows;
-        PanelGrid.Columns = layout.ChartPanelCols;
+        // The READER's calibration, not a second copy in the screen layout: this number
+        // decides which chart a panel index refers to, and holding it twice meant every
+        // chart could draw on the wrong tile while the solver placed the right ones.
+        _panelOptions = ChartPanelReader.Options.Load();
+        PanelGrid.Rows = _panelOptions.Rows;
+        PanelGrid.Columns = _panelOptions.Cols;
         PanelGrid.Children.Clear();
+        BuildTabStrip();
 
-        _panelCells = new Border[layout.ChartPanelRows * layout.ChartPanelCols];
+        _panelCells = new Border[_panelOptions.PageSize];
         for (var i = 0; i < _panelCells.Length; i++)
         {
             var cell = new Border
@@ -2639,10 +2749,15 @@ public partial class VoyageView : UserControl, IDisposable
         var searching = _search.Length > 0;
         var hits = 0;
 
+        var page = CurrentPage;
         for (var i = 0; i < _panelCells.Length; i++)
         {
-            var index = i + 1;
+            // The cell shows a POSITION on the open tab; which chart that is depends on
+            // the tab. Stamping the global index on the Tag keeps every click, mark and
+            // tooltip handler working without any of them learning that tabs exist.
+            var index = page.ToGlobal(i + 1);
             var cell = _panelCells[i];
+            cell.Tag = index;
             var chart = _session.ByPanelIndex.GetValueOrDefault(index);
 
             // An empty tile is not a miss, it is nothing -- dimming it would make the

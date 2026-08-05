@@ -146,17 +146,30 @@ public sealed class VoyageSession
     /// read did not find survives one read before it is dropped, because a missed chart
     /// and a spent one look exactly alike here.
     /// </summary>
-    public void ApplyPanelRead(IEnumerable<ChartPanelReader.ReadCell> cells)
+    public void ApplyPanelRead(IEnumerable<ChartPanelReader.ReadCell> cells) =>
+        ApplyPanelRead(cells, PanelPage.All);
+
+    /// <summary>
+    /// Take a panel read of ONE TAB.
+    ///
+    /// A screenshot shows the open tab and nothing else, so a read is evidence about
+    /// that tab alone. Reconciling the whole session against it would strike every chart
+    /// on every other tab and then delete them -- reading tab 1 would quietly consume
+    /// tab 2. The page scopes both halves: cells are stored under this tab's indices,
+    /// and only this tab's charts are eligible to go missing.
+    /// </summary>
+    public void ApplyPanelRead(IEnumerable<ChartPanelReader.ReadCell> cells, PanelPage page)
     {
         var seen = new HashSet<int>();
         foreach (var cell in cells)
         {
             if (cell.Shape is not { } shape) continue;    // unreadable glyph, skip rather than guess
-            seen.Add(cell.Index);
+            var index = page.ToGlobal(cell.Index);
+            seen.Add(index);
 
-            if (_charts.TryGetValue(cell.Index, out var existing))
+            if (_charts.TryGetValue(index, out var existing))
             {
-                _charts[cell.Index] = existing with
+                _charts[index] = existing with
                 {
                     Shape = shape,
                     AreaLevel = cell.Level ?? existing.AreaLevel,
@@ -166,8 +179,8 @@ public sealed class VoyageSession
 
             // Nameless until hovered: the panel shows no name, and inventing "chart 12"
             // would print twice in a plan that already leads with the panel number.
-            _charts[cell.Index] = new Chart(
-                $"panel-{cell.Index}", "", shape, cell.Level ?? 0, Array.Empty<string>());
+            _charts[index] = new Chart(
+                $"panel-{index}", "", shape, cell.Level ?? 0, Array.Empty<string>());
         }
 
         // A chart that is gone from the panel has been used or sold -- but a chart the
@@ -184,9 +197,28 @@ public sealed class VoyageSession
         // departed one's X or star would veto or force a card the user never touched.
         foreach (var index in _charts.Keys.ToList())
         {
+            if (!page.Contains(index)) continue;    // another tab; this read says nothing about it
             if (seen.Contains(index)) _missedOnce.Remove(index);        // strikes are consecutive
             else if (!_missedOnce.Add(index)) RemoveChart(index);       // Add fails: struck already
         }
+    }
+
+    /// <summary>Charts on one tab, for drawing it and for queueing a slurp that can only
+    /// reach what is on screen.</summary>
+    public IReadOnlyList<int> ChartsOnPage(PanelPage page) =>
+        _charts.Keys.Where(page.Contains).OrderBy(i => i).ToList();
+
+    /// <summary>Tabs that still hold a chart with no hover detail, so the slurp can say
+    /// which tab to open next instead of going quiet with work left.</summary>
+    public IReadOnlyList<int> PagesAwaitingDetail(int pages, int pageSize)
+    {
+        if (pages <= 1 || pageSize <= 0) return [];
+        return ChartsAwaitingDetail
+            .Select(i => (i - 1) / pageSize + 1)
+            .Where(p => p >= 1 && p <= pages)
+            .Distinct()
+            .OrderBy(p => p)
+            .ToList();
     }
 
     /// <summary>

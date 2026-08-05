@@ -748,6 +748,12 @@
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" x:Name="PanelHeader" Text="C H A R T S"
                            Style="{StaticResource Eyebrow}"/>
+                <!-- The game's inventory tabs, mirrored. Hidden entirely on a one-tab
+                     panel, so nothing about today's layout changes until the game's
+                     inventory actually grows. Built in code from the reader's page
+                     count, which is the same number that assigns panel indices. -->
+                <StackPanel x:Name="TabStrip" DockPanel.Dock="Top" Orientation="Horizontal"
+                            Visibility="Collapsed" Margin="0,0,0,8"/>
                 <!-- Search sits BELOW the panel: it filters what is above it, and a box
                      between the heading and the grid would push the tiles down the column
                      for a control that is empty most of the time. -->

@@ -146,11 +146,16 @@ public sealed class ScreenLayout
     /// <summary>The 3x3 voyage board.</summary>
     public Rect Board { get; set; } = new();
 
-    /// <summary>The 6x10 chart panel on the right.</summary>
+    /// <summary>Where the chart panel sits on screen, as a fraction of the window.</summary>
+    ///
+    /// How MANY cells it holds is deliberately NOT here. That number decides which chart
+    /// a panel index refers to, and it was stored twice -- once here for the drawn grid
+    /// and once in the reader's calibration for the decode. Two files, one fact: let them
+    /// disagree and every chart renders on the wrong tile while the solver places the
+    /// right ones, which is the worst kind of wrong because both halves look fine alone.
+    /// <see cref="ChartPanelReader.Options"/> owns it, because that is what assigns the
+    /// indices in the first place.
     public Rect ChartPanel { get; set; } = new();
-
-    public int ChartPanelRows { get; set; } = 10;
-    public int ChartPanelCols { get; set; } = 6;
 
     public sealed class Rect
     {

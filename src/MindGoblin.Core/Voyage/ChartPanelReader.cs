@@ -52,6 +52,25 @@ public sealed class ChartPanelReader
         public int Rows { get; init; } = 10;
         public int Cols { get; init; } = 6;
 
+        /// <summary>
+        /// How many TABS the chart panel has. The game paginates the inventory, and a
+        /// screenshot only ever shows one tab, so this is not "a bigger grid": it is N
+        /// grids of <see cref="Rows"/> x <see cref="Cols"/> that share a screen position
+        /// and cannot be read together.
+        ///
+        /// One today. Raise it when the game does and the tab strip appears by itself --
+        /// the number lives here because this is what assigns panel indices, and an
+        /// index means nothing without knowing which tab it counts from.
+        /// </summary>
+        public int Pages { get; init; } = 1;
+
+        /// <summary>Cells on ONE tab -- the stride between a tab's indices and the next
+        /// tab's.</summary>
+        public int PageSize => Rows * Cols;
+
+        /// <summary>The tab numbered <paramref name="number"/>, for scoping a read.</summary>
+        public PanelPage Page(int number) => new(number, PageSize);
+
         /// <summary>The glyph sits slightly above cell centre; the level text is below it.</summary>
         public int GlyphOffsetY { get; init; } = -3;
 

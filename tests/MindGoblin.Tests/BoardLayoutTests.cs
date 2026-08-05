@@ -102,7 +102,23 @@ public class ScreenLayoutTests
         var layout = new ScreenLayout();
         Assert.Equal(2560, layout.ReferenceWidth);
         Assert.Equal(1440, layout.ReferenceHeight);
-        Assert.Equal(10, layout.ChartPanelRows);
-        Assert.Equal(6, layout.ChartPanelCols);
+    }
+
+    /// <summary>
+    /// How many cells the panel holds is NOT here. It was, in parallel with the reader's
+    /// calibration -- two files holding one fact, and the fact decides which chart a
+    /// panel index refers to. Let them disagree and every chart draws on the wrong tile
+    /// while the solver places the right ones. The reader owns it, because the reader is
+    /// what assigns the indices.
+    /// </summary>
+    [Fact]
+    public void ThePanelGridIsSizedByTheReaderAlone()
+    {
+        Assert.DoesNotContain(typeof(ScreenLayout).GetProperties(),
+            p => p.Name.Contains("Rows") || p.Name.Contains("Cols"));
+
+        var options = new ChartPanelReader.Options();
+        Assert.Equal(10, options.Rows);
+        Assert.Equal(6, options.Cols);
     }
 }

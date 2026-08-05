@@ -57,6 +57,22 @@ once that captured a live boss fight instead of the app. Use `--render`.
   even when every chart scores negative (the currency profile once answered its own
   penalties with a seven-chart board). Empties are only legal when the pool or the
   placement cap cannot cover the cells.
+* **The chart panel is TABBED, and growing it means more TABS, not a bigger grid.**
+  A screenshot only ever shows the open tab, which is why a panel index means nothing on
+  its own — "chart 7" is a different chart on tab 1 and tab 2. Indices run straight
+  through instead (tab 1 owns 1..60, tab 2 the next 60), so every stored session stays
+  valid and the solver, the plan and the stash search never learn tabs exist.
+  **To expand: set `Pages` in `panel-calibration.json`. That is the whole change** — the
+  tab strip appears, reads and slurps scope themselves, and the grid is sized from the
+  same file. Rows/Cols live there too and NOWHERE else: they used to be duplicated in
+  `screen-layout.json`, and two files holding one fact means every chart can draw on the
+  wrong tile while the solver places the right ones.
+  Two things the app cannot do: it cannot SEE which tab the game is showing (the user
+  clicks the matching tab), and it cannot turn the page for them — input goes to the game
+  in exactly one place, inside their own F9 press. So the slurp queues only the open tab
+  and, when that tab is done, names the next one that still has unread charts.
+  A read is scoped the same way: reconciling the whole session against one tab's
+  screenshot would strike every chart on every other tab and then delete them.
 * **The voyage starts in the bottom-left chart** and travels by connections.
 * **Every chart has exactly one implicit**, and it is either *"in all Voyage Areas"*
   (global, position irrelevant) or *"adjacent Areas"* (buffs neighbours). The copied item
