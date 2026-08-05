@@ -52,41 +52,81 @@ public static class ChartSearch
     {
         if (string.IsNullOrWhiteSpace(query)) return true;
         var terms = query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        var fields = haystack.Split('\n');
-        return terms.All(term => TermHits(term, haystack, fields));
+        return terms.All(term => TermHits(term, haystack));
     }
 
     /// <summary>
-    /// A term hits on a plain substring, or -- for terms long enough to mean something --
-    /// as a SUBSEQUENCE, so a typo or a half-remembered word still finds the chart
-    /// ("strngbox", "divne").
+    /// A term hits on a plain substring, or on a WORD it is nearly spelled like.
     ///
-    /// Two guards, both learned by watching it match things that are not there:
+    /// SUBSEQUENCE MATCHING WAS THE WRONG TOOL AND IT SHIPPED. Scattering a term's
+    /// letters across a whole field looks like fuzziness and is really a wildcard: over
+    /// sentence-length modifier text almost anything is a subsequence of almost
+    /// anything. Measured on a real 60-chart panel, "eater" matched FIFTY-EIGHT charts,
+    /// "soul" thirty-nine, and "divine" hit two charts carrying no such word -- it had
+    /// walked "dropped in ... have ... instead". A four-character gate did not save it,
+    /// because the haystack is long, not because the term was short.
     ///
-    /// Subsequence matching is gated at four characters because it is extremely loose --
-    /// two or three letters in order occur in almost any sentence, so ungated it would
-    /// light the whole panel up and the filter would say nothing.
+    /// What fuzzy has to mean instead is MISSPELLED, not scattered: the term must be
+    /// within a small edit distance of some run of characters inside a single word. So
+    /// "strngbox" still finds Strongboxes and "divne" still finds Diviner's, while
+    /// "eater" finds only the charts that say Eater.
     ///
-    /// And it runs per FIELD, never across the joined text, because a subsequence walks
-    /// straight through a separator: on a chart named "Kelp" in an area called "Forest",
-    /// "kelpforest" matched a word that is on no chart anywhere. A filter that invents
-    /// matches is worse than one that misses them. Substring needs no such guard: a term
-    /// never contains whitespace, and the fields are joined with it.
+    /// The budget scales with the term because one wrong letter in four is a different
+    /// word, and one in ten is a typo.
     /// </summary>
-    private static bool TermHits(string term, string haystack, string[] fields)
+    private static bool TermHits(string term, string haystack)
     {
         if (haystack.Contains(term, StringComparison.OrdinalIgnoreCase)) return true;
-        return term.Length >= 4 && fields.Any(f => IsSubsequence(term, f));
+
+        var budget = term.Length >= 8 ? 2 : term.Length >= 5 ? 1 : 0;
+        if (budget == 0) return false;      // short terms must appear literally
+
+        foreach (var word in haystack.Split(WordBreaks, StringSplitOptions.RemoveEmptyEntries))
+            if (word.Length + budget >= term.Length && NearlyContains(term, word, budget))
+                return true;
+        return false;
     }
 
-    private static bool IsSubsequence(string term, string haystack)
+    private static readonly char[] WordBreaks =
+        [' ', '\n', '\r', '\t', ',', '.', ';', ':', '(', ')', '\'', '"', '/', '-'];
+
+    /// <summary>
+    /// Is <paramref name="term"/> within <paramref name="budget"/> edits of a PREFIX of
+    /// <paramref name="word"/>? Levenshtein anchored at the start and free at the end.
+    ///
+    /// Anchoring the start is what stops the second wave of noise. Free at both ends,
+    /// "eater" was one edit from the "water" buried inside Deepwater, Saltwater and
+    /// Underwater, so it lit eighteen charts on a panel where five say Eater. A typo is
+    /// at the start of a word you meant; a match in the MIDDLE of a longer word is
+    /// usually a different word.
+    ///
+    /// Free at the end still stands, and is what lets "strngbox" reach Strongboxes
+    /// without paying for the trailing "es".
+    /// </summary>
+    private static bool NearlyContains(string term, string word, int budget)
     {
-        var t = 0;
-        foreach (var c in haystack)
+        var previous = new int[word.Length + 1];
+        for (var j = 0; j <= word.Length; j++) previous[j] = j;   // anchored: skipping costs
+        var current = new int[word.Length + 1];
+
+        for (var i = 1; i <= term.Length; i++)
         {
-            if (char.ToLowerInvariant(c) == char.ToLowerInvariant(term[t]) && ++t == term.Length)
-                return true;
+            current[0] = i;                             // consumed i term chars, matched none
+            var best = current[0];
+            for (var j = 1; j <= word.Length; j++)
+            {
+                var cost = char.ToLowerInvariant(term[i - 1]) == char.ToLowerInvariant(word[j - 1])
+                    ? 0 : 1;
+                current[j] = Math.Min(Math.Min(previous[j] + 1, current[j - 1] + 1),
+                                      previous[j - 1] + cost);
+                best = Math.Min(best, current[j]);
+            }
+            if (best > budget) return false;            // no alignment can recover
+            (previous, current) = (current, previous);
         }
+
+        for (var j = 0; j <= word.Length; j++)
+            if (previous[j] <= budget) return true;     // end anywhere
         return false;
     }
 }

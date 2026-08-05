@@ -80,6 +80,51 @@ public class ChartSearchTests
         Assert.True(ChartSearch.Matches(typo, chart, 1));
     }
 
+    /// <summary>
+    /// THE BUG THE FIRST VERSION SHIPPED WITH, and which the tests above all passed
+    /// through. Subsequence matching scatters a term's letters across a whole field,
+    /// which over sentence-length modifier text is a wildcard: on a real 60-chart panel
+    /// "eater" matched FIFTY-EIGHT charts and "soul" thirty-nine. These are the ordinary
+    /// lines that were being hit -- none of them contains the term.
+    /// </summary>
+    [Theory]
+    [InlineData("soul", "Monsters gain 60% of Maximum Life as Extra Maximum Energy Shield")]
+    [InlineData("divine", "Rings dropped in adjacent Areas have 10% chance to instead drop as a Unique Ring")]
+    [InlineData("eater", "Adjacent Areas contain an additional cage of Tormented Spirits")]
+    [InlineData("bottle", "Monsters have a 40% chance to avoid Poison, Impale, and Bleeding")]
+    public void ATermDoesNotMatchAChartThatMerelyContainsItsLettersInOrder(
+        string term, string modifier)
+    {
+        var chart = Chart(name: "Offshore Quest", area: "Sandy Seabed Chart",
+                          modifiers: [modifier]);
+        Assert.False(ChartSearch.Matches(term, chart, 1),
+                     $"'{term}' matched a line that does not contain it: {modifier}");
+    }
+
+    [Fact]
+    public void TheTermStillFindsTheChartThatReallySaysIt()
+    {
+        // The other half: tightening must not cost the true positives.
+        var real = Chart(voyage: "Players in all Voyage Areas have Soul Eater");
+        Assert.True(ChartSearch.Matches("soul eater", real, 1));
+        Assert.True(ChartSearch.Matches("eater", real, 1));
+    }
+
+    /// <summary>
+    /// Fuzzy means a MISSPELLED word, not a run of characters buried mid-word. Free at
+    /// both ends, "eater" sat one edit from the "water" inside Deepwater, Saltwater and
+    /// Underwater -- eighteen charts on a panel where five say Eater.
+    /// </summary>
+    [Fact]
+    public void AFuzzyTermMustMatchFromTheStartOfAWord()
+    {
+        var watery = Chart(name: "Deepwater Venture", area: "Saltwater Journey");
+
+        Assert.False(ChartSearch.Matches("eater", watery, 1));
+        Assert.True(ChartSearch.Matches("deepwater", watery, 1));   // the word itself
+        Assert.True(ChartSearch.Matches("deepwatr", watery, 1));    // ...and its typo
+    }
+
     [Fact]
     public void ShortTermsMustAppearLiterally()
     {
