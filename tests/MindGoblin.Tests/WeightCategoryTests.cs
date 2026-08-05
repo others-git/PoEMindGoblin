@@ -126,12 +126,31 @@ public class WeightCategoryTests
         Assert.DoesNotContain(donorStat, WeightCategories.CategoriesIn(Shipped(profileName)));
     }
 
-    /// <summary>Catalog rules still carry their own stat, stamped rather than looked up.</summary>
+    /// <summary>
+    /// Catalog rules still carry their own stat, stamped rather than looked up.
+    ///
+    /// Asserted against the CATALOG rather than against one expected name: the older
+    /// form checked that every sulphur rule said "Sulphur", which only held while
+    /// sulphur happened to weight a single stat. Giving it the amplifier -- a multiplier
+    /// on its own objective it had been blind to -- broke the test without breaking the
+    /// invariant, which is the sign of a test pinned to the wrong thing.
+    /// </summary>
     [Fact]
     public void CatalogRulesCarryTheirStat()
     {
-        var sulphur = Shipped("sulphur");
-        Assert.All(sulphur.Rules, r => Assert.Equal("Sulphur", r.Category));
+        var byPattern = ModCatalog.Entries.ToDictionary(e => e.Pattern, e => e.Stat.ToString());
+
+        // Rules stamped Extras are excluded BY THE STAMP, not by pattern: a strategy's
+        // own rule may reuse a catalog wording at a different weight on purpose, and
+        // which one it is comes from where it came from -- which is the whole reason
+        // the stamp exists instead of a pattern lookup.
+        foreach (var profile in VoyageRules.Defaults())
+            foreach (var rule in profile.Rules)
+            {
+                if (rule.Category == WeightCategories.Other) continue;
+                if (!byPattern.TryGetValue(rule.Pattern, out var stat)) continue;
+                Assert.Equal(stat, rule.Category);
+            }
     }
 
     /// <summary>An untagged rule -- an older file, a hand edit -- keeps the old pattern

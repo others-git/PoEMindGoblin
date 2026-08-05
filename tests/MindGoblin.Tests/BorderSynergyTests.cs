@@ -158,6 +158,42 @@ public class BorderSynergyTests
     }
 
     /// <summary>
+    /// EVERY upright plan must weight the amplifier at 1.0, because its unit is RELATIVE.
+    ///
+    /// The catalog prices it 0.01 per percent of the RECEIVER's own explicit value, so
+    /// weight 1.0 says "80% magnitude is worth 80% more of whatever this plan already
+    /// values" -- the only coherent reading. Any other number says a plan wants its own
+    /// objective amplified more, or less, than itself.
+    ///
+    /// Left at zero the rule compiles away entirely and the profile is blind to a
+    /// multiplier on the thing it exists to maximise. Found live: sulphur scored four
+    /// amplifier figurines at NOTHING on a real board, which cost it 390 points of 1965
+    /// and made the search look broken -- it proved a placement-indifferent board in
+    /// 3,825 nodes because, as scored, no placement mattered.
+    /// </summary>
+    [Fact]
+    public void EveryUprightPlanWeightsTheAmplifierAtOne()
+    {
+        foreach (var strategy in Strategies.Shipped().Where(s => s.ChartBaseValue <= 0))
+            Assert.True(Math.Abs(strategy.WeightOf(Stat.ModifierMagnitude) - 1) < 1e-9,
+                        $"{strategy.Name} weights the amplifier "
+                        + $"{strategy.WeightOf(Stat.ModifierMagnitude)}, not 1");
+    }
+
+    /// <summary>The consequence that matters: an amplifier beside the fattest chart the
+    /// plan values must be worth a fraction OF that chart, not zero.</summary>
+    [Fact]
+    public void AnAmplifierIsWorthAFractionOfWhatThePlanAlreadyValues()
+    {
+        var sulphur = VoyageRules.Defaults().Single(p => p.Name == "sulphur");
+        var fat = new Chart("c", "Reach", ChartShape.Crossing, 83, []) { Sulphur = 45 };
+
+        Assert.True(sulphur.ExplicitValue(fat) > 0, "a chart's sulphur IS explicit value");
+        Assert.Equal(0.8, sulphur.ScoreText(
+            ["Adjacent Areas have 80% increased explicit modifier magnitudes"]), 6);
+    }
+
+    /// <summary>
     /// An experience buff is paid PER KILL, so it is a population payout however it is
     /// worded -- "Players in adjacent Areas gain #% increased Experience" starts with
     /// Players and is still worth a percentage of nothing on an empty tile.

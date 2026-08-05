@@ -200,7 +200,9 @@ public static class StatText
             + "unless you are farming currency or gold, where it costs nothing.",
         Stat.ModifierMagnitude =>
             "\"Increased explicit modifier magnitudes\": an amplifier on the touched "
-            + "chart's entire rolled set, rather than a payout of its own.",
+            + "chart's entire rolled set, rather than a payout of its own. Leave it at 1 "
+            + "— it is a fraction of what YOU already value, so any other number says "
+            + "you want your own objective amplified more or less than itself.",
         Stat.PlayerPower =>
             "Player power such as Soul Eater. It drops no loot, so it is priced at zero — "
             + "right-click a chart twice to require it instead.",
@@ -322,6 +324,12 @@ public static class ModCatalog
         // the only honest unit is the share. Priced flat (it was 1.5/percent) it scored
         // the same 90 points beside a blank chart as beside the best chart on the board,
         // and being per-square it then steered no placement at all.
+        // The unit is RELATIVE, which is why every upright strategy weights this 1.0
+        // and none of them should tune it: 0.01 per percent times the receiver's own
+        // explicit value means "80% magnitude is worth 80% more of whatever this plan
+        // already values". A profile that leaves it at zero is not being conservative,
+        // it is blind to a multiplier on its own objective -- sulphur scored four
+        // amplifier figurines at nothing on a real board until this was noticed.
         new(@"(\d+)%\s+increased explicit modifier magnitudes", Stat.ModifierMagnitude, 0.01,
             Comment: "a FRACTION of the receiving chart's explicit mods, not a flat value"),
         new(@"Flasks found.*chance to have (\d+)% Quality", Stat.Quantity, 0.3),
@@ -530,7 +538,13 @@ public static class Strategies
         {
             Name = "sulphur",
             Description = "Maximise Dead Man's Sulphur.",
-            Weights = { [Stat.Sulphur] = 5 },
+            // ModifierMagnitude is 1 here for the same reason it is 1 everywhere: the
+            // amplifier is priced as a FRACTION of the receiving chart's own explicit
+            // value, and a chart's "Dead Man's Sulphur: +45" IS explicit. Left at zero
+            // the rule compiled away and sulphur scored four amplifier figurines at
+            // nothing -- on a board where an 80% one beside a 45-sulphur chart is worth
+            // 180, against a whole board of 1575.
+            Weights = { [Stat.Sulphur] = 5, [Stat.ModifierMagnitude] = 1 },
         },
         new()
         {
@@ -544,6 +558,7 @@ public static class Strategies
                 [Stat.Bottles] = 1.5, [Stat.Strongboxes] = 0.6, [Stat.Openables] = 0.8,
                 [Stat.Lanterns] = 0.7, [Stat.Quantity] = 1, [Stat.Rarity] = 0.3,
                 [Stat.ChartRefunds] = 1, [Stat.NoEquipmentDrops] = -40,
+                [Stat.ModifierMagnitude] = 1,
             },
             ExtraRules =
             {
@@ -586,6 +601,7 @@ public static class Strategies
             {
                 [Stat.Rares] = 1, [Stat.Currency] = 0.2, [Stat.Scarabs] = 1.5,
                 [Stat.Packs] = 0.4, [Stat.Strongboxes] = 0.4,
+                [Stat.ModifierMagnitude] = 1,
             },
         },
         new()
@@ -596,6 +612,7 @@ public static class Strategies
             Weights =
             {
                 [Stat.Magic] = 1, [Stat.Packs] = 0.5, [Stat.Quantity] = 0.3,
+                [Stat.ModifierMagnitude] = 1,
             },
         },
         new()
