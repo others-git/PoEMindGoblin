@@ -289,7 +289,8 @@ public sealed class VoyageProfile
 
     public static PayoutChannel PayoutChannelOf(string description) =>
         PerRare.IsMatch(description) ? PayoutChannel.Rares
-        : PerPopulation.IsMatch(description) ? PayoutChannel.Population
+        : PerPopulation.IsMatch(description) || ExperienceGift.IsMatch(description)
+            ? PayoutChannel.Population
         : PayoutChannel.None;
 
     private static readonly Regex PerRare =
@@ -300,6 +301,26 @@ public sealed class VoyageProfile
     // classifier whose word three scoring paths trust must not call a curse a payout.
     private static readonly Regex PerPopulation =
         new(@"^\s*(?:Magic\s+)?Monsters\b.*(?:at least Magic|additional modifier)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// "Players in adjacent Areas gain #% increased Experience" -- a POPULATION payout
+    /// despite starting with "Players", because experience is paid per kill: the buff is
+    /// a percentage of nothing on an empty tile and everything on a packed one. Rarity
+    /// raises experience too, so the at-least-Magic upgrade riding this same channel is
+    /// the model agreeing with itself rather than a coincidence.
+    ///
+    /// Scored FLAT it was inert: worth the same 20 wherever the figurine sat, so raising
+    /// the Experience slider could never seat the dense chart beside it, which is the
+    /// only thing a levelling plan wants the solver to do.
+    ///
+    /// Pack density is the best available proxy for "how much experience does this tile
+    /// pay". A tile's MAGIC-ness is not expressible: per the corpus rule, pack size is
+    /// the only self-scope population statement a chart makes, and every magic-adding
+    /// line is scoped to adjacent or all Areas.
+    /// </summary>
+    private static readonly Regex ExperienceGift =
+        new(@"gain\s+\d*%?\s*increased Experience|increased Experience",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>

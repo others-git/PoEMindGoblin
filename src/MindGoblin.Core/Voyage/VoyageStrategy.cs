@@ -88,7 +88,10 @@ public enum Stat
     /// <summary>Chart refunds ("chance to not be consumed").</summary>
     ChartRefunds,
 
-    /// <summary>Experience gain. Nearly worthless to a farmer; dump burns it.</summary>
+    /// <summary>Experience gain, per percent. Rolls 100/150/200 on FIGURINES only --
+    /// no chart base rolls it. Paid per kill, so it rides the population channel and a
+    /// levelling plan wants the densest tile beside the figurine. Every shipped preset
+    /// leaves it at zero: that is the PLAN's opinion, not the mod's worth.</summary>
     Experience,
 
     /// <summary>Monster difficulty that kills runs. Catalog values are SEVERITIES
@@ -186,7 +189,8 @@ public static class StatText
             "\"Chance to not be consumed\": the chart comes back to your panel after the "
             + "voyage instead of being spent.",
         Stat.Experience =>
-            "Experience gain. Nearly worthless if you are farming; the dump voyage burns it.",
+            "Experience gain. Zero in every shipped preset because they all farm — raise "
+            + "it and the solver will feed the buff the densest tile it can reach.",
         Stat.Danger =>
             "Monster difficulty that ends runs — hexproof, penetration, damage. Weight it "
             + "NEGATIVE to steer away from charts that can kill the voyage.",
@@ -369,7 +373,15 @@ public static class ModCatalog
         new(@"(\d+)% of Equipment dropped by monsters.*converted to Gold", Stat.Gold, 1),
         new(@"(\d+)% chance (?:for Charts? )?to not be consumed", Stat.ChartRefunds, 3,
             Comment: "a refunded adjacent chart is ~its own value x the chance"),
-        new(@"gain (\d+)% increased Experience", Stat.Experience, 0.1),
+        // Figurine-only (no chart base rolls it) and it rolls BIG: 100/150/200%. The
+        // 0.1 is per percent, so a max roll is 20 before the tile multiplies it -- and
+        // it is a POPULATION payout, paid per kill, so the tile does multiply it.
+        // What this value is NOT is "experience is worthless": that is a judgement about
+        // a PLAN and it belongs in a strategy's weight, which is where it now lives --
+        // every shipped preset leaves Experience at zero and dump prices it negative.
+        new(@"gain (\d+)% increased Experience", Stat.Experience, 0.1,
+            Comment: "per percent; rolls 100/150/200 on figurines only. Paid per kill, "
+                     + "so it rides the population channel"),
         new(@"have Soul Eater", Stat.PlayerPower, 10,
             Comment: "player power, not loot; the required-star exists for it"),
         new(@"cannot drop Equipment, Flasks or Tinctures", Stat.NoEquipmentDrops, 1,

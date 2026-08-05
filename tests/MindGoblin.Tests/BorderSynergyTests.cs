@@ -157,6 +157,61 @@ public class BorderSynergyTests
                     $"13 packs scored {packs:0.#}, 19 barrel clusters {barrels:0.#}");
     }
 
+    /// <summary>
+    /// An experience buff is paid PER KILL, so it is a population payout however it is
+    /// worded -- "Players in adjacent Areas gain #% increased Experience" starts with
+    /// Players and is still worth a percentage of nothing on an empty tile.
+    /// </summary>
+    [Fact]
+    public void AnExperienceGiftRidesThePopulationChannel() =>
+        Assert.Equal(VoyageProfile.PayoutChannel.Population,
+                     VoyageProfile.PayoutChannelOf(
+                         "Players in adjacent Areas gain 200% increased Experience"));
+
+    /// <summary>
+    /// The point of making it a channel at all: a levelling plan zeroes the loot stats
+    /// and raises Experience, and the solver must then feed the buff the densest tile it
+    /// can reach. Scored FLAT the figurine paid the same wherever it sat, so the slider
+    /// could move the score and never the board.
+    /// </summary>
+    [Fact]
+    public void ARaisedExperienceSliderSeatsTheDensestChartBesideTheBuff()
+    {
+        var levelling = WeightCategories.Blended(
+            VoyageRules.Defaults().Single(p => p.Name == "currency"),
+            new Dictionary<string, int>
+            {
+                ["Experience"] = WeightCategories.Max,
+                ["Currency"] = 0, ["Scarabs"] = 0, ["Bottles"] = 0, ["Openables"] = 0,
+                ["Quantity"] = 0, ["Rares"] = 0, ["Packs"] = 0, ["Uniques"] = 0,
+                ["ModifierMagnitude"] = 0,
+            },
+            VoyageRules.Defaults());
+
+        var session = Session(out _, out _);
+        session.ApplyChartText(1, "Swarm\nAnchorfield\nMonster Pack Size: +150%");
+        session.ApplySquareModifiers(1,
+            ["Players in this Area gain 200% increased Experience"]);
+
+        var plan = session.Plan(session.Solve(levelling, TimeSpan.FromSeconds(3)));
+
+        Assert.Equal(1, Assert.Single(plan, s => s.ChartNumber == 1).Square);
+    }
+
+    /// <summary>Making the slider WORK must not make it fire by itself: every shipped
+    /// preset farms, so all of them leave Experience at zero and none of their plans
+    /// move because of this.</summary>
+    [Fact]
+    public void NoShippedPresetPursuesExperience()
+    {
+        const string xp = "Players in adjacent Areas gain 200% increased Experience";
+        foreach (var strategy in Strategies.Shipped())
+            Assert.True(strategy.WeightOf(Stat.Experience) <= 0,
+                        $"{strategy.Name} pursues experience");
+        Assert.All(VoyageRules.Defaults().Where(p => p.ChartBaseValue <= 0),
+                   p => Assert.Equal(0, p.ScoreText([xp])));
+    }
+
     /// <summary>The other half of that claim: a CONTAINER gift is not fed by monsters.
     /// Barrels are stocked when the area is built, so pack size does nothing for them,
     /// and the two channels must not be collapsed into one.</summary>
