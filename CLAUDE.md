@@ -491,3 +491,18 @@ imply.
   Nothing may call it in a loop or from a timer. Screenshots and clipboard reads are the
   only other contact. The slurp identifies the panel on arm, walks unread figurines then
   unidentified charts only, and never auto-solves — nothing does, except the Solve button.
+* **THE MACRO MUST NEVER CLICK. Asked and answered, 2026-08-05.** Having F9 also click
+  through to the next chart tab was considered and REJECTED. The community macro guide
+  GGG's own forum hosts reports emailing them about a macro that moves the cursor and
+  clicks, and being told it *"would definitely constitute botting"*; the standing rule is
+  that you may not perform multiple in-game actions from one press. What keeps the
+  current slurp on the right side of that line is that hover-and-copy performs no
+  in-game action at all — the character does nothing, and Ctrl+C is a client-side copy.
+  That is the same shape as PoE Trade Macro, the tool the community treats as the
+  canonical safe one. A CLICK is an in-game action, and adding one would move this tool
+  from "reads the screen" to "plays the game".
+  So the tab handoff is the user's: the slurp finishes the open tab and NAMES the next
+  one. Caveat worth keeping: no first-party GGG staff post was found saying this in so
+  many words — the sources are valued posters relaying GGG email replies — so if the
+  answer ever needs to be authoritative rather than careful, it comes from
+  support@grindinggear.com.
