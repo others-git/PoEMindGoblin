@@ -123,15 +123,21 @@ public class PanelPageTests
         Assert.Empty(s.PagesAwaitingDetail(pages: 1, pageSize: 60));
     }
 
-    /// <summary>Pages default to one, so nothing about today's panel changes until the
-    /// game's inventory actually grows.</summary>
+    /// <summary>
+    /// The default matches the GAME, which has two tabs. It shipped defaulted to one as
+    /// a "prepare for later" flag, so the app disagreed with the screen out of the box
+    /// and asked the user to go and fix it -- the same mistake as assuming a resolution
+    /// instead of detecting one.
+    /// </summary>
     [Fact]
-    public void ThePanelIsOneTabUntilToldOtherwise()
+    public void ThePanelDefaultsToTheTabsTheGameHas()
     {
         var options = new ChartPanelReader.Options();
-        Assert.Equal(1, options.Pages);
+        Assert.Equal(2, options.Pages);
         Assert.Equal(60, options.PageSize);
         Assert.Equal(1, options.Page(1).First);
         Assert.Equal(60, options.Page(1).Last);
+        Assert.Equal(61, options.Page(2).First);
+        Assert.Equal(120, options.Page(2).Last);
     }
 }

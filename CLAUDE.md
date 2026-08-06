@@ -62,11 +62,14 @@ once that captured a live boss fight instead of the app. Use `--render`.
   its own — "chart 7" is a different chart on tab 1 and tab 2. Indices run straight
   through instead (tab 1 owns 1..60, tab 2 the next 60), so every stored session stays
   valid and the solver, the plan and the stash search never learn tabs exist.
-  **To expand: set `Pages` in `panel-calibration.json`. That is the whole change** — the
-  tab strip appears, reads and slurps scope themselves, and the grid is sized from the
-  same file. Rows/Cols live there too and NOWHERE else: they used to be duplicated in
-  `screen-layout.json`, and two files holding one fact means every chart can draw on the
-  wrong tile while the solver places the right ones.
+  **`Pages` in `panel-calibration.json` is the tab count, and it DEFAULTS TO WHAT THE
+  GAME HAS (2).** It was defaulted to 1 as a prepare-for-later flag, which shipped an app
+  that disagreed with the screen and asked the user to go and fix it — the same mistake as
+  assuming a resolution instead of detecting one. A file written before the field existed
+  inherits the default, so nobody has to edit JSON; the calibrator has a Tabs control for
+  when the count changes again. Rows/Cols live there too and NOWHERE else: they used to be
+  duplicated in `screen-layout.json`, and two files holding one fact means every chart can
+  draw on the wrong tile while the solver places the right ones.
   Two things the app cannot do: it cannot SEE which tab the game is showing (the user
   clicks the matching tab), and it cannot turn the page for them — input goes to the game
   in exactly one place, inside their own F9 press. So the slurp queues only the open tab

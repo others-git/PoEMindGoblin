@@ -58,11 +58,14 @@ public sealed class ChartPanelReader
         /// grids of <see cref="Rows"/> x <see cref="Cols"/> that share a screen position
         /// and cannot be read together.
         ///
-        /// One today. Raise it when the game does and the tab strip appears by itself --
-        /// the number lives here because this is what assigns panel indices, and an
-        /// index means nothing without knowing which tab it counts from.
+        /// TWO, because that is what the game has. It was defaulted to one as a
+        /// "prepare for later" flag, which meant the app shipped disagreeing with the
+        /// screen and asked the user to go and fix it -- the same mistake as assuming a
+        /// resolution instead of detecting one. The number lives here because this is
+        /// what assigns panel indices, and an index means nothing without knowing which
+        /// tab it counts from.
         /// </summary>
-        public int Pages { get; init; } = 1;
+        public int Pages { get; init; } = 2;
 
         /// <summary>Cells on ONE tab -- the stride between a tab's indices and the next
         /// tab's.</summary>
