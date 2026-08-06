@@ -124,6 +124,71 @@ public class PanelPageTests
     }
 
     /// <summary>
+    /// THE HOVER MUST BE COMPUTED FROM THE CELL, NOT THE INDEX.
+    ///
+    /// Every tab draws over the SAME pixels -- they are tabs, not more grid -- so the
+    /// row and column come from the chart's position on the open tab. Taken from the
+    /// global index instead, chart 61 divided out to row 10 of a ten-row panel and the
+    /// cursor went below the inventory entirely, copying nothing or whatever sat under
+    /// it. Field-reported as "the mouse moves beneath the chart inventory".
+    /// </summary>
+    [Theory]
+    [InlineData(1, 1, 0, 0)]        // tab 1, first cell
+    [InlineData(1, 60, 9, 5)]       // tab 1, last cell
+    [InlineData(2, 61, 0, 0)]       // tab 2, first cell -- the same pixels as chart 1
+    [InlineData(2, 120, 9, 5)]      // tab 2, last cell
+    public void HoverGeometryComesFromTheCellOnTheOpenTab(
+        int page, int globalIndex, int expectedRow, int expectedCol)
+    {
+        const int cols = 6, rows = 10;
+        var local = new PanelPage(page, rows * cols).ToLocal(globalIndex);
+
+        var row = (local - 1) / cols;
+        var col = (local - 1) % cols;
+
+        Assert.Equal(expectedRow, row);
+        Assert.Equal(expectedCol, col);
+        Assert.InRange(row, 0, rows - 1);       // never below the panel
+    }
+
+    /// <summary>
+    /// A tab nobody has read holds no charts, so "which charts still need detail" says
+    /// nothing about it -- the slurp finished tab 1, found no unread charts anywhere,
+    /// and reported complete while half the inventory had never been looked at.
+    /// </summary>
+    [Fact]
+    public void ATabNobodyHasReadCountsAsWorkLeft()
+    {
+        var s = new VoyageSession();
+        s.ApplyPanelRead(Cells(60), new PanelPage(1, 60));
+        foreach (var i in Enumerable.Range(1, 60))
+            s.ApplyChartText(i, $"C{i}\nAnchorfield\nItem Quantity: +10%");
+
+        // Tab 1 is finished, so nothing is "awaiting detail" anywhere...
+        Assert.Empty(s.PagesAwaitingDetail(pages: 2, pageSize: 60));
+
+        // ...but tab 2 has never been read, which is the thing to say.
+        var work = s.PagesNeedingWork(pages: 2, pageSize: 60);
+        var only = Assert.Single(work);
+        Assert.Equal(2, only.Page);
+        Assert.True(only.Unread, "an unread tab must be reported as needing a READ");
+    }
+
+    [Fact]
+    public void AReadTabWithUnreadChartsIsNotReportedAsUnread()
+    {
+        var s = new VoyageSession();
+        s.ApplyPanelRead(Cells(60), new PanelPage(1, 60));
+        s.ApplyPanelRead(Cells(60), new PanelPage(2, 60));
+        foreach (var i in Enumerable.Range(1, 60))
+            s.ApplyChartText(i, $"C{i}\nAnchorfield\nItem Quantity: +10%");
+
+        var only = Assert.Single(s.PagesNeedingWork(pages: 2, pageSize: 60));
+        Assert.Equal(2, only.Page);
+        Assert.False(only.Unread, "it has been read; it just needs slurping");
+    }
+
+    /// <summary>
     /// The default matches the GAME, which has two tabs. It shipped defaulted to one as
     /// a "prepare for later" flag, so the app disagreed with the screen out of the box
     /// and asked the user to go and fix it -- the same mistake as assuming a resolution

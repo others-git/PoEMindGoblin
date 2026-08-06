@@ -222,6 +222,34 @@ public sealed class VoyageSession
     }
 
     /// <summary>
+    /// Tabs with work left, INCLUDING ones never read at all.
+    ///
+    /// A tab that has never been identified holds no charts, so asking which charts
+    /// still need detail says nothing about it -- the slurp finished tab 1, found no
+    /// unread charts anywhere else, and reported "complete" while half the inventory
+    /// had never been looked at. Emptiness is exactly the state that needs reporting,
+    /// not the state that means nothing to do.
+    ///
+    /// A genuinely empty tab keeps asking to be read. That is the right way round: the
+    /// cost is one wasted Identify, and the cost of the other mistake is planning a
+    /// voyage from half a stash.
+    /// </summary>
+    /// <returns>Tab number, and whether it has been read at all.</returns>
+    public IReadOnlyList<(int Page, bool Unread)> PagesNeedingWork(int pages, int pageSize)
+    {
+        if (pages <= 1 || pageSize <= 0) return [];
+        var awaiting = PagesAwaitingDetail(pages, pageSize).ToHashSet();
+
+        var result = new List<(int, bool)>();
+        for (var p = 1; p <= pages; p++)
+        {
+            var never = ChartsOnPage(new PanelPage(p, pageSize)).Count == 0;
+            if (never || awaiting.Contains(p)) result.Add((p, never));
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Attach hover text to a chart. The shape from the panel read wins over anything the
     /// text claims -- the glyph is measured, the text is parsed.
     /// </summary>

@@ -846,7 +846,12 @@ public partial class VoyageView : UserControl, IDisposable
         // is the identity unless the window was resized since that capture.
         var game = ScreenCapture.ResolveGameBounds().Rect;
         var o = (_panelGrid ?? ChartPanelReader.Options.Load()).ForScreen(game.Width, game.Height);
-        var (row, col) = ((index - 1) / o.Cols, (index - 1) % o.Cols);
+        // The index counts THROUGH the tabs; the grid on screen is one tab. Chart 61 is
+        // cell 1 of tab 2, and dividing its global index by the column count put it on
+        // row 10 of a ten-row panel -- the cursor went below the panel entirely and
+        // copied nothing, or whatever happened to be under it.
+        var local = CurrentPage.ToLocal(index);
+        var (row, col) = ((local - 1) / o.Cols, (local - 1) % o.Cols);
         // Client-relative like everything else, plus the window origin -- this is the
         // one place that has to know where on the DESKTOP the game happens to sit.
         GameInput.HoverAt(game.X + (int)Math.Round(o.OriginX + col * o.Pitch),
@@ -1084,15 +1089,22 @@ public partial class VoyageView : UserControl, IDisposable
         SlurpBtn.IsChecked = false;      // routes through StopSlurp via OnSlurpChanged
 
         var remaining = _session
-            .PagesAwaitingDetail(_panelOptions.Pages, _panelOptions.PageSize)
-            .Where(p => p != _page)
+            .PagesNeedingWork(_panelOptions.Pages, _panelOptions.PageSize)
+            .Where(p => p.Page != _page)
             .ToList();
 
-        StopSlurp(remaining.Count == 0
-            ? "Slurp complete \u2014 Solve when ready."
-            : $"Tab {_page} done. Click tab {remaining[0]} in game AND above, then arm the "
-              + $"slurp again \u2014 {(remaining.Count == 1 ? "it is" : $"tabs {string.Join(", ", remaining)} are")} "
-              + "still unread.");
+        StopSlurp(remaining.Count switch
+        {
+            0 => "Slurp complete \u2014 Solve when ready.",
+            // A tab nobody has read yet holds no charts to slurp, so it needs the
+            // panel READ before the slurp has anything to walk. Saying "arm the slurp"
+            // there would send the user round a loop that does nothing.
+            _ when remaining[0].Unread =>
+                $"Tab {_page} done. Tab {remaining[0].Page} has not been read at all \u2014 "
+                + $"open it in game, click tab {remaining[0].Page} above, then Identify Charts.",
+            _ => $"Tab {_page} done. Open tab {remaining[0].Page} in game, click it above, "
+                 + "then arm the slurp again \u2014 it still has charts without detail.",
+        });
         RebuildModifiers();
     }
     private void Capture(string text, string how)
@@ -2662,13 +2674,29 @@ public partial class VoyageView : UserControl, IDisposable
 
     private void RefreshTabStrip()
     {
+        if (TabStrip.Visibility != Visibility.Visible) return;
+
         foreach (var tab in TabStrip.Children.OfType<Button>())
         {
-            var active = tab.Tag is int n && n == _page;
+            if (tab.Tag is not int number) continue;
+            var active = number == _page;
+            var charts = _session.ChartsOnPage(_panelOptions.Page(number)).Count;
+
+            // A tab with no charts has never been read, and that is the state most
+            // worth seeing: without it the panel looks complete while half the stash
+            // has never been looked at. Marked on the tab itself so it does not take a
+            // slurp to find out.
+            tab.Content = charts == 0 ? $"{number} ·" : number.ToString();
             tab.FontWeight = active ? FontWeights.Bold : FontWeights.Normal;
-            tab.Foreground = new SolidColorBrush(active
-                ? Color.FromRgb(0xC8, 0xAA, 0x6E)
+            tab.Foreground = new SolidColorBrush(
+                charts == 0 ? Color.FromRgb(0xB8, 0x50, 0x3E)
+                : active ? Color.FromRgb(0xC8, 0xAA, 0x6E)
                 : Color.FromRgb(0x7A, 0x6E, 0x5C));
+            tab.ToolTip = Tip($"Tab {number}",
+                charts == 0
+                    ? "Not read yet — open it in game and press Identify Charts."
+                    : $"{charts} charts read. Open it in game before reading or slurping it.",
+                [], false);
         }
     }
 
@@ -2918,6 +2946,9 @@ public partial class VoyageView : UserControl, IDisposable
 
         SearchHint.Visibility = searching ? Visibility.Collapsed : Visibility.Visible;
         SearchClear.Visibility = searching ? Visibility.Visible : Visibility.Collapsed;
+        // The strip says which tabs are still unread, so it is only as true as the last
+        // panel refresh.
+        RefreshTabStrip();
     }
 
     /// <summary>
