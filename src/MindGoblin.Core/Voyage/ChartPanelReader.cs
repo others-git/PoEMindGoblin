@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MindGoblin.Core.Voyage;
 
@@ -58,17 +59,24 @@ public sealed class ChartPanelReader
         /// grids of <see cref="Rows"/> x <see cref="Cols"/> that share a screen position
         /// and cannot be read together.
         ///
-        /// TWO, because that is what the game has. It was defaulted to one as a
-        /// "prepare for later" flag, which meant the app shipped disagreeing with the
-        /// screen and asked the user to go and fix it -- the same mistake as assuming a
-        /// resolution instead of detecting one. The number lives here because this is
-        /// what assigns panel indices, and an index means nothing without knowing which
-        /// tab it counts from.
+        /// TWO, because that is what the game has, and NOT PERSISTED — which is the
+        /// whole point. Origin and pitch are facts about the user's screen and belong in
+        /// their file; how many tabs the inventory has is a fact about the GAME, the same
+        /// for everybody, changing only when GGG patches it. Written to the file it
+        /// became a landmine: a calibration saved by a build from before this defaulted
+        /// to 2 pinned it at 1, and the second tab silently vanished from an app that had
+        /// been corrected weeks earlier. A stale file must not be able to outvote a
+        /// shipped fact.
+        ///
+        /// So it moves with the code, like the mod tables and everything else the patch
+        /// notes decide. If GGG adds a third tab, change this number and ship.
         /// </summary>
+        [JsonIgnore]
         public int Pages { get; init; } = 2;
 
         /// <summary>Cells on ONE tab -- the stride between a tab's indices and the next
-        /// tab's.</summary>
+        /// tab's. Derived, so it has no business in the file either.</summary>
+        [JsonIgnore]
         public int PageSize => Rows * Cols;
 
         /// <summary>The tab numbered <paramref name="number"/>, for scoping a read.</summary>

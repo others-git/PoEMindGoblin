@@ -235,6 +235,56 @@ public class PanelPageTests
     }
 
     /// <summary>
+    /// A STALE CALIBRATION FILE MUST NOT OUTVOTE A SHIPPED FACT.
+    ///
+    /// The tab count was being written to panel-calibration.json, and a file saved by a
+    /// build from before the default became 2 pinned it at 1 -- the second tab silently
+    /// vanished from an app that had been corrected days earlier, with nothing on screen
+    /// to explain it. Origin and pitch are facts about the USER'S SCREEN and belong in
+    /// their file; how many tabs the inventory has is a fact about the GAME, the same for
+    /// everybody, and moves with the code like the mod tables do.
+    /// </summary>
+    [Fact]
+    public void AnOldCalibrationCannotPinTheTabCount()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"cal-{Guid.NewGuid():N}.json");
+        try
+        {
+            // Exactly what the field file contained, "Pages": 1 and all.
+            File.WriteAllText(path, """
+                {
+                  "OriginX": 1755, "OriginY": 420, "Pitch": 66.98,
+                  "Rows": 10, "Cols": 6, "Pages": 1, "PageSize": 60,
+                  "GlyphOffsetY": -3, "GlyphHalf": 19, "OccupiedThreshold": 150,
+                  "EdgeMargin": 3, "EdgeSpan": 0.6, "OpenThreshold": 1,
+                  "ReferenceWidth": 2560, "ReferenceHeight": 1440
+                }
+                """);
+
+            var loaded = ChartPanelReader.Options.Load(path);
+
+            Assert.Equal(2, loaded.Pages);          // the shipped fact wins
+            Assert.Equal(1755, loaded.OriginX);     // the user's own measurements do not
+            Assert.Equal(19, loaded.GlyphHalf);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    /// <summary>Nor may saving put it back: a round trip must not smuggle a game fact
+    /// into the user's file, or the next default change is pinned all over again.</summary>
+    [Fact]
+    public void SavingTheCalibrationDoesNotWriteTheTabCount()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new ChartPanelReader.Options());
+        Assert.DoesNotContain("Pages", json);
+        Assert.DoesNotContain("PageSize", json);
+        Assert.Contains("OriginX", json);
+    }
+
+    /// <summary>
     /// The default matches the GAME, which has two tabs. It shipped defaulted to one as
     /// a "prepare for later" flag, so the app disagreed with the screen out of the box
     /// and asked the user to go and fix it -- the same mistake as assuming a resolution

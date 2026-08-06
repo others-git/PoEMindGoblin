@@ -147,9 +147,6 @@ public partial class CalibrationWindow : Window
     {
         'x' => o with { OriginX = o.OriginX + delta },
         'y' => o with { OriginY = o.OriginY + delta },
-        // Tabs. Clamped at one because a zero-tab panel is not a panel, and the count
-        // is what indices are counted from -- there is no sane "off".
-        'g' => o with { Pages = Math.Max(1, o.Pages + delta) },
         _ => o with { Pitch = Math.Max(10, o.Pitch + delta) },
     };
 
@@ -258,7 +255,6 @@ public partial class CalibrationWindow : Window
     {
         OriginLabel.Text = $"{_options.OriginX},{_options.OriginY}";
         PitchLabel.Text = _options.Pitch.ToString("0.##");
-        PagesLabel.Text = _options.Pages.ToString();
         if (_bitmap is null) return;
 
         // No clone: BitmapPixels borrows, so the window keeps its capture across redraws.

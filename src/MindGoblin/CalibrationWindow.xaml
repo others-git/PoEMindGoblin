@@ -61,18 +61,6 @@
                     <Button Content="+" Click="OnNudge" Tag="p+1" Padding="8,4" FontSize="10" Focusable="False"/>
                     <Button Content="++" Click="OnNudge" Tag="p+5" Padding="8,4" Focusable="False"/>
 
-                    <!-- The inventory is TABBED and the app cannot see how many tabs the
-                         game has, so it is asked for here rather than hidden in a JSON
-                         file. One tab means no tab strip at all, which is why nothing
-                         about the panel changes until this is raised. -->
-                    <TextBlock Text="Tabs" Foreground="#8A7A5E" VerticalAlignment="Center"
-                               Margin="18,0,0,0" FontFamily="{x:Static local:PoeFonts.Display}"/>
-                    <Button Content="−" Click="OnNudge" Tag="g-1" Margin="8,0,0,0" Padding="8,4" FontSize="10" Focusable="False"/>
-                    <TextBlock x:Name="PagesLabel" Width="20" TextAlignment="Center"
-                               VerticalAlignment="Center" FontFamily="Consolas"/>
-                    <Button Content="+" Click="OnNudge" Tag="g+1" Padding="8,4" FontSize="10" Focusable="False"
-                            ToolTip="How many tabs the chart inventory has in game. Each tab holds one full grid."/>
-
                     <Button Content="Recapture" Click="OnRecapture" Margin="14,0,0,0" Padding="10,4" Focusable="False"
                             ToolTip="Take a fresh screenshot of the game right now. Alt-tab to the Voyage screen first — this window does not have to be in front."/>
                     <Button Content="Reset" Click="OnReset" Margin="6,0,0,0" Padding="10,4" Focusable="False"
