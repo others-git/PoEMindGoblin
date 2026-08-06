@@ -17,8 +17,8 @@ public class RequiredChartTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         foreach (var i in Enumerable.Range(1, 12).Where(i => i != 4))
             session.ApplyChartText(i, "Reach\nAnchorfield\nDead Man's Sulphur: +50");
         session.ApplyChartText(4,
@@ -90,8 +90,8 @@ public class RequiredChartTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, false, false)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, false, false))
+                .ToList());
         foreach (var i in Enumerable.Range(1, 12).Where(i => i != 4))
             session.ApplyChartText(i, "Reach\nAnchorfield\nDead Man's Sulphur: +50");
         session.ApplyChartText(4,

@@ -328,15 +328,21 @@ encode it.
   short of that. The cost is that a wildly wrong calibration can no longer be rescued by
   Locate, which is what the calibrator is for and beats reading furniture as charts.
   `SparsePanelTests` pins it, decoys and all.
-* **The level TEMPLATES cannot be re-rendered, only resampled.** They are carved from a
-  real capture (no installed font matches Fontin), so at another resolution they are
-  resampled to the caption height — and a resampled mask is exactly the kind of thing this
-  reader distrusts, so the rule is enforced directly: whatever it reads must match the
-  reference, and everything else reads null. Below 1440p most levels still read blank; a
-  missing level is recoverable, a fabricated one corrupts the plan. Closing that gap needs
-  templates carved from a NATIVE capture at that resolution (`Learn`), not better maths.
+* **THE PANEL READ DOES NOT READ LEVELS. Deleted 2026-08-06, and do not bring it back.**
+  The "L:83" caption went through template matching against masks carved from a real
+  capture (no installed font matches Fontin), resampled at every other resolution. It
+  never earned its keep: below 1440p most levels read blank, and on a 2560×1440 capture
+  whose calibration was measured at 2490×1401 it read **83 as 3** — wrong, not missing,
+  which is the failure mode that corrupts a plan rather than delaying one. The level
+  arrives exactly and for free in the copied chart text (`Item Level: 83`), which every
+  chart worth scoring gets anyway, so the caption was a worse copy of a fact the hover
+  already supplies. A chart is level 0 until hovered.
+  **The consequence, stated:** a panel-read-only session now has NO scoring signal —
+  "solve before hovering" used to rank on level alone and now ranks on nothing. That was
+  judged worth it, because ranking on levels that are silently wrong is worse than not
+  ranking.
 * **Windows OCR reads PoE prose well and small numerals badly** — it read `L:76` as
-  `L.'j6`. Chart levels go through template matching; only modifier text goes through OCR.
+  `L.'j6`. That is why nothing numeric goes through OCR; only modifier text does.
 * **PoE's font (Fontin) is not on Windows.** A sweep of every system `.ttf` at every
   plausible size missed by 134 of ~130 ink pixels, so glyphs must be carved from a capture.
 * **Fontin's `ffi` ligature is an EMPTY glyph** — zero contours, full 1658-unit advance —

@@ -506,8 +506,7 @@ public partial class VoyageView : UserControl, IDisposable
             // image rather than the scaled calibration, and the slurp's hover must
             // aim at the SAME grid the decode numbered the cells with -- hovering
             // the calibration while reading the located grid copies the neighbour.
-            var reader = new ChartPanelReader(
-                ChartPanelReader.Options.Load(), LevelReader.LoadWithUserTemplates());
+            var reader = new ChartPanelReader(ChartPanelReader.Options.Load());
             var grid = reader.Resolve(pixels);
             var cells = reader.ReadWith(pixels, grid);
 
@@ -1604,8 +1603,7 @@ public partial class VoyageView : UserControl, IDisposable
             using var bmp = new System.Drawing.Bitmap(screenshot);
             // The app's own decode path -- calibration and learned templates included --
             // so the demo shows what a real identify would, not a defaults-only read.
-            _session.ApplyPanelRead(new ChartPanelReader(
-                ChartPanelReader.Options.Load(), LevelReader.LoadWithUserTemplates())
+            _session.ApplyPanelRead(new ChartPanelReader(ChartPanelReader.Options.Load())
                 .Read(new BitmapPixels(bmp)));
         }
 

@@ -402,8 +402,8 @@ public class SquareModifierTests
         // chart that benefits from it onto that square.
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 9).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         session.ApplySquareModifiers(5, ["Adjacent Areas contain 8 additional packs"]);
 
         var profile = new VoyageProfile

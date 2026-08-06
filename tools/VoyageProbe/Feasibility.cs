@@ -22,8 +22,7 @@ public static class Feasibility
         var session = new VoyageSession();
         // The app's reader: "these charts cannot tile the board" is only an answer about
         // the real panel if the shapes came off it the way the app reads them.
-        session.ApplyPanelRead(new ChartPanelReader(ChartPanelReader.Options.Load(),
-                                                    LevelReader.LoadWithUserTemplates()).Read(px));
+        session.ApplyPanelRead(new ChartPanelReader(ChartPanelReader.Options.Load()).Read(px));
         var charts = session.Charts;
         Console.WriteLine($"{charts.Count} charts read");
         foreach (var g in charts.GroupBy(c => c.Shape).OrderByDescending(g => g.Count()))

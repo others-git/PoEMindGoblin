@@ -21,8 +21,8 @@ public class VoyagePersistenceTests : IDisposable
     {
         var session = new VoyageSession();
         session.ApplyPanelRead([
-            new ChartPanelReader.ReadCell(2, 0, 1, false, true, false, true) { Level = 71 },
-            new ChartPanelReader.ReadCell(9, 1, 2, true, true, true, true) { Level = 83 },
+            new ChartPanelReader.ReadCell(2, 0, 1, false, true, false, true),
+            new ChartPanelReader.ReadCell(9, 1, 2, true, true, true, true),
         ]);
         session.ApplyChartText(2,
             "Tempest Reach\nSeafloor Ridges\nArea Level: 71\nItem Quantity: +42%\n"
@@ -136,15 +136,15 @@ public class VoyagePersistenceTests : IDisposable
     {
         var session = new VoyageSession();
         session.ApplyPanelRead([
-            new ChartPanelReader.ReadCell(1, 0, 0, true, true, true, true) { Level = 80 },
-            new ChartPanelReader.ReadCell(2, 0, 1, true, true, true, true) { Level = 80 }]);
+            new ChartPanelReader.ReadCell(1, 0, 0, true, true, true, true),
+            new ChartPanelReader.ReadCell(2, 0, 1, true, true, true, true)]);
         session.ApplyPanelRead([
-            new ChartPanelReader.ReadCell(1, 0, 0, true, true, true, true) { Level = 80 }]);
+            new ChartPanelReader.ReadCell(1, 0, 0, true, true, true, true)]);
         session.Save(_path);
 
         var (restored, _) = VoyageSession.Restore(_path);
         restored.ApplyPanelRead([
-            new ChartPanelReader.ReadCell(1, 0, 0, true, true, true, true) { Level = 80 }]);
+            new ChartPanelReader.ReadCell(1, 0, 0, true, true, true, true)]);
 
         Assert.Equal(2, restored.Charts.Count);
     }
@@ -154,8 +154,8 @@ public class VoyagePersistenceTests : IDisposable
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 9).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         session.ApplySquareModifiers(5, ["Areas contain 8 additional packs"]);
         session.Save(_path);
 
@@ -178,7 +178,7 @@ public class VoyagePersistenceTests : IDisposable
         // it. Saving them would resurrect yesterday's scoring under today's rules.
         var session = new VoyageSession();
         session.ApplyPanelRead([
-            new ChartPanelReader.ReadCell(1, 0, 0, true, true, true, true) { Level = 80 }]);
+            new ChartPanelReader.ReadCell(1, 0, 0, true, true, true, true)]);
         session.ApplyChartText(1, "A\nDead Man's Sulphur: +14");
         session.Save(_path);
 
@@ -353,7 +353,7 @@ public class SessionRefineTests : IDisposable
     {
         var session = new VoyageSession();
         session.ApplyPanelRead([
-            new ChartPanelReader.ReadCell(2, 0, 1, false, true, false, true) { Level = 71 }]);
+            new ChartPanelReader.ReadCell(2, 0, 1, false, true, false, true)]);
 
         // Write the state as the old parser would have left it.
         var state = session.ToState();

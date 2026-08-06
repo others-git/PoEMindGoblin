@@ -352,8 +352,10 @@ public class BorderSynergyTests
 
         Assert.Single(plan, s => s.ChartNumber == 2);       // the 2-bottle roll sails
         Assert.DoesNotContain(plan, s => s.ChartNumber == 7);
-        var note = Assert.Single(session.SolveNotes);
-        Assert.Contains("1 per voyage", note);
+        // The rationing note by CONTENT, not by being the only one: an unhovered panel
+        // also earns the "levels are unknown" note, and pinning the count made this test
+        // fail for a reason that has nothing to do with bottles.
+        var note = Assert.Single(session.SolveNotes, n => n.Contains("1 per voyage"));
         Assert.Contains("held back", note);
     }
 
@@ -435,8 +437,8 @@ public class BorderSynergyTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         foreach (var i in Enumerable.Range(1, 12))
             session.ApplyChartText(i, "Reach\nAnchorfield\nVoyage Modifier: Monsters in "
                                       + "all Voyage Areas cannot drop Equipment, Flasks or Tinctures");
@@ -668,8 +670,8 @@ public class BorderSynergyTests
         // headline in the tables too -- doubled rares beat a half-again pack.
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         var brine = 7;
         session.ApplyChartText(brine, "Deep Plunge\nCoral Reef Chart\nBrine King's Domain");
         session.ApplySquareModifiers(1, ["Rare Monsters in Area drop an additional Divine Orb"]);
@@ -698,8 +700,8 @@ public class BorderSynergyTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
 
         // Two charts distinguishable only by pack size, which currency does not score --
         // so their own values tie and only the synergy can separate them.

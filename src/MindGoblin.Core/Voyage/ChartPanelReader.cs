@@ -197,13 +197,6 @@ public sealed class ChartPanelReader
         int Index, int Row, int Col,
         bool North, bool East, bool South, bool West)
     {
-        /// <summary>
-        /// Area level from the "L:83" caption, or null when it could not be read.
-        /// Null is deliberate: see <see cref="LevelReader"/>, which refuses to guess at a
-        /// digit it has no template for rather than report a plausible wrong level.
-        /// </summary>
-        public int? Level { get; init; }
-
 
         public int OpenCount => (North ? 1 : 0) + (East ? 1 : 0) + (South ? 1 : 0) + (West ? 1 : 0);
 
@@ -240,16 +233,13 @@ public sealed class ChartPanelReader
 
         public override string ToString() =>
             $"#{Index} r{Row}c{Col} N{(North ? 1 : 0)}E{(East ? 1 : 0)}S{(South ? 1 : 0)}W{(West ? 1 : 0)} "
-            + $"{Shape?.ToString() ?? "?"}{(Level is { } l ? $" L{l}" : "")}";
+            + $"{Shape?.ToString() ?? "?"}";
     }
 
     private readonly Options _o;
-    private readonly LevelReader? _levels;
-
-    public ChartPanelReader(Options? options = null, LevelReader? levels = null)
+    public ChartPanelReader(Options? options = null)
     {
         _o = options ?? new Options();
-        _levels = levels ?? new LevelReader();
     }
 
     /// <summary>The longest contiguous stretch of lines dense enough to be glyph
@@ -562,12 +552,6 @@ public sealed class ChartPanelReader
     /// </summary>
     public IReadOnlyList<ReadCell> ReadWith(IPixels pixels, Options o)
     {
-        // THE CAPTION IS SIZED BY THE GRID THAT FOUND THE CELL, not by the image. They
-        // are the same number only while the capture is a whole screen: crop one and the
-        // resolution says 0.52 where the measured pitch says 0.73, and that slid the
-        // caption window clean off the "L".
-        var scale = o.Pitch / Reference.Pitch;
-
         var found = new List<ReadCell>();
         for (var row = 0; row < o.Rows; row++)
         {
@@ -579,9 +563,7 @@ public sealed class ChartPanelReader
                 var cellY = (int)Math.Round(o.OriginY + row * o.Pitch);
                 var cy = cellY + o.GlyphOffsetY;
                 if (ReadCellAt(pixels, o, cx, cy, row, col) is not { } cell) continue;
-                // Only bother with the caption once a glyph is confirmed -- an empty cell
-                // has no level to read.
-                found.Add(cell with { Level = _levels?.Read(pixels, cx, cellY, scale) });
+                found.Add(cell);
             }
         }
         return found;

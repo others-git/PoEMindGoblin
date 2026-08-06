@@ -75,8 +75,8 @@ public class MagnitudeAmplifierTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 9).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         session.ApplyFigurineText(figurine, Amplifier);
 
         const int fat = 1;
@@ -100,8 +100,8 @@ public class MagnitudeAmplifierTests
         {
             var session = new VoyageSession();
             session.ApplyPanelRead(Enumerable.Range(1, 9).Select(i =>
-                new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-                { Level = 80 }).ToList());
+                new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                    .ToList());
             session.ApplyFigurineText(1, Amplifier);
             session.ApplyChartText(1, fatChartExists
                 ? "Fat\nAnchorfield\nItem Quantity: +200%"
@@ -132,8 +132,8 @@ public class MagnitudeAmplifierTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 9).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
 
         // Square 5 is the centre of a 3x3: four neighbours, and no figurine reaches it.
         session.ApplyChartText(1, $"Amp\nAnchorfield\n{Amplifier}");
@@ -171,8 +171,8 @@ public class MagnitudeAmplifierTests
 
             var session = new VoyageSession();
             session.ApplyPanelRead(Enumerable.Range(1, 9).Select(i =>
-                new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-                { Level = 80 }).ToList());
+                new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                    .ToList());
             session.ApplyFigurineText(1, Amplifier);
             session.ApplyChartText(1, "Fat\nAnchorfield\nItem Quantity: +200%");
             for (var i = 2; i <= 9; i++)

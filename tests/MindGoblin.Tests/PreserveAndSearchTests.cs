@@ -11,8 +11,8 @@ public class PreserveAndSearchTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         return session;
     }
 
@@ -176,8 +176,8 @@ public class FigurineTooltipTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         session.ApplyChartText(3, "Reach\nAnchorfield\nItem Quantity: +40%");
         session.ApplyFigurineText(1, "120% increased Quantity of Items found in adjacent Areas");
         session.ApplyFigurineText(2, "50% more Rarity of Items found in adjacent Areas");
@@ -194,8 +194,8 @@ public class FigurineTooltipTests
 
         // Chart removal has two gears: detail first, then the chart itself.
         Assert.True(session.RemoveChartDetail(3));
-        Assert.Contains(3, session.ChartsAwaitingDetail);          // back to shape-and-level
-        Assert.Equal(80, session.ByPanelIndex[3].AreaLevel);
+        Assert.Contains(3, session.ChartsAwaitingDetail);          // back to the shape alone
+        Assert.Equal(ChartShape.Crossing, session.ByPanelIndex[3].Shape);
         Assert.True(session.RemoveChart(3));
         Assert.False(session.ByPanelIndex.ContainsKey(3));
     }
@@ -205,8 +205,8 @@ public class FigurineTooltipTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         session.CycleMark(5); session.CycleMark(5);               // required
         Assert.True(session.RemoveChart(5));
         Assert.Empty(session.Required);

@@ -4,9 +4,8 @@ namespace MindGoblin.Tests;
 
 public class VoyageSessionTests
 {
-    private static ChartPanelReader.ReadCell Cell(
-        int index, bool n, bool e, bool s, bool w, int? level = 80) =>
-        new(index, (index - 1) / 6, (index - 1) % 6, n, e, s, w) { Level = level };
+    private static ChartPanelReader.ReadCell Cell(int index, bool n, bool e, bool s, bool w) =>
+        new(index, (index - 1) / 6, (index - 1) % 6, n, e, s, w);
 
     /// <summary>Twelve crossings: any of them fits any square, so layout is never the blocker.</summary>
     private static IReadOnlyList<ChartPanelReader.ReadCell> Crossings(int count = 12) =>
@@ -16,11 +15,10 @@ public class VoyageSessionTests
     public void PanelReadCreatesChartsKeyedByPanelIndex()
     {
         var s = new VoyageSession();
-        s.ApplyPanelRead([Cell(3, true, false, true, false, 81)]);
+        s.ApplyPanelRead([Cell(3, true, false, true, false)]);
 
         var chart = Assert.Single(s.Charts);
         Assert.Equal(ChartShape.Straight, chart.Shape);
-        Assert.Equal(81, chart.AreaLevel);
         Assert.Equal(3, s.ByPanelIndex.Keys.Single());
     }
 
@@ -43,11 +41,10 @@ public class VoyageSessionTests
         s.ApplyPanelRead([Cell(1, true, true, true, true)]);
         s.ApplyChartText(1, "Storm Hollow\nMonster Pack Size: +30%");
 
-        s.ApplyPanelRead([Cell(1, true, true, true, true, level: 83)]);
+        s.ApplyPanelRead([Cell(1, true, true, true, true)]);
 
         var chart = Assert.Single(s.Charts);
         Assert.Equal(30, chart.MonsterPackSize);
-        Assert.Equal(83, chart.AreaLevel);          // the fresh read still updates the level
         Assert.Equal("Storm Hollow", chart.Name);
     }
 
@@ -130,6 +127,52 @@ public class VoyageSessionTests
         Assert.Equal(4, s.Charts.Count);
         Assert.Equal("Storm Hollow", s.ByPanelIndex[1].Name);   // hover detail survives
         Assert.Equal(0, s.ClearBorderReadings());               // idempotent
+    }
+
+    /// <summary>
+    /// Stripping a chart's detail takes the LEVEL with it. It used to keep the level,
+    /// which was right while the screenshot read the caption -- that was panel knowledge.
+    /// Now the level arrives only in the copied text, so keeping it preserved the one
+    /// thing this call exists to throw away: a bad read's level surviving the re-capture
+    /// meant to correct it.
+    /// </summary>
+    [Fact]
+    public void StrippingAChartsDetailTakesTheLevelWithIt()
+    {
+        var s = new VoyageSession();
+        s.ApplyPanelRead([Cell(1, true, true, true, true)]);
+        s.ApplyChartText(1, "Storm Hollow\nArea Level: 83\nMonster Pack Size: +30%");
+        Assert.Equal(83, s.ByPanelIndex[1].AreaLevel);
+
+        Assert.True(s.RemoveChartDetail(1));
+
+        var chart = s.ByPanelIndex[1];
+        Assert.Equal(0, chart.AreaLevel);
+        Assert.Equal(0, chart.MonsterPackSize);
+        Assert.Equal(ChartShape.Crossing, chart.Shape);   // the shape is the panel's
+    }
+
+    /// <summary>
+    /// A level-weighted plan built off a screenshot alone is ranking on NOTHING, and has
+    /// to say so rather than return a board that looks considered. The panel read stopped
+    /// supplying levels because the caption read 83 as 3.
+    /// </summary>
+    [Fact]
+    public void ALevelWeightedPlanSaysWhenNoChartHasALevelYet()
+    {
+        var bottles = VoyageRules.Defaults().Single(p => p.Name == "bottles");
+        Assert.True(bottles.AreaLevelWeight > 0, "this test needs a tier-weighted plan");
+
+        var s = new VoyageSession();
+        s.ApplyPanelRead(Crossings(12));
+        s.Solve(bottles, TimeSpan.FromSeconds(1));
+        Assert.Contains(s.SolveNotes, n => n.Contains("Levels are unknown"));
+
+        // Hover them and the warning goes: there is something to rank by now.
+        foreach (var i in Enumerable.Range(1, 12))
+            s.ApplyChartText(i, $"C{i}\nAnchorfield\nArea Level: 80");
+        s.Solve(bottles, TimeSpan.FromSeconds(1));
+        Assert.DoesNotContain(s.SolveNotes, n => n.Contains("Levels are unknown"));
     }
 
     [Fact]
@@ -343,8 +386,10 @@ public class VoyageScoringTests
         // included it -- doubling the weight the profile actually asked for.
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 9).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
+        foreach (var i in Enumerable.Range(1, 9))
+            session.ApplyChartText(i, "Tempest Reach\nAnchorfield\nArea Level: 80");
 
         var solution = session.Solve(
             new VoyageProfile { Name = "lv", AreaLevelWeight = 1 }, TimeSpan.FromMilliseconds(300));

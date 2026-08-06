@@ -9,16 +9,18 @@ namespace MindGoblin.Core.Voyage;
 /// Reading the board happens in two passes because the game only shows half of what
 /// matters without hovering:
 ///
-///   PASS 1 -- one screenshot. <see cref="ChartPanelReader"/> gives every chart's shape,
-///             rotation and area level. Enough to solve the CONNECTIVITY problem outright.
+///   PASS 1 -- one screenshot. <see cref="ChartPanelReader"/> gives every chart's shape
+///             and rotation. Enough to solve the CONNECTIVITY problem outright. NOT the
+///             level: the caption was template-matched and read 83 as 3, and the copied
+///             text carries it exactly, so a chart is level 0 until hovered.
 ///   PASS 2 -- hover. Quantity, pack size, sulphur and the two special modifier lines
 ///             exist only in tooltips, so each chart worth scoring is hovered and copied.
 ///             Same for the 12 figurines.
 ///
 /// The session tracks pass 2 as a checklist, because it is the tedious part and the user
-/// needs to see what is still missing rather than discover it in a bad plan. Crucially,
-/// pass 2 is OPTIONAL: with no hover text at all the solver still returns a valid layout,
-/// scored on area level alone. Detail improves the plan; its absence does not block one.
+/// needs to see what is still missing rather than discover it in a bad plan. With no hover
+/// text the solver still returns a legal, fully connected layout -- it just has nothing to
+/// rank the charts by, since dropping the level caption took the last thing pass 1 scored.
 /// </summary>
 /// <summary>What the user has said the planner may do with a chart.</summary>
 public enum ChartMark
@@ -169,18 +171,22 @@ public sealed class VoyageSession
 
             if (_charts.TryGetValue(index, out var existing))
             {
-                _charts[index] = existing with
-                {
-                    Shape = shape,
-                    AreaLevel = cell.Level ?? existing.AreaLevel,
-                };
+                // The SHAPE is measured, so a re-read may correct it. The level is not
+                // read from the panel at all -- it arrives with the copied chart text --
+                // so a re-read must leave whatever the hover established.
+                _charts[index] = existing with { Shape = shape };
                 continue;
             }
 
             // Nameless until hovered: the panel shows no name, and inventing "chart 12"
             // would print twice in a plan that already leads with the panel number.
+            // Level 0 until hovered: the panel's "L:83" caption is not read any more.
+            // Template-matching four-pixel digits produced levels that were WRONG rather
+            // than missing -- a real capture read 83 as 3 -- and the copied chart text
+            // carries "Item Level" exactly, so the caption was a worse copy of a fact
+            // the hover already supplies.
             _charts[index] = new Chart(
-                $"panel-{index}", "", shape, cell.Level ?? 0, Array.Empty<string>());
+                $"panel-{index}", "", shape, 0, Array.Empty<string>());
         }
 
         // A chart that is gone from the panel has been used or sold -- but a chart the
@@ -284,14 +290,20 @@ public sealed class VoyageSession
     public bool RemoveFigurine(int figurineIndex) => _figurines.Remove(figurineIndex);
 
     /// <summary>
-    /// Strip a chart back to what the panel screenshot knew -- shape and level -- so a
-    /// bad hover read can be re-captured without re-identifying the whole panel. The
-    /// chart keeps its identity and any mark; only the hover detail goes.
+    /// Strip a chart back to what the panel screenshot knew -- its SHAPE -- so a bad
+    /// hover read can be re-captured without re-identifying the whole panel. The chart
+    /// keeps its identity and any mark; everything the hover established goes.
+    ///
+    /// The level goes WITH it. This used to carry AreaLevel forward, which made sense
+    /// while the screenshot read the level caption: it was panel knowledge, not hover
+    /// knowledge. Now the level arrives only in the copied text, so keeping it would
+    /// preserve the one thing this call exists to throw away -- a bad read's level
+    /// surviving the re-capture meant to correct it.
     /// </summary>
     public bool RemoveChartDetail(int panelIndex)
     {
         if (!_charts.TryGetValue(panelIndex, out var chart)) return false;
-        _charts[panelIndex] = new Chart(chart.Id, "", chart.Shape, chart.AreaLevel, []);
+        _charts[panelIndex] = new Chart(chart.Id, "", chart.Shape, 0, []);
         return true;
     }
 
@@ -456,6 +468,17 @@ public sealed class VoyageSession
         // bottles. The best gift sails NOW and is guaranteed a seat: its existence is
         // the objective, so it borrows the star's bonus (peeled back off below).
         _solveNotes.Clear();
+
+        // A LEVEL-WEIGHTED PLAN BUILT OFF A SCREENSHOT ALONE IS RANKING ON NOTHING.
+        // The panel read stopped supplying levels -- the caption was template-matched and
+        // read 83 as 3 -- so a chart is level 0 until hovered. A profile that weights area
+        // level then scores every unhovered chart identically on the stat it was chosen
+        // for, and says so rather than quietly returning a board that looks considered.
+        if (profile.AreaLevelWeight > 0 && eligible.Count > 0
+            && eligible.All(kv => kv.Value.AreaLevel <= 0))
+            _solveNotes.Add("Levels are unknown until a chart is hovered, and this plan "
+                            + "weights area level — slurp the panel to rank by tier.");
+
         int? bottleSeat = null;
         string? bottleId = null;
         if (Strategies.SeatsOneBottleChart(profile.Name))

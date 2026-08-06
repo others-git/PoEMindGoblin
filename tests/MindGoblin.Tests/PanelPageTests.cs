@@ -10,7 +10,7 @@ namespace MindGoblin.Tests;
 public class PanelPageTests
 {
     private static ChartPanelReader.ReadCell Cell(int index, int cols = 6) =>
-        new(index, (index - 1) / cols, (index - 1) % cols, true, true, true, true) { Level = 80 };
+        new(index, (index - 1) / cols, (index - 1) % cols, true, true, true, true);
 
     private static IReadOnlyList<ChartPanelReader.ReadCell> Cells(int count) =>
         Enumerable.Range(1, count).Select(i => Cell(i)).ToList();

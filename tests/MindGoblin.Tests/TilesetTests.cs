@@ -92,7 +92,7 @@ public class TilesetTests
         // has to report them.
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 4).Select(i =>
-            new ChartPanelReader.ReadCell(i, 0, i - 1, true, true, true, true) { Level = 80 })
+            new ChartPanelReader.ReadCell(i, 0, i - 1, true, true, true, true))
             .ToList());
 
         session.ApplyChartText(1, "A\nAnchorfield\nItem Quantity: +10%");

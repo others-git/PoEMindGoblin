@@ -16,8 +16,12 @@ public class DumpProfileTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, count).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = level?.Invoke(i) ?? 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
+        // A level reaches a chart through its text, never through the panel read.
+        if (level is not null)
+            foreach (var i in Enumerable.Range(1, count))
+                session.ApplyChartText(i, $"Tempest Reach\nAnchorfield\nArea Level: {level(i)}");
         return session;
     }
 

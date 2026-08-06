@@ -263,7 +263,7 @@ public partial class CalibrationWindow : Window
 
         // No clone: BitmapPixels borrows, so the window keeps its capture across redraws.
         var pixels = new BitmapPixels(_bitmap);
-        var cells = new ChartPanelReader(_options, LevelReader.LoadWithUserTemplates())
+        var cells = new ChartPanelReader(_options)
             .Read(pixels);
         var occupied = cells.ToDictionary(c => (c.Row, c.Col), c => c);
         var slots = _options.Rows * _options.Cols;

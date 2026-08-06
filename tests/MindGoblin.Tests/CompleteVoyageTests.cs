@@ -11,8 +11,8 @@ public class CompleteVoyageTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         return session;
     }
 
@@ -60,8 +60,8 @@ public class SquareBadgeTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         session.ApplySquareModifiers(1, ["Area contains 4 additional Golden Lanterns"]);
         session.ApplySquareModifiers(5, ["Area contains Filthscrabble"]);
 
@@ -80,8 +80,8 @@ public class SquareBadgeTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         session.ApplySquareModifiers(1, ["Rare Monsters in Area drop Dead Man's Sulphur"]);
         session.ApplySquareModifiers(3, ["Area contains 2 additional Diviner's Strongboxes"]);
         session.ApplySquareModifiers(6,

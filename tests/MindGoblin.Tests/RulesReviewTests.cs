@@ -107,8 +107,8 @@ public class RulesReviewTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
 
         // Nine strong flat-sulphur charts, two mediocre spares, and ONE chart whose
         // whole worth is the global multiplier. Flat scoring ranks it dead last.

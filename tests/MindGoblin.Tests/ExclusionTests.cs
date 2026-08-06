@@ -13,8 +13,8 @@ public class ExclusionTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         return session;
     }
 
@@ -56,7 +56,7 @@ public class ExclusionTests
         // that cannot see a chart is not evidence the chart is gone.
         var withoutFiveAndSeven = Enumerable.Range(1, 12).Where(i => i is not (5 or 7))
             .Select(i => new ChartPanelReader.ReadCell(
-                i, (i - 1) / 6, (i - 1) % 6, true, true, true, true) { Level = 80 })
+                i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
             .ToList();
         session.ApplyPanelRead(withoutFiveAndSeven);
         session.ApplyPanelRead(withoutFiveAndSeven);
@@ -65,8 +65,8 @@ public class ExclusionTests
 
         // A new chart drawn into slot 5 is in the pool like any other.
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         Assert.False(session.IsExcluded(5));
         Assert.False(session.IsRequired(7));
     }
@@ -79,8 +79,8 @@ public class ExclusionTests
         var session = Session();
         session.CycleMark(4);
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
         Assert.True(session.IsExcluded(4));
     }
 

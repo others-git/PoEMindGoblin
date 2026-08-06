@@ -83,40 +83,6 @@ public class OtherResolutionTests
     }
 
     /// <summary>
-    /// The level reader DECLINES rather than guessing when its templates do not fit the
-    /// band. A missing level is recoverable; a fabricated one silently corrupts a plan,
-    /// which is the whole reason this reader refuses untrained digits too.
-    /// </summary>
-    [Fact]
-    public void AnUnfittableTemplateDeclinesInsteadOfGuessing()
-    {
-        // A band shorter than the 20-row templates: what every sub-reference screen
-        // produces once TextHeight has been scaled down.
-        var options = new ChartPanelReader.Options().ScaledTo(1920, 1080);
-        var levels = new LevelReader();
-        var band = new bool[12, 30];
-        for (var y = 0; y < 12; y++) band[y, 5] = true;      // ink, but nothing that fits
-
-        Assert.Null(levels.Decode(band, new LevelReader.Options
-        {
-            TextHeight = 8,        // band 12 tall, so pad 4 -- room to slide, none to fit
-        }));
-        Assert.Equal(1920, options.ReferenceWidth);
-    }
-
-    /// <summary>The reference resolution still reads its levels: the fix declines only
-    /// where the templates genuinely do not fit, and must not cost the measured case.</summary>
-    [Fact]
-    public void TheMeasuredResolutionStillReadsLevels()
-    {
-        using var px = new BitmapPixels(Fixture("voyage-panel.png"));
-        var cells = new ChartPanelReader().Read(px);
-
-        Assert.Equal(24, cells.Count);
-        Assert.All(cells, c => Assert.NotNull(c.Level));
-    }
-
-    /// <summary>
     /// THE REPORTED BUG. Every chart must decode to the SAME SHAPE at 1080p as at the
     /// resolution the reader was calibrated against — a Crossing read as a Corner sends
     /// a chart to a square whose connections it does not have, and the plan is then
@@ -172,33 +138,6 @@ public class OtherResolutionTests
     }
 
     /// <summary>
-    /// A LEVEL IS NEVER FABRICATED. The templates are resampled to the screen's caption
-    /// height so a smaller screen can read levels at all, and resampling is the one thing
-    /// this reader was built to distrust — so the standing rule is checked directly:
-    /// whatever it does read must agree with the reference, and the rest must read null.
-    /// A missing level is recoverable; a wrong one silently corrupts a plan.
-    /// </summary>
-    [Fact]
-    public void ARescaledTemplateNeverReadsTheWrongLevel()
-    {
-        using var reference = new BitmapPixels(Fixture("voyage-panel.png"));
-        using var smaller = new BitmapPixels(Fixture(SmallerScreen));
-
-        var expected = new ChartPanelReader().Read(reference).ToDictionary(c => c.Index);
-        var actual = new ChartPanelReader().Read(smaller).ToDictionary(c => c.Index);
-
-        var wrong = expected.Keys
-            .Where(i => actual[i].Level is not null && actual[i].Level != expected[i].Level)
-            .Select(i => $"#{i}: {expected[i].Level} read as {actual[i].Level}")
-            .ToList();
-        Assert.True(wrong.Count == 0, string.Join("; ", wrong));
-
-        // And it must read SOME of them, or the resampling is not earning its place.
-        Assert.True(actual.Values.Any(c => c.Level is not null),
-                    "no level decoded at all on the smaller screen");
-    }
-
-    /// <summary>
     /// A NATIVE 1080p capture, from the player who reported the bug — not a downscale of
     /// the 1440p one. It matters that this is real: the resampled fixture agreed with the
     /// reference once the thresholds were fixed, while this one still failed, because the
@@ -249,7 +188,6 @@ public class OtherResolutionTests
 
         Assert.Equal(24, cells.Count);
         Assert.All(cells, c => Assert.NotNull(c.Shape));
-        Assert.All(cells, c => Assert.NotNull(c.Level));
     }
 
     /// <summary>

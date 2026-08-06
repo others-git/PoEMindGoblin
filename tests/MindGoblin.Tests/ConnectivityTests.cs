@@ -133,8 +133,8 @@ public class ConnectivityTests
     {
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 12).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
 
         var solution = session.Solve(
             VoyageRules.Defaults().Single(p => p.Name == "currency"), TimeSpan.FromSeconds(2));
@@ -213,8 +213,8 @@ public class StrandingIsForbiddenTests
         // Five of eleven profiles used to return a dead corner on a real 42-chart board.
         var session = new VoyageSession();
         session.ApplyPanelRead(Enumerable.Range(1, 20).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList());
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList());
 
         foreach (var profile in VoyageRules.Defaults())
         {
@@ -254,7 +254,7 @@ public class StrandingIsForbiddenTests
                 'S' => (true, false, true, false),
                 _ => (true, false, false, false),
             };
-            return new ChartPanelReader.ReadCell(i + 1, i / 6, i % 6, n, e, s, w) { Level = 80 };
+            return new ChartPanelReader.ReadCell(i + 1, i / 6, i % 6, n, e, s, w);
         }).ToList());
 
         // Hover detail, so the profiles score something and their orderings diverge --

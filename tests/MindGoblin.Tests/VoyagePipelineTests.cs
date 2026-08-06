@@ -25,7 +25,9 @@ public class VoyagePipelineTests
     {
         var session = ReadRealPanel();
         Assert.Equal(24, session.Charts.Count);
-        Assert.All(session.Charts, c => Assert.InRange(c.AreaLevel, 60, 90));
+        // A screenshot yields shapes and nothing else -- the level is in the chart's
+        // text, and only a hover can fetch that.
+        Assert.All(session.Charts, c => Assert.Equal(0, c.AreaLevel));
         // Nothing hovered yet, so everything is on the checklist.
         Assert.Equal(24, session.ChartsAwaitingDetail.Count);
     }
@@ -101,19 +103,35 @@ public class VoyagePipelineTests
         Assert.Equal(70, sulphur.ScoreChart(chart));       // 14 * 5.0
     }
 
+    /// <summary>
+    /// The real capture's own levels, panel index to level, read off its rendered
+    /// captions one by one. They arrive by hover here because that is the only way a
+    /// level ever arrives -- the panel read gives shapes.
+    /// </summary>
+    private static readonly Dictionary<int, int> CaptureLevels = new()
+    {
+        [2] = 71, [5] = 82, [6] = 82, [7] = 82, [9] = 82, [10] = 74,
+        [11] = 68, [14] = 81, [16] = 68, [17] = 78, [18] = 81, [22] = 76,
+        [31] = 81, [32] = 78, [33] = 78, [34] = 77, [35] = 78, [37] = 83,
+        [39] = 83, [42] = 83, [43] = 77, [52] = 83, [53] = 83, [59] = 83,
+    };
+
     [Fact]
     public void ProfileChoiceChangesTheLayoutOfTheRealPanel()
     {
         var session = ReadRealPanel();
+        foreach (var (index, level) in CaptureLevels)
+            Assert.True(session.ApplyChartText(index, $"Tempest Reach\nAnchorfield\nArea Level: {level}"),
+                        $"chart {index} is not in the capture");
 
         var levelled = session.Plan(session.Solve(
             VoyageRules.Defaults().Single(p => p.Name == "bottles"), TimeSpan.FromSeconds(3)));
 
-        // "bottles" weights area level -- the bottle mod only rolls on ilvl 68+ -- and a
-        // panel read carries nothing else to score, so the levels it picks are the only
-        // evidence the profile reached the solver at all.
-        var levels = levelled.ToDictionary(s => s.Square, s => session.ByPanelIndex[s.ChartNumber].AreaLevel);
-        Assert.True(levels.Values.Average() >= 80,
-            $"the level-weighted profile picked an average level of {levels.Values.Average():0.#}");
+        // "bottles" weights area level -- the bottle mod only rolls on ilvl 68+ -- and
+        // the hover text carries nothing else to score, so the levels it picks are the
+        // only evidence the profile reached the solver at all.
+        var levels = levelled.Select(s => session.ByPanelIndex[s.ChartNumber].AreaLevel).ToList();
+        Assert.True(levels.Average() >= 80,
+            $"the level-weighted profile picked an average level of {levels.Average():0.#}");
     }
 }

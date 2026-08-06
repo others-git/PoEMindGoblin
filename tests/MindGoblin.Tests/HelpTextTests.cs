@@ -14,8 +14,8 @@ public class HelpTextTests
 {
     private static IReadOnlyList<ChartPanelReader.ReadCell> Crossings(int count) =>
         Enumerable.Range(1, count).Select(i =>
-            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true)
-            { Level = 80 }).ToList();
+            new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6, true, true, true, true))
+                .ToList();
 
     /// <summary>
     /// Corners, which can close on themselves.
@@ -28,8 +28,7 @@ public class HelpTextTests
     private static IReadOnlyList<ChartPanelReader.ReadCell> Corners(int count) =>
         Enumerable.Range(1, count).Select(i =>
             new ChartPanelReader.ReadCell(i, (i - 1) / 6, (i - 1) % 6,
-                                          true, true, false, false)
-            { Level = 80 }).ToList();
+                                          true, true, false, false)).ToList();
 
     /// <summary>"Voyages will always start in the bottom left Chart of the Voyage."</summary>
     [Fact]

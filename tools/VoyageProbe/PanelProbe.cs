@@ -25,8 +25,7 @@ public static class PanelProbe
         using var pixels = new FilePixels(path);
         Console.WriteLine($"{Path.GetFileName(path)}  {pixels.Width}x{pixels.Height}");
 
-        var reader = new ChartPanelReader(ChartPanelReader.Options.Load(),
-                                          LevelReader.LoadWithUserTemplates());
+        var reader = new ChartPanelReader(ChartPanelReader.Options.Load());
         // The geometry the decode SAMPLED, which is not the calibration whenever the
         // located grid wins. Drawing the calibration instead puts the boxes on cells
         // nothing was read from, and the overlay exists to check exactly that.
@@ -42,15 +41,10 @@ public static class PanelProbe
         foreach (var group in cells.GroupBy(c => c.Shape).OrderByDescending(g => g.Count()))
             Console.WriteLine($"  {group.Key,-9} x{group.Count()}");
 
-        var unreadable = cells.Count(c => c.Level is null);
-        if (unreadable > 0)
-            Console.WriteLine($"  {unreadable} level(s) unreadable "
-                              + $"(reader knows {string.Join("", new LevelReader().KnownDigits)})");
-
         Console.WriteLine("\npanel:");
         foreach (var row in cells.GroupBy(c => c.Row).OrderBy(g => g.Key))
             Console.WriteLine("  " + string.Join("  ",
-                row.OrderBy(c => c.Col).Select(c => $"#{c.Index,-2} {c.Shape,-8} L{c.Level?.ToString() ?? "??"}")));
+                row.OrderBy(c => c.Col).Select(c => $"#{c.Index,-2} {c.Shape}")));
 
         var session = new VoyageSession();
         session.ApplyPanelRead(cells);
@@ -109,7 +103,7 @@ public static class PanelProbe
                 var cell = cells.FirstOrDefault(c => c.Row == row && c.Col == col);
                 g.DrawRectangle(cell is null ? empty : found, cx - h, cy - h, h * 2, h * 2);
                 if (cell is not null)
-                    g.DrawString($"{cell.Index} {cell.Shape} L{cell.Level?.ToString() ?? "?"}",
+                    g.DrawString($"{cell.Index} {cell.Shape}",
                                  font, label, cx - h, cy + h + 1);
             }
         }

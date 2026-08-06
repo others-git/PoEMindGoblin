@@ -84,13 +84,6 @@ public class ChartPanelReaderTests
         Assert.Equal(14, cells.Count(c => c.Shape == ChartShape.Straight));
         Assert.Equal(8, cells.Count(c => c.Shape == ChartShape.Junction));
         Assert.Equal(6, cells.Count(c => c.Shape == ChartShape.End));
-
-        // Every level reads too: this capture is where '0' and '9' were carved from
-        // (L:80 and L:79), closing two-thirds of the reader's known digit gap.
-        Assert.All(cells, c => Assert.NotNull(c.Level));
-        Assert.Equal(80, cells.Single(c => c.Index == 10).Level);
-        Assert.Equal(79, cells.Single(c => c.Index == 20).Level);
-        Assert.Equal(80, cells.Single(c => c.Index == 39).Level);
     }
 
     [Fact]
@@ -159,30 +152,6 @@ public class ChartPanelReaderTests
         Assert.Equal(2, cells.Single(c => c is { Row: 0, Col: 1 }).Index);
         Assert.Equal(14, cells.Single(c => c is { Row: 2, Col: 1 }).Index);
         Assert.Equal(59, cells.Single(c => c is { Row: 9, Col: 4 }).Index);
-    }
-
-    [Theory]
-    // Every level in the capture, read off the rendered captions one by one.
-    [InlineData(0, 1, 71)] [InlineData(0, 4, 82)] [InlineData(0, 5, 82)]
-    [InlineData(1, 0, 82)] [InlineData(1, 2, 82)] [InlineData(1, 3, 74)]
-    [InlineData(1, 4, 68)] [InlineData(2, 1, 81)] [InlineData(2, 3, 68)]
-    [InlineData(2, 4, 78)] [InlineData(2, 5, 81)] [InlineData(3, 3, 76)]
-    [InlineData(5, 0, 81)] [InlineData(5, 1, 78)] [InlineData(5, 2, 78)]
-    [InlineData(5, 3, 77)] [InlineData(5, 4, 78)] [InlineData(6, 0, 83)]
-    [InlineData(6, 2, 83)] [InlineData(6, 5, 83)] [InlineData(7, 0, 77)]
-    [InlineData(8, 3, 83)] [InlineData(8, 4, 83)] [InlineData(9, 4, 83)]
-    public void ReadsTheAreaLevelCaption(int row, int col, int level)
-    {
-        var cell = ReadFixture().Single(c => c.Row == row && c.Col == col);
-        Assert.Equal(level, cell.Level);
-    }
-
-    [Fact]
-    public void EveryChartInTheCaptureHasAReadableLevel()
-    {
-        // The capture happens to use only trained digits, so a null here means the
-        // matcher regressed rather than that it hit an untrained digit.
-        Assert.All(ReadFixture(), c => Assert.NotNull(c.Level));
     }
 
     [Fact]
