@@ -49,47 +49,27 @@ public class VoyageSessionTests
     }
 
     /// <summary>
-    /// A missed chart and a spent one look identical in one read, and the deletion takes
-    /// the hover detail with it -- a window over part of the panel used to destroy every
-    /// chart it covered, copied text and all, and the caller persists straight after. So
-    /// the first read that cannot find a chart only puts a strike against it.
+    /// A READ IS AUTHORITATIVE: a chart the panel does not show has been spent or sold,
+    /// and goes on that read, detail and all.
+    ///
+    /// This was a two-strike rule once -- drop only after two consecutive misses, to
+    /// protect hover detail from a half-occluded capture. The hedge cost more than it
+    /// saved: every wrong read had to be corrected twice, phantom charts included, and a
+    /// stale chart left in the panel is one the plan can still be built from. The
+    /// occlusion case is handled where it belongs, by refusing to read at all when the
+    /// game window is covered or the capture comes back empty.
     /// </summary>
     [Fact]
-    public void AChartMissedByOneReadKeepsItsDetail()
+    public void ChartsMissingFromANewReadAreDroppedAtOnce()
     {
         var s = new VoyageSession();
         s.ApplyPanelRead([Cell(1, true, true, true, true), Cell(2, true, true, true, true)]);
         s.ApplyChartText(2, "Storm Hollow\nMonster Pack Size: +30%");
 
-        s.ApplyPanelRead([Cell(1, true, true, true, true)]);      // chart 2 occluded
-
-        Assert.Equal(2, s.Charts.Count);
-        Assert.Equal("Storm Hollow", s.ByPanelIndex[2].Name);
-        Assert.Equal(30, s.ByPanelIndex[2].MonsterPackSize);
-    }
-
-    [Fact]
-    public void ChartsMissingFromTwoConsecutiveReadsAreDropped()
-    {
-        var s = new VoyageSession();
-        s.ApplyPanelRead([Cell(1, true, true, true, true), Cell(2, true, true, true, true)]);
         s.ApplyPanelRead([Cell(1, true, true, true, true)]);
-        s.ApplyPanelRead([Cell(1, true, true, true, true)]);
+
         Assert.Single(s.Charts);
-    }
-
-    /// <summary>Consecutive, not cumulative: seeing the chart again clears its strike,
-    /// or a panel read badly placed once would doom the chart forever after.</summary>
-    [Fact]
-    public void SeeingAChartAgainClearsItsStrike()
-    {
-        var s = new VoyageSession();
-        s.ApplyPanelRead([Cell(1, true, true, true, true), Cell(2, true, true, true, true)]);
-        s.ApplyPanelRead([Cell(1, true, true, true, true)]);                          // strike
-        s.ApplyPanelRead([Cell(1, true, true, true, true), Cell(2, true, true, true, true)]);
-        s.ApplyPanelRead([Cell(1, true, true, true, true)]);                          // strike again
-
-        Assert.Equal(2, s.Charts.Count);
+        Assert.False(s.ByPanelIndex.ContainsKey(2));
     }
 
     /// <summary>Completion is not a guess about the screen -- the user watched the game

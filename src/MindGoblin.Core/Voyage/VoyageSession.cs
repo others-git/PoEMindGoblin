@@ -43,10 +43,6 @@ public sealed class VoyageSession
     private readonly Dictionary<int, string> _figurines = new();
     private readonly Dictionary<int, List<string>> _squareModifiers = new();
 
-    /// <summary>Charts the last panel read failed to find, one strike each. Deliberately
-    /// not persisted: a fresh load starts everyone at zero strikes.</summary>
-    private readonly HashSet<int> _missedOnce = new();
-
     /// <summary>What the last Solve decided beyond the board itself -- the bottle
     /// rationing note, today. Transient: it narrates one solve, not the session.</summary>
     public IReadOnlyList<string> SolveNotes => _solveNotes;
@@ -143,10 +139,9 @@ public sealed class VoyageSession
                .ToList();
 
     /// <summary>
-    /// Take a panel read. Charts already carrying hover detail keep it: a re-read after
-    /// hovering half the panel must not wipe the half that was done -- and a chart the
-    /// read did not find survives one read before it is dropped, because a missed chart
-    /// and a spent one look exactly alike here.
+    /// Take a panel read. Charts already carrying hover detail keep it -- a re-read after
+    /// hovering half the panel must not wipe the half that was done -- but a chart the
+    /// read does NOT find is gone: the panel is the truth about what is in the stash.
     /// </summary>
     public void ApplyPanelRead(IEnumerable<ChartPanelReader.ReadCell> cells) =>
         ApplyPanelRead(cells, PanelPage.All);
@@ -189,14 +184,16 @@ public sealed class VoyageSession
                 $"panel-{index}", "", shape, 0, Array.Empty<string>());
         }
 
-        // A chart that is gone from the panel has been used or sold -- but a chart the
-        // CAPTURE missed reads identically, and this deletion takes the hover detail with
-        // it while the caller persists immediately. One window overlapping the panel
-        // decodes a handful of cells and every other chart's copied text is gone. So a
-        // chart is only dropped once TWO CONSECUTIVE reads fail to find it: occlusion is
-        // transient and the next clean identify rescues it, while a genuinely spent chart
-        // costs nothing but one extra read to disappear. Removal by the user or by
-        // CompleteVoyage stays immediate -- those are not guesses about the screen.
+        // A READ IS AUTHORITATIVE about the tab it saw: a chart the panel does not show
+        // has been spent or sold, and goes NOW.
+        //
+        // This was once a two-strike rule -- drop only after two consecutive misses --
+        // to protect hover detail from a half-occluded capture. It is gone because the
+        // hedge cost more than it saved: every wrong read had to be corrected twice,
+        // including the phantom charts a bogus grid invented, and a stale chart sitting
+        // in the panel is a chart the plan can still be built from. The occlusion case it
+        // guarded is covered where it belongs -- IdentifyChartsNow refuses outright when
+        // the game window is covered or the read comes back empty.
         //
         // A dropped chart's MARKS go with it: panel indices are physical positions, so
         // the next chart read into this one is a different chart, and inheriting the
@@ -204,8 +201,7 @@ public sealed class VoyageSession
         foreach (var index in _charts.Keys.ToList())
         {
             if (!page.Contains(index)) continue;    // another tab; this read says nothing about it
-            if (seen.Contains(index)) _missedOnce.Remove(index);        // strikes are consecutive
-            else if (!_missedOnce.Add(index)) RemoveChart(index);       // Add fails: struck already
+            if (!seen.Contains(index)) RemoveChart(index);
         }
     }
 
@@ -313,7 +309,6 @@ public sealed class VoyageSession
         if (!_charts.Remove(panelIndex)) return false;
         _excluded.Remove(panelIndex);
         _required.Remove(panelIndex);
-        _missedOnce.Remove(panelIndex);
         return true;
     }
 
@@ -1106,8 +1101,7 @@ public sealed class VoyageSession
     /// <returns>How many charts were spent.</returns>
     public int CompleteVoyage(IEnumerable<int> placedCharts)
     {
-        // Immediate, unlike a panel read's two-strike drop: the user watched the game
-        // eat these, so there is nothing to be unsure about.
+        // The user watched the game eat these, so there is nothing to be unsure about.
         var spent = 0;
         foreach (var index in placedCharts)
             if (RemoveChart(index)) spent++;

@@ -74,7 +74,7 @@ public class PanelPageTests
     }
 
     /// <summary>Scoping must not cost the reconciliation it was built on: a chart that
-    /// really is gone from the OPEN tab still goes, on the same two strikes.</summary>
+    /// really is gone from the OPEN tab still goes, on that read.</summary>
     [Fact]
     public void AChartGoneFromTheOpenTabIsStillDropped()
     {
@@ -84,9 +84,8 @@ public class PanelPageTests
         Assert.Equal(60, s.Charts.Count);
 
         s.ApplyPanelRead(Cells(59), two);
-        Assert.Equal(60, s.Charts.Count);      // one strike, still there
-        s.ApplyPanelRead(Cells(59), two);
-        Assert.Equal(59, s.Charts.Count);      // struck twice, gone
+
+        Assert.Equal(59, s.Charts.Count);
         Assert.False(s.ByPanelIndex.ContainsKey(120));
     }
 

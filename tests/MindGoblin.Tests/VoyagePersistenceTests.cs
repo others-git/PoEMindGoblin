@@ -125,30 +125,6 @@ public class VoyagePersistenceTests : IDisposable
         Assert.Contains(1, restored.SquaresAwaitingModifiers);
     }
 
-    /// <summary>
-    /// Strikes against charts a panel read could not find are deliberately not saved.
-    /// They are a claim about one capture, not about the panel, and the conservative
-    /// direction is to keep a chart: after a restart every chart gets its first read
-    /// back, so a session saved mid-strike cannot drop one on the next identify.
-    /// </summary>
-    [Fact]
-    public void AStrikeAgainstAMissingChartDoesNotSurviveARestart()
-    {
-        var session = new VoyageSession();
-        session.ApplyPanelRead([
-            new ChartPanelReader.ReadCell(1, 0, 0, true, true, true, true),
-            new ChartPanelReader.ReadCell(2, 0, 1, true, true, true, true)]);
-        session.ApplyPanelRead([
-            new ChartPanelReader.ReadCell(1, 0, 0, true, true, true, true)]);
-        session.Save(_path);
-
-        var (restored, _) = VoyageSession.Restore(_path);
-        restored.ApplyPanelRead([
-            new ChartPanelReader.ReadCell(1, 0, 0, true, true, true, true)]);
-
-        Assert.Equal(2, restored.Charts.Count);
-    }
-
     [Fact]
     public void ARestoredSessionStillSolves()
     {
