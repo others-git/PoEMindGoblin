@@ -76,6 +76,13 @@ once that captured a live boss fight instead of the app. Use `--render`.
   and, when that tab is done, names the next one that still has unread charts.
   A read is scoped the same way: reconciling the whole session against one tab's
   screenshot would strike every chart on every other tab and then delete them.
+  **The SOLVER sees every tab** — placement is about which charts are best and a tab is
+  only where one is kept, so a board can be built entirely from tab 2. Which is why a
+  chart is NAMED with its tab as an exponent: `32²` is cell 32 of tab 2 (`PanelPage.Label`,
+  Unicode superscript so it works in plain status strings as well as in a TextBlock).
+  The plan's job is "go and fetch this one", and a bare index cannot say where — chart 67
+  is not the sixty-seventh thing the user can see. Board labels for charts off tab 1 are
+  tinted as well, so nine squares can be sorted by tab at a glance.
 * **The voyage starts in the bottom-left chart** and travels by connections.
 * **Every chart has exactly one implicit**, and it is either *"in all Voyage Areas"*
   (global, position irrelevant) or *"adjacent Areas"* (buffs neighbours). The copied item

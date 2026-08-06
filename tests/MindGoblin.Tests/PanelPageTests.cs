@@ -189,6 +189,52 @@ public class PanelPageTests
     }
 
     /// <summary>
+    /// How a chart is NAMED. The plan's job is "go and fetch this one", and on a tabbed
+    /// inventory a bare number cannot say where: chart 67 is not the sixty-seventh thing
+    /// the user can see, it is the seventh cell of the second tab.
+    /// </summary>
+    [Theory]
+    [InlineData(1, "1\u00b9")]        // cell 1, tab 1
+    [InlineData(60, "60\u00b9")]
+    [InlineData(61, "1\u00b2")]       // cell 1 again -- the same pixels, tab 2
+    [InlineData(67, "7\u00b2")]
+    [InlineData(120, "60\u00b2")]
+    public void ATabbedPanelNamesChartsByTabAndCell(int globalIndex, string expected) =>
+        Assert.Equal(expected, PanelPage.Label(globalIndex, pageSize: 60, pages: 2));
+
+    /// <summary>A single-tab panel stays plain: nobody should read a tab number that
+    /// never changes.</summary>
+    [Theory]
+    [InlineData(1, "1")]
+    [InlineData(47, "47")]
+    public void AOneTabPanelNamesChartsPlainly(int globalIndex, string expected) =>
+        Assert.Equal(expected, PanelPage.Label(globalIndex, pageSize: 60, pages: 1));
+
+    /// <summary>
+    /// The solver plans over the WHOLE inventory, not the open tab. Placement is about
+    /// which charts are best, and a tab is only where one is kept -- so given a better
+    /// set on tab 2 the board should be built entirely from it.
+    /// </summary>
+    [Fact]
+    public void TheSolverPlansAcrossEveryTab()
+    {
+        var s = new VoyageSession();
+        s.ApplyPanelRead(Cells(12), new PanelPage(1, 60));
+        s.ApplyPanelRead(Cells(12), new PanelPage(2, 60));
+        foreach (var i in Enumerable.Range(1, 12))
+            s.ApplyChartText(i, $"Dull {i}\nAnchorfield\nDead Man's Sulphur: +5");
+        foreach (var i in Enumerable.Range(61, 12))
+            s.ApplyChartText(i, $"Rich {i}\nAnchorfield\nDead Man's Sulphur: +90");
+
+        var plan = s.Plan(s.Solve(
+            VoyageRules.Defaults().Single(p => p.Name == "sulphur"), TimeSpan.FromSeconds(3)));
+
+        Assert.Equal(9, plan.Count);
+        Assert.All(plan, step => Assert.True(step.ChartNumber > 60,
+            $"chart {step.ChartNumber} came from tab 1 when tab 2 was better"));
+    }
+
+    /// <summary>
     /// The default matches the GAME, which has two tabs. It shipped defaulted to one as
     /// a "prepare for later" flag, so the app disagreed with the screen out of the box
     /// and asked the user to go and fix it -- the same mistake as assuming a resolution

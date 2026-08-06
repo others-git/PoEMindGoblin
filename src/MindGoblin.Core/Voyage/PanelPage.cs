@@ -40,4 +40,42 @@ public readonly record struct PanelPage(int Number, int Size)
 
     /// <summary>The inverse, for drawing: which cell of this tab a stored index sits in.</summary>
     public int ToLocal(int globalIndex) => IsAll ? globalIndex : globalIndex - First + 1;
+
+    /// <summary>
+    /// How a chart is NAMED to the user, everywhere.
+    ///
+    /// The plan's whole job is "go and fetch this one", and on a tabbed inventory a bare
+    /// number cannot say where: chart 67 is not the sixty-seventh thing the user can
+    /// see, it is the seventh cell of the second tab. So a multi-tab panel names charts
+    /// "2·7" and a single-tab one stays plain "7" -- nobody should read a tab number
+    /// that never changes.
+    ///
+    /// One function because the board, the panel tile, the plan and every status line
+    /// have to agree. Two numbering schemes on one screen is worse than either.
+    /// </summary>
+    public static string Label(int globalIndex, int pageSize, int pages)
+    {
+        if (pages <= 1 || pageSize <= 0) return globalIndex.ToString();
+        var page = (globalIndex - 1) / pageSize + 1;
+        var cell = (globalIndex - 1) % pageSize + 1;
+        return cell + Superscript(page);
+    }
+
+    /// <summary>
+    /// The tab as an EXPONENT -- "32²" is cell 32 of tab 2.
+    ///
+    /// Unicode superscript digits rather than rich text, because a chart gets named in
+    /// plain strings as often as in a TextBlock: status lines, tooltips, the slurp's
+    /// running commentary. One representation that works in all of them beats a pretty
+    /// one that works in two and degrades to markup in the rest.
+    ///
+    /// It reads as an annotation rather than another number, which is the point: the
+    /// cell is what the user looks for, the tab is only which drawer it is in.
+    /// </summary>
+    private static string Superscript(int number)
+    {
+        const string digits = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+        var text = number.ToString();
+        return string.Concat(text.Select(c => char.IsAsciiDigit(c) ? digits[c - '0'] : c));
+    }
 }

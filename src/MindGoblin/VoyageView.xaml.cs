@@ -787,7 +787,7 @@ public partial class VoyageView : UserControl, IDisposable
         var done = _slurpTotal - queue.Count;
         var (isFigurine, next) = queue.Peek();
         SlurpInfo.Text = $"Press F9 in game \u2014 captures "
-                       + (isFigurine ? $"figurine {next} ({FigurineEdge(next)})" : $"chart {next}")
+                       + (isFigurine ? $"figurine {next} ({FigurineEdge(next)})" : $"chart {Label(next)}")
                        + $" ({done} of {_slurpTotal} done). Keep the Voyage screen open and unscrolled.";
         SlurpPanel.Visibility = Visibility.Visible;
     }
@@ -839,7 +839,7 @@ public partial class VoyageView : UserControl, IDisposable
             await SlurpFigurine(index);
             return;
         }
-        SlurpInfo.Text = $"Copying chart {index}…";   // the press visibly landed
+        SlurpInfo.Text = $"Copying chart {Label(index)}…";   // the press visibly landed
         // The grid the DECODE used, not the raw calibration: Resolve may have located
         // the grid in the image, and arming the slurp always identifies first, so
         // _panelGrid is the geometry the queue's indices were numbered with. ForScreen
@@ -1150,7 +1150,7 @@ public partial class VoyageView : UserControl, IDisposable
         }
         else
         {
-            SetStatus($"That text did not look like chart {_targetIndex}.", bad: true);
+            SetStatus($"That text did not look like chart {Label(_targetIndex)}.", bad: true);
             return;
         }
 
@@ -1237,7 +1237,7 @@ public partial class VoyageView : UserControl, IDisposable
         if (chart > 0)
         {
             SetTarget(Target.Chart, chart,
-                      $"Hover chart {chart} in game, Ctrl+C — or paste its text below.");
+                      $"Hover chart {Label(chart)} in game, Ctrl+C — or paste its text below.");
             return;
         }
 
@@ -1315,7 +1315,7 @@ public partial class VoyageView : UserControl, IDisposable
                 $"Hover square {_targetIndex} in game, press Ctrl+Alt+C",
             Target.Figurine =>
                 $"Figurine {_targetIndex}: usually not copyable \u2014 type it below",
-            _ => $"Hover chart {_targetIndex} in game, press Ctrl+C",
+            _ => $"Hover chart {Label(_targetIndex)} in game, press Ctrl+C",
         };
     }
 
@@ -1793,7 +1793,7 @@ public partial class VoyageView : UserControl, IDisposable
             _summary.Add(SummaryRow.Section("Adjacency · reach decides the value"));
             foreach (var adjacency in summary.Adjacencies)
                 _summary.Add(SummaryRow.Detail(
-                    $"sq {adjacency.Square} · chart {adjacency.ChartNumber} — {adjacency.Modifier}",
+                    $"sq {adjacency.Square} · chart {Label(adjacency.ChartNumber)} — {adjacency.Modifier}",
                     $"×{adjacency.Reach}"));
         }
 
@@ -1828,6 +1828,11 @@ public partial class VoyageView : UserControl, IDisposable
     private ChartPanelReader.Options _panelOptions = ChartPanelReader.Options.Load();
 
     private PanelPage CurrentPage => _panelOptions.Page(_page);
+
+    /// <summary>How a chart is named on screen: "7" on a one-tab panel, "2·7" when the
+    /// number alone cannot say which tab to open.</summary>
+    private string Label(int globalIndex) =>
+        PanelPage.Label(globalIndex, _panelOptions.PageSize, _panelOptions.Pages);
     private readonly Dictionary<int, Border> _figurineMarkers = new();
 
     private const double SquareSize = 138;
@@ -2079,7 +2084,7 @@ public partial class VoyageView : UserControl, IDisposable
 
         if (step is not null)
         {
-            lines.Add($"— chart {step.ChartNumber} —");
+            lines.Add($"— chart {Label(step.ChartNumber)} —");
             lines.AddRange(DescribeChart(step.Chart));
         }
 
@@ -2110,7 +2115,7 @@ public partial class VoyageView : UserControl, IDisposable
         }
 
         return Tip(
-            step is null ? $"Square {square}" : $"Square {square} · chart {step.ChartNumber}",
+            step is null ? $"Square {square}" : $"Square {square} · chart {Label(step.ChartNumber)}",
             // No shape and no rotation: the square is DRAWN, so its lines already say
             // which way round it goes and naming them is a caption on a picture.
             step is null
@@ -2360,11 +2365,18 @@ public partial class VoyageView : UserControl, IDisposable
         stack.Children.Add(new TextBlock
         {
             Text = square == _session.StartSquare
-                ? $"START · chart {step.ChartNumber}"
-                : $"chart {step.ChartNumber}",
+                ? $"START · chart {Label(step.ChartNumber)}"
+                : $"chart {Label(step.ChartNumber)}",
             FontFamily = new FontFamily("Consolas"),
             FontSize = 10,
-            Foreground = stranded ? Brush(0xB8, 0x50, 0x3E) : Brush(0x94, 0x86, 0x6F),
+            // A chart from a tab other than the first is tinted, because the board is a
+            // FETCH LIST and "which tab do I open for this one" is the only question it
+            // cannot answer by pointing. The label already names the tab; the colour is
+            // so a nine-square board can be sorted by tab at a glance instead of read.
+            Foreground = stranded ? Brush(0xB8, 0x50, 0x3E)
+                : _panelOptions.Pages > 1 && !_panelOptions.Page(1).Contains(step.ChartNumber)
+                    ? Brush(0x8F, 0xA8, 0xB8)
+                    : Brush(0x94, 0x86, 0x6F),
             HorizontalAlignment = HorizontalAlignment.Center,
         });
         if (stranded)
@@ -2834,7 +2846,10 @@ public partial class VoyageView : UserControl, IDisposable
             var stack = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
             stack.Children.Add(new TextBlock
             {
-                Text = index.ToString(),
+                // The tile is AT a position on the open tab, so it names itself the way
+                // the board names it -- otherwise the plan says "chart 2·7" and the
+                // panel says "67" about the same tile.
+                Text = Label(index),
                 FontFamily = new FontFamily("Consolas"),
                 FontSize = 10,
                 Foreground = new SolidColorBrush(isPlanned
@@ -2923,7 +2938,8 @@ public partial class VoyageView : UserControl, IDisposable
                 cell.Child = stack;
             }
             cell.ToolTip = Tip(
-                string.IsNullOrWhiteSpace(chart.Name) ? $"Chart {index}" : $"Chart {index} · {chart.Name}",
+                string.IsNullOrWhiteSpace(chart.Name)
+                    ? $"Chart {Label(index)}" : $"Chart {Label(index)} · {chart.Name}",
                 isExcluded ? "Excluded \u2014 right-click again to require it, twice to clear"
                     : isRequired ? "Required \u2014 the solver must place it; right-click to clear"
                     : isPlanned ? $"Goes on square {used[index]}" : "Not in the plan",
@@ -2994,7 +3010,7 @@ public partial class VoyageView : UserControl, IDisposable
             if (!planned.ContainsKey(panelIndex)) continue;
             _modifiers.Add(new ModifierRow(
                 ModifierRow.Sort.VoyageWide, panelIndex,
-                "Voyage-wide", $"chart {panelIndex}",
+                "Voyage-wide", $"chart {Label(panelIndex)}",
                 modifier, captured: true,
                 selected: _target == Target.Chart && _targetIndex == panelIndex));
         }
