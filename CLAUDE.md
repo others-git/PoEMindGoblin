@@ -110,6 +110,26 @@ once that captured a live boss fight instead of the app. Use `--render`.
   carrying it is free upside — the alert says so); Grasping Vines is its replacement
   danger; dredged currency now rolls Strongboxes mid-voyage; Eldritch Depths is a new
   chart variant, unmeasured.
+* **3.29.2** (checked 2026-08-06, [notes](https://www.pathofexile.com/forum/view-thread/3994431)):
+  * **"Doubled the size of the Charted Charts inventory"** — this is the patch the tab
+    support above exists for, and it confirms two tabs of 60.
+  * **GOLD FOUND NEVER FUNCTIONED IN CHARTS.** *"All modifiers which previously granted
+    increased gold found on Charts will now grant increased rarity of items found, as the
+    increased amount of gold found did not function in Charts and Voyages."* Same shape as
+    the max-res disclosure. Verified that every rarity wording it converts INTO already
+    scores, self-scope "in this Area" included, so nothing needed parsing — but a chart
+    read BEFORE the patch still says "Gold Found" in a saved session and is now really a
+    rarity roll. Re-hover those. The equipment→gold CONVERSION is deliberately left alone:
+    it does not grant "increased gold found", so the note does not obviously cover it.
+  * **Altars to the Goddess more than doubled**: a blessing is now a 10% chance to convert
+    certain common currencies to rarer ones (from 4%), empowered 20% (from 8%), and it
+    applies to Mercenaries. Repriced 12 → 30 by that ratio. They also spawn less often,
+    which does NOT touch the rule — the mod states how many it grants, and GGG's note says
+    the per-voyage total lands "roughly higher or equivalent". **This also retires an
+    UNVERIFIED**: what an Altar does is now known from GGG rather than from SEO sites.
+  * No action, recorded so nobody re-reads them: faster sulphur-gathering beam, clearer
+    Golden Lanterns, capsule/Valerie/gamepad UI, and the planning-UI fix for re-placing a
+    chart in the same spot.
 * **All connections must lead to the board edge or to another connection.** Connections
   are mutual: an open edge facing a closed one is invalid from both sides. An open edge
   facing an *empty in-bounds cell* is invalid — which is why a partial board must form a

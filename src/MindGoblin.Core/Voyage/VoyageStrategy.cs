@@ -171,7 +171,10 @@ public static class StatText
         Stat.Sulphur =>
             "Dead Man's Sulphur, which buys board rerolls and Allflame crafts. It trades "
             + "for almost nothing, so the value here is what a reroll is worth to you.",
-        Stat.Gold => "Gold, for the Currency Exchange and Kingsmarch.",
+        Stat.Gold =>
+            "Gold, for the Currency Exchange and Kingsmarch. Worth nothing on a chart: "
+            + "3.29.2 disclosed that increased gold found never functioned in Charts, and "
+            + "converted every such modifier to increased Rarity.",
         Stat.Quantity =>
             "Item Quantity in percentage points. It multiplies most of the rest, and the "
             + "solver already uses it to decide which tile a container gift lands on.",
@@ -286,8 +289,16 @@ public static class ModCatalog
             Comment: "board modifier"),
         new(@"contain Captainsbane", Stat.Openables, 10,
             Comment: "board modifier"),
-        new(@"(?:(\d+)|an) Altars? to the Goddess", Stat.Currency, 12,
-            Comment: "3.29.1 blessings convert common currency to rarer, party-wide"),
+        // 3.29.2 MORE THAN DOUBLED what one altar converts: a blessing is now a 10%
+        // chance to turn certain common currencies into rarer ones (from 4%), and an
+        // empowered one 20% (from 8%). Priced by that ratio off the old judged 12,
+        // because 12 was itself a judgement and the RATE is the part that moved.
+        // Altars also spawn less often now, which does not touch this rule: the mod
+        // states how many it grants, and GGG's own note says the per-voyage total comes
+        // out "roughly higher or equivalent". Also 3.29.2: the blessing applies to
+        // Mercenaries, and the altar now shows its conversion amount on hover.
+        new(@"(?:(\d+)|an) Altars? to the Goddess", Stat.Currency, 30,
+            Comment: "3.29.2: 10% common->rarer per blessing (20% empowered), was 4/8%"),
         // A CONVERSION, so the tile it lands on decides what it is worth: the value is
         // (decks converted) x (deck price - the basic currency it replaced), and the
         // count of basic drops is what Item Quantity multiplies. 40 is ~20 converted
@@ -376,6 +387,17 @@ public static class ModCatalog
         new(@"(\d+)% chance to instead drop as a Unique", Stat.Uniques, 3),
         new(@"Items dropped.*(\d+)% chance to be Fractured", Stat.Uniques, 8,
             Comment: "fractured bases are craft stock, not vendor fodder"),
+        // GOLD FOUND NEVER FUNCTIONED IN CHARTS, and 3.29.2 says so out loud: "All
+        // modifiers which previously granted increased gold found on Charts will now
+        // grant increased rarity of items found, as the increased amount of gold found
+        // did not function in Charts and Voyages." Same shape as the max-res roll that
+        // 3.29.1 disclosed. The rules stay because poedb still lists the old wordings
+        // and a stale corpus must not fall through to the pattern fallback -- but a
+        // chart READ BEFORE the patch still says "Gold Found" in a saved session, and
+        // that chart now rolls rarity instead. Re-hover it.
+        // The equipment->gold CONVERSION is left alone: it does not grant "increased
+        // gold found", so the note does not obviously cover it, and guessing either way
+        // would be inventing a fact.
         new(@"Gold Found:\s*\+?(\d+)", Stat.Gold, 1),
         new(@"(\d+)%\s+increased Gold found", Stat.Gold, 1),
         new(@"(\d+)% of Equipment dropped by monsters.*converted to Gold", Stat.Gold, 1),
