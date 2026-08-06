@@ -518,12 +518,37 @@ public sealed class ChartPanelReader
         foreach (var left in new[] { 0, pixels.Width / 2, pixels.Width * 2 / 3 })
         {
             if (Locate(pixels, _o, left) is not { } candidate) continue;
+            if (!NearThePanel(candidate, best)) continue;
             var found = Confidence(ReadWith(pixels, candidate));
             if (found <= score) continue;
             best = candidate;
             score = found;
         }
         return best;
+    }
+
+    /// <summary>
+    /// Is this candidate grid plausibly the CHART PANEL, or just the best grid-shaped
+    /// thing on the screen?
+    ///
+    /// Locate exists to correct DRIFT -- ten or twenty pixels against a fifty-pixel
+    /// pitch -- not to search the desktop, and the confidence measure cannot tell the
+    /// difference on its own because it counts decoded shapes and more always wins. On a
+    /// panel holding ONE chart that is fatal: the true grid scores 1, so any patch of
+    /// green elsewhere that decodes two things beats it. Measured on a real capture with
+    /// a single chart on tab 2, the winner sat at x 279 while the panel was at x 1768 --
+    /// a thousand pixels away, five charts invented out of the game's own chrome.
+    ///
+    /// Three pitches is far more than any real drift or rescaling error and still throws
+    /// that out by a factor of five. The cost is that a WILDLY wrong calibration can no
+    /// longer be rescued by Locate -- which is what the calibrator is for, and it beats
+    /// silently reading furniture as charts.
+    /// </summary>
+    private static bool NearThePanel(Options candidate, Options fallback)
+    {
+        var tolerance = Math.Max(1, fallback.Pitch * 3);
+        return Math.Abs(candidate.OriginX - fallback.OriginX) <= tolerance
+               && Math.Abs(candidate.OriginY - fallback.OriginY) <= tolerance;
     }
 
     private static int Confidence(IReadOnlyList<ReadCell> cells) =>

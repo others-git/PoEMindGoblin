@@ -318,6 +318,16 @@ encode it.
   by row and column — round it once and the error accumulates a cell down the panel.
   Lengths scale with `s`, sample COUNTS with `s²`, and thresholds must round DOWN or they
   tighten as the picture shrinks. `ShapesDecodeIdenticallyAtEveryResolution` pins it.
+* **LOCATE CORRECTS DRIFT; IT DOES NOT SEARCH THE DESKTOP.** The grid is chosen by
+  counting how many shapes each candidate decodes, and more always wins — fine on a full
+  panel, fatal on a nearly empty one. With ONE chart the true grid scores 1, so any patch
+  of green elsewhere that decodes two beats it. Field-reported on a real capture: tab 2
+  held a single chart and the reader announced FIVE, off a grid at x 279 while the panel
+  sat at x 1768. A candidate origin more than three pitches from the calibration is now
+  rejected outright — far more than any real drift or rescale error, and a factor of five
+  short of that. The cost is that a wildly wrong calibration can no longer be rescued by
+  Locate, which is what the calibrator is for and beats reading furniture as charts.
+  `SparsePanelTests` pins it, decoys and all.
 * **The level TEMPLATES cannot be re-rendered, only resampled.** They are carved from a
   real capture (no installed font matches Fontin), so at another resolution they are
   resampled to the caption height — and a resampled mask is exactly the kind of thing this
